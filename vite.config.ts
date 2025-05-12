@@ -19,7 +19,7 @@ function spaFallbackPlugin() {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue(), spaFallbackPlugin()],
-  base: '/iani-configurator/',
+  base: process.env.VITE_BASE_URL,
   build: {
     outDir: 'dist',
   }
