@@ -35,7 +35,8 @@
     scene.add(directionalLight)
 
     const loader = new GLTFLoader()
-    loader.load(`${import.meta.env.VITE_BASE_URL}models/Couch.glb`, 
+      loader.load(
+        '/models/Couch.glb', // <-- Replace this with your filename
         gltf => {
           const model = gltf.scene
           model.position.set(0, 0, 0)
