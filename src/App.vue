@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import ThreeScene from './components/ThreeScene.vue'
+import HelloWorld from './components/HelloWorld.vue'
 </script>
 
 <template>
-  <ThreeScene />
+  <HelloWorld />
 </template>
 
 <style scoped>
