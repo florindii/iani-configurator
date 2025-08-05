@@ -34,6 +34,16 @@
               ></div>
             </div>
           </div>
+
+          <!-- Add to Cart Button -->
+          <div class="cart-section">
+            <button 
+              @click="addToCart" 
+              :disabled="!model || isAddingToCart"
+              class="add-to-cart-btn">
+              {{ isAddingToCart ? 'Adding...' : `Add to Cart - ${calculatedPrice.toFixed(2)}` }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -45,11 +55,14 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import shopifyService from '../services/shopifyService'
 
 // Refs
 const canvasContainer = ref(null)
 const isLoading = ref(true)
 const sceneChildren = ref(0)
+const isAddingToCart = ref(false)
+const calculatedPrice = ref(299.99) // Base price
 
 // Three.js refs
 let scene, camera, renderer, model, controls
@@ -196,6 +209,32 @@ const updateColor = (color) => {
   })
   
   console.log('🎨 Color changed to:', color)
+}
+
+const addToCart = async () => {
+  if (isAddingToCart.value) return
+  
+  try {
+    isAddingToCart.value = true
+    console.log('🛒 Starting add to cart process...')
+    
+    const configurationData = {
+      color: configuration.value.color,
+      basePrice: 299.99,
+      selectedOptions: configuration.value
+    }
+    
+    const result = await shopifyService.addToCart(configurationData, calculatedPrice.value)
+    
+    console.log('✅ Successfully added to cart:', result)
+    alert('Product added to cart successfully!')
+    
+  } catch (error) {
+    console.error('❌ Failed to add to cart:', error)
+    alert('Failed to add to cart. Please try again.')
+  } finally {
+    isAddingToCart.value = false
+  }
 }
 
 const animate = () => {
@@ -372,5 +411,35 @@ onUnmounted(() => {
   border-color: #0066cc;
   transform: scale(1.15);
   box-shadow: 0 2px 8px rgba(0, 102, 204, 0.3);
+}
+
+.cart-section {
+  margin-left: auto;
+}
+
+.add-to-cart-btn {
+  background: linear-gradient(135deg, #0066cc, #0052a3);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 25px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.3);
+}
+
+.add-to-cart-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0052a3, #004080);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.4);
+}
+
+.add-to-cart-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 </style>

@@ -20,7 +20,8 @@ class ShopifyService {
   public customerEmail: string | null;
   
   constructor() {
-    this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+    // Use Vercel API functions for production
+    this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://iani-configurator.vercel.app';
     this.shop = null;
     this.productId = null;
     this.customerId = null;
@@ -52,7 +53,7 @@ class ShopifyService {
         shop: this.shop 
       });
 
-      const response = await fetch(`${this.baseUrl}/api/products/${this.productId}/configuration`, {
+      const response = await fetch(`${this.baseUrl}/api/products/${this.productId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -82,7 +83,7 @@ class ShopifyService {
 
   async loadConfiguration(): Promise<any[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/products/${this.productId}/configuration`);
+      const response = await fetch(`${this.baseUrl}/api/products/${this.productId}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -121,83 +122,65 @@ class ShopifyService {
     }
   }
 
-  // async addToCart(configurationData: ConfigurationData, totalPrice: number): Promise<any> {
-  //   try {
-  //     console.log('🛒 Adding to cart...', { configurationData, totalPrice });
+  async addToCart(configurationData: ConfigurationData, totalPrice: number): Promise<any> {
+    try {
+      console.log('🛒 Adding to cart...', { configurationData, totalPrice });
       
-  //     // First save the configuration
-  //     const saveResult = await this.saveConfiguration(configurationData, null, totalPrice);
+      const cartPayload = {
+        shop: this.shop,
+        productId: this.productId,
+        configurationData,
+        totalPrice,
+        customerId: this.customerId,
+        customerEmail: this.customerEmail
+      };
+
+      // Send to our Vercel API
+      const response = await fetch(`${this.baseUrl}/api/cart/add`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(cartPayload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Added to cart successfully:', result);
       
-  //     if (!saveResult.success) {
-  //       throw new Error('Failed to save configuration');
-  //     }
+      // Send success message to parent window (Shopify admin) if embedded
+      if (this.isEmbeddedInShopify()) {
+        window.parent.postMessage({
+          type: 'CART_SUCCESS',
+          data: {
+            configurationId: result.configuration?.id,
+            productId: this.productId,
+            totalPrice,
+            message: 'Custom configuration added to cart successfully!'
+          }
+        }, '*');
+      }
 
-  //     const configurationId = saveResult.configuration.id;
+      return result;
+    } catch (error) {
+      console.error('❌ Error adding to cart:', error);
       
-  //     // Create cart payload for Shopify
-  //     const cartPayload = {
-  //       productId: this.productId,
-  //       configurationId,
-  //       configurationData,
-  //       totalPrice,
-  //       shop: this.shop,
-  //       customerId: this.customerId,
-  //       customerEmail: this.customerEmail
-  //     };
-
-  //     // Send to our server to handle Shopify cart API
-  //     const response = await fetch(`${this.baseUrl}/api/cart/add`, {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //       },
-  //       body: JSON.stringify(cartPayload)
-  //     });
-
-  //     if (!response.ok) {
-  //       throw new Error(`HTTP error! status: ${response.status}`);
-  //     }
-
-  //     const result = await response.json();
-  //     console.log('✅ Added to cart successfully:', result);
+      // Send error message to parent window if embedded
+      if (this.isEmbeddedInShopify()) {
+        window.parent.postMessage({
+          type: 'CART_ERROR',
+          data: {
+            error: error instanceof Error ? error.message : 'Failed to add to cart'
+          }
+        }, '*');
+      }
       
-  //     // Update configuration status to "in_cart"
-  //     await fetch(`${this.baseUrl}/api/configurations/${configurationId}`, {
-  //       method: 'PATCH',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //       },
-  //       body: JSON.stringify({
-  //         status: 'in_cart',
-  //         shopifyVariantId: result.variantId,
-  //         cartItemId: result.cartItemId
-  //       })
-  //     });
-
-  //     // Send success message to parent window (Shopify admin) if embedded
-  //     if (this.isEmbeddedInShopify()) {
-  //       window.parent.postMessage({
-  //         type: 'CART_SUCCESS',
-  //         data: {
-  //           configurationId,
-  //           productId: this.productId,
-  //           totalPrice,
-  //           message: 'Custom configuration added to cart successfully!'
-  //         }
-  //       }, '*');
-  //     }
-
-  //     return result;
-  //   } catch (error) {
-  //     console.error('❌ Error adding to cart:', error);
-      
-  //     // Send error message to parent window if embedded
-  //     if (this.isEmbeddedInShopify()) {
-  //       window.parent.postMessage({
-  //         type: 'CART_ERROR',
-  //         data: {
-  //           error: error.message || 'Failed to add to cart'
-  //         }
+      throw error;
+    }
+  }
   //       }, '*');
   //     }
       

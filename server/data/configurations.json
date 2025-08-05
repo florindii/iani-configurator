@@ -69,5 +69,87 @@
       "updatedAt": "2025-07-30T22:08:29.541Z"
     }
   ],
-  "products": []
+  "products": [],
+  "cartItems": [
+    {
+      "id": "cart_1754437001069_75dbambp5",
+      "productId": "test-sofa",
+      "variantId": "variant_1754437001069_hvnnagu65",
+      "variantTitle": "Custom undefined blue undefined",
+      "price": 299.99,
+      "quantity": 1,
+      "shop": "ianii.myshopify.com",
+      "customerId": null,
+      "customerEmail": null,
+      "status": "in_cart",
+      "configurationData": {
+        "color": "blue",
+        "basePrice": 299.99,
+        "selectedOptions": {
+          "color": "blue"
+        }
+      },
+      "createdAt": "2025-08-05T23:36:41.070Z"
+    },
+    {
+      "id": "cart_1754437744748_m2fd8zcg4",
+      "productId": "test-sofa",
+      "variantId": "variant_1754437744748_4bnycs5zu",
+      "variantTitle": "Custom undefined blue undefined",
+      "price": 299.99,
+      "quantity": 1,
+      "shop": "ianii.myshopify.com",
+      "customerId": null,
+      "customerEmail": null,
+      "status": "in_cart",
+      "configurationData": {
+        "color": "blue",
+        "basePrice": 299.99,
+        "selectedOptions": {
+          "color": "blue"
+        }
+      },
+      "createdAt": "2025-08-05T23:49:04.748Z"
+    },
+    {
+      "id": "cart_1754437776232_dx3g6brr1",
+      "productId": "cmdqi3ahv0000l58sgyabfvux",
+      "variantId": "variant_1754437776232_w6vqv5mgp",
+      "variantTitle": "Custom undefined blue undefined",
+      "price": 299.99,
+      "quantity": 1,
+      "shop": "ianii.myshopify.com",
+      "customerId": null,
+      "customerEmail": null,
+      "status": "in_cart",
+      "configurationData": {
+        "color": "blue",
+        "basePrice": 299.99,
+        "selectedOptions": {
+          "color": "blue"
+        }
+      },
+      "createdAt": "2025-08-05T23:49:36.232Z"
+    },
+    {
+      "id": "cart_1754437883861_5ngxdlrzj",
+      "productId": null,
+      "variantId": "variant_1754437883861_kkbcne0s0",
+      "variantTitle": "Custom undefined blue undefined",
+      "price": 299.99,
+      "quantity": 1,
+      "shop": null,
+      "customerId": null,
+      "customerEmail": null,
+      "status": "in_cart",
+      "configurationData": {
+        "color": "blue",
+        "basePrice": 299.99,
+        "selectedOptions": {
+          "color": "blue"
+        }
+      },
+      "createdAt": "2025-08-05T23:51:23.862Z"
+    }
+  ]
 }
