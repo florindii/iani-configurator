@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Iframe Test - 3D Configurator</title>
+  <style>
+    body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+    .test-container { 
+      border: 2px solid #ccc; 
+      border-radius: 8px; 
+      padding: 20px; 
+      margin-bottom: 20px; 
+    }
+    iframe { 
+      width: 100%; 
+      height: 600px; 
+      border: 1px solid #ddd; 
+      border-radius: 4px; 
+    }
+    .status { 
+      background: #f0f0f0; 
+      padding: 10px; 
+      border-radius: 4px; 
+      margin-bottom: 10px; 
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 3D Configurator Iframe Test</h1>
+  
+  <div class="test-container">
+    <h2>Test 1: Direct Vue App</h2>
+    <div class="status">
+      <strong>URL:</strong> http://localhost:5173<br>
+      <strong>Expected:</strong> Should show blue sofa with controls
+    </div>
+    <iframe src="http://localhost:5173" frameborder="0" allowfullscreen allow="accelerometer; camera; geolocation; gyroscope; magnetometer; microphone; payment; usb"></iframe>
+  </div>
+
+  <div class="test-container">
+    <h2>Test 2: Server-Served Vue App</h2>
+    <div class="status">
+      <strong>URL:</strong> http://localhost:3001/configurator<br>
+      <strong>Expected:</strong> Should show blue sofa (production build)
+    </div>
+    <iframe src="http://localhost:3001/configurator" frameborder="0" allowfullscreen allow="accelerometer; camera; geolocation; gyroscope; magnetometer; microphone; payment; usb"></iframe>
+  </div>
+
+  <div class="test-container">
+    <h2>Test 3: Direct Model Access</h2>
+    <div class="status">
+      <strong>URL:</strong> http://localhost:3001/models/Couch.glb<br>
+      <strong>Expected:</strong> Should download the GLB file
+    </div>
+    <p><a href="http://localhost:3001/models/Couch.glb" target="_blank">Click to test model download</a></p>
+  </div>
+
+  <script>
+    console.log('🧪 Iframe test page loaded');
+    
+    // Test if we can fetch the model directly
+    fetch('http://localhost:3001/models/Couch.glb')
+      .then(response => {
+        console.log('✅ Model fetch response:', response.status, response.statusText);
+        if (response.ok) {
+          console.log('✅ Model is accessible from:', response.url);
+        } else {
+          console.error('❌ Model fetch failed:', response.status);
+        }
+      })
+      .catch(error => {
+        console.error('❌ Model fetch error:', error);
+      });
+  </script>
+</body>
+</html>

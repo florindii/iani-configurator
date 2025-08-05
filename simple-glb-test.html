@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple GLB Test</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #f0f0f0; }
+        canvas { display: block; }
+        #info { 
+            position: absolute; 
+            top: 10px; 
+            left: 10px; 
+            color: black; 
+            font-family: Arial; 
+            background: rgba(255,255,255,0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>Simple GLB Model Test</h3>
+        <div id="status">Loading...</div>
+        <div id="details"></div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        
+        console.log('🚀 Starting simple GLB test');
+        
+        // Basic Three.js setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xcccccc);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+        
+        // Add a reference cube
+        const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+        const cubeMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+        cube.position.set(3, 0, 0);
+        scene.add(cube);
+        console.log('✅ Reference cube added');
+        
+        // Add test sphere too
+        const sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+        const sphereMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        sphere.position.set(-3, 0, 0);
+        scene.add(sphere);
+        console.log('✅ Test sphere added');
+        
+        // Set camera position
+        camera.position.set(8, 5, 8);
+        camera.lookAt(0, 0, 0);
+        
+        // GLB Loader
+        const loader = new GLTFLoader();
+        
+        // Update status
+        document.getElementById('status').textContent = 'Attempting to load GLB...';
+        
+        // First test: try to load from server
+        loader.load(
+            'http://localhost:3001/models/Couch.glb',
+            function (gltf) {
+                console.log('✅ GLB loaded successfully:', gltf);
+                document.getElementById('status').textContent = 'GLB loaded successfully!';
+                
+                const model = gltf.scene;
+                
+                // Log model info
+                let details = `Model children: ${model.children.length}<br>`;
+                
+                // Get bounding box
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                
+                details += `Size: ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}<br>`;
+                details += `Center: ${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)}<br>`;
+                
+                // Force bright material on all meshes
+                let meshCount = 0;
+                model.traverse((child) => {
+                    if (child.isMesh) {
+                        meshCount++;
+                        details += `Mesh ${meshCount}: ${child.name || 'unnamed'}<br>`;
+                        console.log('📦 Processing mesh:', child.name, child);
+                        
+                        // Replace material with BRIGHT BLUE for maximum visibility
+                        child.material = new THREE.MeshStandardMaterial({
+                            color: 0x0088ff, // Bright blue
+                            transparent: false,
+                            opacity: 1.0,
+                            roughness: 0.5,
+                            metalness: 0.1
+                        });
+                        child.visible = true;
+                        child.frustumCulled = false;
+                    }
+                });
+                
+                // Center the model
+                model.position.sub(center);
+                
+                // Scale up MASSIVELY for visibility
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const scale = maxDim > 0 ? 10 / maxDim : 5;
+                model.scale.setScalar(scale);
+                
+                // Position at origin
+                model.position.y = 0;
+                
+                scene.add(model);
+                document.getElementById('details').innerHTML = details + `<br>Scaled by: ${scale.toFixed(2)}x`;
+                
+                console.log('✅ Model added to scene - scaled by:', scale);
+                console.log('📊 Final model position:', model.position);
+                console.log('📊 Final model scale:', model.scale);
+            },
+            function (xhr) {
+                if (xhr.lengthComputable) {
+                    const progress = (xhr.loaded / xhr.total * 100);
+                    document.getElementById('status').textContent = `Loading: ${progress.toFixed(1)}%`;
+                    console.log('⏳ Loading progress:', progress + '%');
+                }
+            },
+            function (error) {
+                console.error('❌ GLB loading error:', error);
+                document.getElementById('status').textContent = 'Error loading GLB!';
+                document.getElementById('details').innerHTML = `
+                    <strong>Error:</strong> ${error.message}<br>
+                    <strong>Possible causes:</strong><br>
+                    • Server not running (localhost:3001)<br>
+                    • GLB file missing or corrupted<br>
+                    • CORS issues<br>
+                    <br>
+                    Check browser console for details.
+                `;
+                
+                // Add a fallback cube where the model should be
+                const fallbackCube = new THREE.Mesh(
+                    new THREE.BoxGeometry(2, 1, 3),
+                    new THREE.MeshStandardMaterial({ color: 0x888888 })
+                );
+                fallbackCube.position.set(0, 0.5, 0);
+                scene.add(fallbackCube);
+                console.log('📎 Added fallback cube due to loading error');
+            }
+        );
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Rotate reference objects to show animation is working
+            cube.rotation.y += 0.01;
+            sphere.rotation.x += 0.02;
+            
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        console.log('🎬 Animation loop started');
+    </script>
+</body>
+</html>

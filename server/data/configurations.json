@@ -1,0 +1,73 @@
+{
+  "configurations": [
+    {
+      "id": "1753912804108",
+      "productId": "cmdqi3ahv0000l58sgyabfvux",
+      "shop": "ianii.myshopify.com",
+      "customerId": null,
+      "customerEmail": null,
+      "configurationData": {
+        "material": "leather",
+        "color": "blue",
+        "size": "medium"
+      },
+      "previewImage": "data:,",
+      "totalPrice": 499.98,
+      "status": "saved",
+      "createdAt": "2025-07-30T22:00:04.108Z",
+      "updatedAt": "2025-07-30T22:00:04.108Z"
+    },
+    {
+      "id": "1753913304732",
+      "productId": "cmdqi3ahv0000l58sgyabfvux",
+      "shop": "ianii.myshopify.com",
+      "customerId": null,
+      "customerEmail": null,
+      "configurationData": {
+        "material": "fabric",
+        "color": "blue",
+        "size": "medium"
+      },
+      "previewImage": "data:,",
+      "totalPrice": 299.99,
+      "status": "saved",
+      "createdAt": "2025-07-30T22:08:24.732Z",
+      "updatedAt": "2025-07-30T22:08:24.732Z"
+    },
+    {
+      "id": "1753913306704",
+      "productId": "cmdqi3ahv0000l58sgyabfvux",
+      "shop": "ianii.myshopify.com",
+      "customerId": null,
+      "customerEmail": null,
+      "configurationData": {
+        "material": "fabric",
+        "color": "blue",
+        "size": "medium"
+      },
+      "previewImage": "data:,",
+      "totalPrice": 299.99,
+      "status": "ordered",
+      "createdAt": "2025-07-30T22:08:26.704Z",
+      "updatedAt": "2025-07-30T22:08:26.722Z"
+    },
+    {
+      "id": "1753913309522",
+      "productId": "cmdqi3ahv0000l58sgyabfvux",
+      "shop": "ianii.myshopify.com",
+      "customerId": null,
+      "customerEmail": null,
+      "configurationData": {
+        "material": "fabric",
+        "color": "blue",
+        "size": "medium"
+      },
+      "previewImage": "data:,",
+      "totalPrice": 299.99,
+      "status": "ordered",
+      "createdAt": "2025-07-30T22:08:29.522Z",
+      "updatedAt": "2025-07-30T22:08:29.541Z"
+    }
+  ],
+  "products": []
+}

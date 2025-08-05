@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GLB File Validator</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .test { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+    </style>
+</head>
+<body>
+    <h1>GLB File Validation Test</h1>
+    
+    <div id="test1" class="test">
+        <h3>Test 1: File Accessibility</h3>
+        <div id="result1">Testing...</div>
+    </div>
+    
+    <div id="test2" class="test">
+        <h3>Test 2: File Size & Headers</h3>
+        <div id="result2">Testing...</div>
+    </div>
+    
+    <div id="test3" class="test">
+        <h3>Test 3: GLB File Structure</h3>
+        <div id="result3">Testing...</div>
+    </div>
+
+    <script>
+        async function runTests() {
+            // Test 1: Basic fetch
+            try {
+                const response = await fetch('http://localhost:3001/models/Couch.glb');
+                if (response.ok) {
+                    document.getElementById('result1').innerHTML = `✅ File accessible: ${response.status} ${response.statusText}`;
+                    document.getElementById('test1').className = 'test success';
+                } else {
+                    document.getElementById('result1').innerHTML = `❌ File not accessible: ${response.status} ${response.statusText}`;
+                    document.getElementById('test1').className = 'test error';
+                    return;
+                }
+                
+                // Test 2: File info
+                const contentLength = response.headers.get('content-length');
+                const contentType = response.headers.get('content-type');
+                document.getElementById('result2').innerHTML = `
+                    ✅ File size: ${contentLength ? (parseInt(contentLength)/1024).toFixed(1) + ' KB' : 'Unknown'}<br>
+                    ✅ Content type: ${contentType || 'Unknown'}
+                `;
+                document.getElementById('test2').className = 'test success';
+                
+                // Test 3: GLB structure
+                const arrayBuffer = await response.arrayBuffer();
+                const dataView = new DataView(arrayBuffer);
+                
+                // Check GLB magic number (should be 0x46546C67 = "glTF")
+                const magic = dataView.getUint32(0, true);
+                const expectedMagic = 0x46546C67;
+                
+                if (magic === expectedMagic) {
+                    const version = dataView.getUint32(4, true);
+                    const length = dataView.getUint32(8, true);
+                    
+                    document.getElementById('result3').innerHTML = `
+                        ✅ Valid GLB file<br>
+                        ✅ Version: ${version}<br>
+                        ✅ Length: ${length} bytes<br>
+                        ✅ Magic number: 0x${magic.toString(16)}
+                    `;
+                    document.getElementById('test3').className = 'test success';
+                } else {
+                    document.getElementById('result3').innerHTML = `
+                        ❌ Invalid GLB file<br>
+                        ❌ Expected magic: 0x${expectedMagic.toString(16)}<br>
+                        ❌ Found magic: 0x${magic.toString(16)}
+                    `;
+                    document.getElementById('test3').className = 'test error';
+                }
+                
+            } catch (error) {
+                document.getElementById('result1').innerHTML = `❌ Network error: ${error.message}`;
+                document.getElementById('test1').className = 'test error';
+            }
+        }
+        
+        // Run tests when page loads
+        runTests();
+    </script>
+</body>
+</html>
