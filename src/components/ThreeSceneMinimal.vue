@@ -303,7 +303,6 @@ onUnmounted(() => {
   flex: 1;
   position: relative;
   background: #fafafa;
-  /* min-height: 600px; */
 }
 
 .viewer-container {
