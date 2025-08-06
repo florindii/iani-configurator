@@ -150,6 +150,26 @@
         }
       },
       "createdAt": "2025-08-05T23:51:23.862Z"
+    },
+    {
+      "id": "cart_1754496498450_mhvj4htp5",
+      "productId": null,
+      "variantId": "variant_1754496498450_ktgr59x80",
+      "variantTitle": "Custom undefined orange undefined",
+      "price": 299.99,
+      "quantity": 1,
+      "shop": null,
+      "customerId": null,
+      "customerEmail": null,
+      "status": "in_cart",
+      "configurationData": {
+        "color": "orange",
+        "basePrice": 299.99,
+        "selectedOptions": {
+          "color": "orange"
+        }
+      },
+      "createdAt": "2025-08-06T16:08:18.450Z"
     }
   ]
 }

@@ -141,14 +141,13 @@ const loadModel = () => {
   loader.load(
     '/models/Couch.glb',
     (gltf) => {
-      console.log('✅ GLB loaded successfully:', gltf)
       
       model = gltf.scene
+      console.log("🚀 ~ loadModel ~ model:", model)
       
       // Apply bright blue material to all meshes
       model.traverse((child) => {
         if (child.isMesh) {
-          console.log('📦 Processing mesh:', child.name)
           child.material = new THREE.MeshStandardMaterial({
             color: 0x0088ff, // Bright blue
             transparent: false,
@@ -159,8 +158,8 @@ const loadModel = () => {
       })
       
       // Scale and position
-      model.scale.setScalar(2.5)
-      model.position.set(0, -0.5, 0)
+      model.scale.setScalar(1.5)
+      model.position.set(0, -1.5, 0)
       
       // Add to scene
       scene.add(model)
@@ -263,6 +262,18 @@ const handleResize = () => {
 // Lifecycle
 onMounted(() => {
   console.log('🚀 Component mounted, initializing...')
+  
+  // Check if we're in an iframe
+  const isInIframe = window !== window.parent
+  if (isInIframe) {
+    console.log('🖼️ Running inside iframe (Shopify product page)')
+    // Add iframe-specific styles or behavior if needed
+    document.body.style.margin = '0'
+    document.body.style.padding = '0'
+  } else {
+    console.log('🌐 Running as standalone page')
+  }
+  
   initThreeJS()
   
   // Add resize listener
@@ -280,7 +291,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 600px;
+  height: 100%;
   font-family: Arial, sans-serif;
   border-radius: 12px;
   overflow: hidden;
@@ -292,7 +303,7 @@ onUnmounted(() => {
   flex: 1;
   position: relative;
   background: #fafafa;
-  min-height: 450px;
+  /* min-height: 600px; */
 }
 
 .viewer-container {
@@ -328,10 +339,16 @@ onUnmounted(() => {
 }
 
 .config-panel {
-  height: 150px;
+  height: auto;
+  min-height: 160px;
+  max-height: 200px;
   background: white;
   border-top: 2px solid #e1e5e9;
-  overflow: hidden;
+  overflow: visible;
+  /* Enhanced safe area padding for mobile */
+  padding-bottom: max(env(safe-area-inset-bottom, 30px), 30px);
+  /* Push entire panel up to avoid navigation overlap */
+  margin-bottom: 20px;
 }
 
 .config-content {
@@ -355,7 +372,8 @@ onUnmounted(() => {
 
 .config-options {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  gap: 15px;
   align-items: center;
   flex: 1;
 }
@@ -376,8 +394,10 @@ onUnmounted(() => {
 
 .config-group {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  width: 100%;
 }
 
 .config-group label {
@@ -389,8 +409,11 @@ onUnmounted(() => {
 
 .color-options {
   display: flex;
-  gap: 8px;
+  justify-content: center;
+  gap: 12px;
   flex-wrap: wrap;
+  max-width: 100%;
+  padding: 0 10px;
 }
 
 .color-swatch {
@@ -414,20 +437,25 @@ onUnmounted(() => {
 }
 
 .cart-section {
-  margin-left: auto;
+  width: 100%;
+  display: flex;
+  justify-content: center;
 }
 
 .add-to-cart-btn {
   background: linear-gradient(135deg, #0066cc, #0052a3);
   color: white;
   border: none;
-  padding: 12px 24px;
+  padding: 14px 28px;
   border-radius: 25px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 2px 8px rgba(0, 102, 204, 0.3);
+  min-width: 200px;
+  max-width: 280px;
+  width: auto;
 }
 
 .add-to-cart-btn:hover:not(:disabled) {
@@ -441,5 +469,169 @@ onUnmounted(() => {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+/* Desktop/Tablet Layout - Side by side */
+@media (min-width: 769px) {
+  .config-options {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 30px;
+    padding: 0 10px;
+  }
+  
+  .config-group {
+    flex: 1;
+    align-items: flex-start;
+  }
+  
+  .cart-section {
+    width: auto;
+    justify-content: flex-end;
+    flex-shrink: 0;
+  }
+  
+  .add-to-cart-btn {
+    min-width: 220px;
+    max-width: 300px;
+    padding: 16px 32px;
+    font-size: 17px;
+  }
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+  .configurator-container {
+    height: 100vh;
+    border-radius: 0;
+    /* Ensure container accounts for safe areas */
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
+  }
+  
+  .viewer-section {
+    /* Reduce 3D area to ensure controls are visible */
+    flex: 1;
+    min-height: calc(100vh - 280px);
+  }
+  
+  .config-panel {
+    min-height: 220px;
+    max-height: 260px;
+    /* Strong bottom margin to push above navigation */
+    margin-bottom: max(env(safe-area-inset-bottom, 50px), 50px);
+    padding-bottom: 30px;
+    /* Add box shadow to make it more visible */
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  }
+  
+  .config-content {
+    padding: 25px 20px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  
+  .config-header h3 {
+    font-size: 16px;
+    margin-bottom: 15px;
+  }
+  
+  .config-options {
+    gap: 15px;
+  }
+  
+  .color-options {
+    gap: 15px;
+    padding: 0;
+  }
+  
+  .color-swatch {
+    width: 40px;
+    height: 40px;
+    border-width: 3px;
+  }
+  
+  .cart-section {
+    margin-top: 10px;
+  }
+  
+  .add-to-cart-btn {
+    width: 100%;
+    max-width: 320px;
+    padding: 16px 20px;
+    font-size: 18px;
+    font-weight: 700;
+    /* Strong margin to ensure button visibility */
+    margin-bottom: 20px;
+    /* Add min-height for easier tapping */
+    min-height: 56px;
+  }
+}
+
+/* Extra small phones */
+@media (max-width: 480px) {
+  .viewer-section {
+    min-height: calc(100vh - 300px);
+  }
+  
+  .config-panel {
+    min-height: 240px;
+    max-height: 280px;
+    /* Extra large margin for small phones to clear navigation */
+    margin-bottom: max(env(safe-area-inset-bottom, 60px), 60px);
+    padding-bottom: 40px;
+  }
+  
+  .config-options {
+    gap: 12px;
+  }
+  
+  .color-options {
+    gap: 10px;
+  }
+  
+  .color-swatch {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .add-to-cart-btn {
+    font-size: 16px;
+    padding: 14px 18px;
+    margin-bottom: 25px;
+    min-height: 52px;
+  }
+}
+
+/* Landscape orientation fixes */
+@media (max-height: 600px) and (orientation: landscape) {
+  .config-panel {
+    min-height: 140px;
+    max-height: 160px;
+    margin-bottom: 20px;
+  }
+  
+  .config-content {
+    padding: 15px;
+  }
+  
+  .config-options {
+    gap: 8px;
+  }
+  
+  .color-options {
+    gap: 8px;
+  }
+  
+  .color-swatch {
+    width: 30px;
+    height: 30px;
+  }
+  
+  .add-to-cart-btn {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
 }
 </style>
