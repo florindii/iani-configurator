@@ -1,7 +1,7 @@
-<!-- Minimal Working ThreeScene.vue -->
+<!-- Fullscreen 3D Configurator - Roostr Style Layout -->
 <template>
-  <div class="configurator-container">
-    <!-- 3D Viewer - Main Area -->
+  <div class="configurator-fullscreen">
+    <!-- Left Side: 3D Viewer -->
     <div class="viewer-section">
       <div ref="canvasContainer" class="viewer-container"></div>
       
@@ -12,38 +12,81 @@
       </div>
     </div>
 
-    <!-- Configuration Panel - Bottom -->
-    <div class="config-panel">
+    <!-- Right Side: Configuration Panel -->
+    <div class="config-section">
       <div class="config-content">
+        <!-- Header -->
         <div class="config-header">
-          <h3>🛋️ Customize Your Sofa</h3>
+          <h2>🛋️ Customize Your Sofa</h2>
+          <p class="product-description">Configure your sofa and add it to your cart</p>
         </div>
-        
+
+        <!-- Price Display -->
+        <div class="price-section">
+          <div class="current-price">
+            <span class="currency">$</span>
+            <span class="amount">{{ calculatedPrice.toFixed(2) }}</span>
+          </div>
+        </div>
+
         <!-- Configuration Options -->
         <div class="config-options">
-          <div class="config-group">
-            <label>Color:</label>
-            <div class="color-options">
+          <!-- Color Selection -->
+          <div class="option-group">
+            <h3 class="option-title">Color</h3>
+            <p class="option-subtitle">{{ getSelectedColorLabel() }}</p>
+            <div class="color-grid">
               <div 
                 v-for="color in colorOptions" 
                 :key="color.value"
-                :class="['color-swatch', { active: configuration.color === color.value }]"
-                :style="{ backgroundColor: color.hex }"
+                :class="['color-option', { active: configuration.color === color.value }]"
                 @click="updateColor(color.value)"
-                :title="color.label"
-              ></div>
+                :title="`${color.label} - $${color.price}`"
+              >
+                <div 
+                  class="color-swatch"
+                  :style="{ backgroundColor: color.hex }"
+                ></div>
+                <span class="color-name">{{ color.label }}</span>
+                <span class="color-price">${{ color.price.toFixed(0) }}</span>
+              </div>
             </div>
           </div>
 
-          <!-- Add to Cart Button -->
-          <div class="cart-section">
-            <button 
-              @click="addToCart" 
-              :disabled="!model || isAddingToCart"
-              class="add-to-cart-btn">
-              {{ isAddingToCart ? 'Adding...' : `Add to Cart - ${calculatedPrice.toFixed(2)}` }}
-            </button>
+          <!-- Additional Options Placeholder -->
+          <div class="option-group">
+            <h3 class="option-title">Size</h3>
+            <p class="option-subtitle">2-Seater</p>
+            <div class="size-options">
+              <div class="size-option active">
+                <span class="size-name">2-Seater</span>
+                <span class="size-dimensions">150cm × 85cm</span>
+              </div>
+            </div>
           </div>
+
+          <!-- Material Options Placeholder -->
+          <div class="option-group">
+            <h3 class="option-title">Material</h3>
+            <p class="option-subtitle">Premium Fabric</p>
+            <div class="material-options">
+              <div class="material-option active">
+                <span class="material-name">Premium Fabric</span>
+                <span class="material-description">Durable & comfortable</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add to Cart Button -->
+        <div class="cart-section">
+          <button 
+            @click="addToCart" 
+            :disabled="!model || isAddingToCart"
+            class="add-to-cart-btn">
+            <span v-if="isAddingToCart">Adding to Cart...</span>
+            <span v-else>Add to Cart - ${{ calculatedPrice.toFixed(2) }}</span>
+          </button>
         </div>
       </div>
     </div>
@@ -51,7 +94,7 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, computed } from 'vue'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
@@ -60,186 +103,362 @@ import shopifyService from '../services/shopifyService'
 // Refs
 const canvasContainer = ref(null)
 const isLoading = ref(true)
-const sceneChildren = ref(0)
 const isAddingToCart = ref(false)
-const calculatedPrice = ref(299.99) // Base price
+const calculatedPrice = ref(299.99)
 
-// Three.js refs
+// Three.js variables
 let scene, camera, renderer, model, controls
 
 // Configuration state
 const configuration = ref({
-  color: 'blue'
+  color: 'blue',
+  size: '2-seater',
+  material: 'fabric'
 })
 
-const colorOptions = [
-  { label: 'Blue', value: 'blue', hex: '#4A90E2' },
-  { label: 'Red', value: 'red', hex: '#E24A4A' },
-  { label: 'Green', value: 'green', hex: '#4AE24A' },
-  { label: 'Brown', value: 'brown', hex: '#8B4513' },
-  { label: 'Purple', value: 'purple', hex: '#9B59B6' },
-  { label: 'Orange', value: 'orange', hex: '#E67E22' }
-]
+// Color options with pricing
+const colorOptions = ref([
+  { label: 'Ocean Blue', value: 'blue', hex: '#4A90E2', price: 299.99 },
+  { label: 'Crimson Red', value: 'red', hex: '#E74C3C', price: 319.99 },
+  { label: 'Forest Green', value: 'green', hex: '#2ECC71', price: 309.99 },
+  { label: 'Chocolate Brown', value: 'brown', hex: '#8B4513', price: 329.99 },
+  { label: 'Royal Purple', value: 'purple', hex: '#9B59B6', price: 339.99 },
+  { label: 'Sunset Orange', value: 'orange', hex: '#E67E22', price: 314.99 }
+])
 
-// Methods
-const initThreeJS = () => {
-  console.log('🚀 Initializing Three.js...')
-  
+// Helper functions
+const getSelectedColorLabel = () => {
+  const selected = colorOptions.value.find(c => c.value === configuration.value.color)
+  return selected ? selected.label : 'Select Color'
+}
+
+// Initialize Three.js scene
+const initThreeJS = async () => {
   if (!canvasContainer.value) {
-    console.error('❌ Canvas container not found!')
+    console.error('❌ Canvas container not found')
     return
   }
+
+  console.log('🔧 Initializing Three.js scene...')
   
-  // Scene setup
-  scene = new THREE.Scene()
-  scene.background = new THREE.Color(0xfafafa)
-  
-  // Camera setup
-  camera = new THREE.PerspectiveCamera(75, canvasContainer.value.clientWidth / canvasContainer.value.clientHeight, 0.1, 1000)
-  camera.position.set(4, 2, 6)
-  camera.lookAt(0, 0, 0)
-  
-  // Renderer setup
-  renderer = new THREE.WebGLRenderer({ antialias: true })
-  renderer.setSize(canvasContainer.value.clientWidth, canvasContainer.value.clientHeight)
-  canvasContainer.value.appendChild(renderer.domElement)
-  
-  // Camera controls
-  controls = new OrbitControls(camera, renderer.domElement)
-  controls.enableDamping = true
-  controls.dampingFactor = 0.08
-  controls.enableZoom = true
-  controls.enableRotate = true
-  controls.enablePan = false
-  controls.maxDistance = 15
-  controls.minDistance = 3
-  controls.maxPolarAngle = Math.PI * 0.8
-  controls.minPolarAngle = Math.PI * 0.1
-  
-  // Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8)
-  scene.add(ambientLight)
-  
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
-  directionalLight.position.set(5, 5, 5)
-  scene.add(directionalLight)
-  
-  console.log('✅ Three.js setup complete')
-  
-  // Load model
-  loadModel()
-  
-  // Start animation
-  animate()
+  try {
+    // Scene setup
+    scene = new THREE.Scene()
+    scene.background = new THREE.Color(0xf8f9fa)
+    
+    // Camera setup
+    const width = canvasContainer.value.clientWidth
+    const height = canvasContainer.value.clientHeight
+    
+    camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000)
+    camera.position.set(4, 3, 4)
+    
+    // Renderer setup
+    renderer = new THREE.WebGLRenderer({ antialias: true })
+    renderer.setSize(width, height)
+    renderer.setPixelRatio(window.devicePixelRatio)
+    renderer.shadowMap.enabled = true
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    renderer.outputEncoding = THREE.sRGBEncoding
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.toneMappingExposure = 1.2
+    
+    canvasContainer.value.appendChild(renderer.domElement)
+    
+    // Enhanced Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4)
+    scene.add(ambientLight)
+    
+    const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8)
+    directionalLight1.position.set(10, 10, 5)
+    directionalLight1.castShadow = true
+    directionalLight1.shadow.mapSize.width = 2048
+    directionalLight1.shadow.mapSize.height = 2048
+    scene.add(directionalLight1)
+    
+    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.3)
+    directionalLight2.position.set(-5, 5, -5)
+    scene.add(directionalLight2)
+    
+    // Controls
+    controls = new OrbitControls(camera, renderer.domElement)
+    controls.enableDamping = true
+    controls.dampingFactor = 0.05
+    controls.minDistance = 2
+    controls.maxDistance = 10
+    controls.maxPolarAngle = Math.PI / 2.2
+    controls.autoRotate = false
+    controls.autoRotateSpeed = 1
+    
+    // Load 3D model
+    await loadModel()
+    
+    // Start animation loop
+    animate()
+    
+    // Handle window resize
+    const handleResize = () => {
+      if (!canvasContainer.value || !camera || !renderer) return
+      
+      const width = canvasContainer.value.clientWidth
+      const height = canvasContainer.value.clientHeight
+      
+      camera.aspect = width / height
+      camera.updateProjectionMatrix()
+      renderer.setSize(width, height)
+    }
+    
+    window.addEventListener('resize', handleResize)
+    
+    console.log('✅ Three.js scene initialized successfully')
+    
+  } catch (error) {
+    console.error('❌ Failed to initialize Three.js:', error)
+    isLoading.value = false
+  }
 }
 
-const loadModel = () => {
-  console.log('🔄 Loading GLB model...')
+// Load 3D model - Use original Couch.glb
+const loadModel = async () => {
+  console.log('📦 Loading original Couch.glb model...')
   
-  const loader = new GLTFLoader()
+  try {
+    const loader = new GLTFLoader()
+    
+    // Load the original sofa model
+    const gltf = await new Promise((resolve, reject) => {
+      loader.load(
+        '/models/Couch.glb', // Your original model path
+        (gltf) => resolve(gltf),
+        (progress) => {
+          console.log('📈 Loading progress:', (progress.loaded / progress.total * 100) + '%')
+        },
+        (error) => reject(error)
+      )
+    })
+    
+    model = gltf.scene
+    
+    // Scale and position the model appropriately
+    model.scale.setScalar(1)
+    model.position.set(0, 0, 0)
+    
+    // Enable shadows
+    model.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+        
+        // Store original material for color changes
+        if (child.material) {
+          child.userData.originalMaterial = child.material.clone()
+          
+          // Apply initial color
+          if (child.material.map) {
+            // If has texture, tint it
+            child.material.color.setHex(getColorHex(configuration.value.color))
+          } else {
+            // If no texture, apply solid color
+            child.material.color.setHex(getColorHex(configuration.value.color))
+          }
+        }
+      }
+    })
+    
+    scene.add(model)
+    
+    // Auto-frame the model
+    const box = new THREE.Box3().setFromObject(model)
+    const center = box.getCenter(new THREE.Vector3())
+    const size = box.getSize(new THREE.Vector3())
+    
+    // Position camera to frame the model nicely
+    const maxDim = Math.max(size.x, size.y, size.z)
+    const fov = camera.fov * (Math.PI / 180)
+    const cameraDistance = maxDim / (2 * Math.tan(fov / 2)) * 1.5
+    
+    camera.position.set(
+      center.x + cameraDistance * 0.8,
+      center.y + cameraDistance * 0.6, 
+      center.z + cameraDistance * 0.8
+    )
+    camera.lookAt(center)
+    
+    // Update controls target
+    if (controls) {
+      controls.target.copy(center)
+      controls.update()
+    }
+    
+    isLoading.value = false
+    console.log('✅ Original Couch model loaded successfully')
+    
+  } catch (error) {
+    console.error('❌ Failed to load Couch model:', error)
+    console.log('🔄 Falling back to basic model...')
+    
+    // Fallback to basic model if Couch.glb fails
+    const geometry = new THREE.BoxGeometry(3, 1.2, 1.5)
+    const material = new THREE.MeshLambertMaterial({ color: getColorHex(configuration.value.color) })
+    
+    model = new THREE.Mesh(geometry, material)
+    model.position.set(0, 0.6, 0)
+    model.castShadow = true
+    model.receiveShadow = true
+    
+    scene.add(model)
+    
+    // Store material reference for color updates
+    model.userData.materials = [material]
+    
+    isLoading.value = false
+  }
+}
+
+// Update model color
+const updateColor = (colorValue) => {
+  console.log('🎨 Updating color to:', colorValue)
   
-  loader.load(
-    '/models/Couch.glb',
-    (gltf) => {
-      
-      model = gltf.scene
-      console.log("🚀 ~ loadModel ~ model:", model)
-      
-      // Apply bright blue material to all meshes
+  configuration.value.color = colorValue
+  
+  // Update model color
+  if (model) {
+    const newColorHex = getColorHex(colorValue)
+    
+    if (model.traverse) {
+      // GLTF model - traverse all meshes
       model.traverse((child) => {
-        if (child.isMesh) {
-          child.material = new THREE.MeshStandardMaterial({
-            color: 0x0088ff, // Bright blue
-            transparent: false,
-            opacity: 1.0
-          })
-          child.visible = true
+        if (child.isMesh && child.material) {
+          if (child.material.map) {
+            // If has texture, tint it
+            child.material.color.setHex(newColorHex)
+          } else {
+            // If no texture, apply solid color
+            child.material.color.setHex(newColorHex)
+          }
         }
       })
-      
-      // Scale and position
-      model.scale.setScalar(1.5)
-      model.position.set(0, -1.5, 0)
-      
-      // Add to scene
-      scene.add(model)
-      sceneChildren.value = scene.children.length
-      isLoading.value = false
-      
-      console.log('✅ Model added to scene')
-    },
-    (xhr) => {
-      if (xhr.lengthComputable) {
-        const progress = (xhr.loaded / xhr.total * 100)
-        console.log(`⏳ Loading progress: ${progress.toFixed(1)}%`)
-      }
-    },
-    (error) => {
-      console.error('❌ Error loading GLB:', error)
-      isLoading.value = false
-      
-      // Add fallback cube
-      const cube = new THREE.Mesh(
-        new THREE.BoxGeometry(2, 1, 3),
-        new THREE.MeshStandardMaterial({ color: 0xff0000 })
-      )
-      cube.position.set(0, 0.5, 0)
-      scene.add(cube)
-      model = cube
-      sceneChildren.value = scene.children.length
-      console.log('📎 Added fallback cube')
+    } else if (model.userData && model.userData.materials) {
+      // Fallback model - update stored materials
+      model.userData.materials.forEach(material => {
+        material.color.setHex(newColorHex)
+      })
+    } else if (model.material) {
+      // Simple mesh
+      model.material.color.setHex(newColorHex)
     }
-  )
+  }
+  
+  // Update calculated price
+  const selectedColor = colorOptions.value.find(c => c.value === colorValue)
+  if (selectedColor) {
+    calculatedPrice.value = selectedColor.price
+  }
 }
 
-const updateColor = (color) => {
-  configuration.value.color = color
-  if (!model) return
-  
-  const colorOption = colorOptions.find(c => c.value === color)
-  if (!colorOption) return
-  
-  const colorHex = colorOption.hex.replace('#', '0x')
-  
-  model.traverse((child) => {
-    if (child.isMesh && child.material) {
-      child.material.color.setHex(colorHex)
-    }
-  })
-  
-  console.log('🎨 Color changed to:', color)
+// Get color hex value
+const getColorHex = (colorValue) => {
+  const colorMap = {
+    blue: 0x4A90E2,
+    red: 0xE74C3C,
+    green: 0x2ECC71,
+    brown: 0x8B4513,
+    purple: 0x9B59B6,
+    orange: 0xE67E22
+  }
+  return colorMap[colorValue] || 0x4A90E2
 }
 
+// Add to cart function - integrates with Shopify
 const addToCart = async () => {
-  if (isAddingToCart.value) return
+  console.log('🛒 Adding to cart...')
   
   try {
     isAddingToCart.value = true
-    console.log('🛒 Starting add to cart process...')
     
-    const configurationData = {
-      color: configuration.value.color,
-      basePrice: 299.99,
-      selectedOptions: configuration.value
+    // Get selected configuration
+    const selectedColor = colorOptions.value.find(c => c.value === configuration.value.color)
+    
+    // If embedded in Shopify, send message to parent
+    if (shopifyService.isEmbeddedInShopify()) {
+      // Send configuration to Shopify parent window
+      window.parent.postMessage({
+        type: 'CONFIGURATOR_ADD_TO_CART',
+        data: {
+          productId: getProductId(),
+          variantId: `variant-${configuration.value.color}`,
+          color: configuration.value.color,
+          colorLabel: selectedColor?.label || 'Selected Color',
+          price: calculatedPrice.value,
+          quantity: 1,
+          configuration: configuration.value
+        }
+      }, '*')
+      
+      // Show success message
+      showSuccessMessage(`✅ ${selectedColor?.label || 'Custom'} sofa added to cart!`)
+      
+    } else {
+      // Standalone mode - simulate cart addition
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      showSuccessMessage(`✅ ${selectedColor?.label || 'Custom'} sofa added to cart! (Demo mode)`)
     }
-    
-    const result = await shopifyService.addToCart(configurationData, calculatedPrice.value)
-    
-    console.log('✅ Successfully added to cart:', result)
-    alert('Product added to cart successfully!')
     
   } catch (error) {
     console.error('❌ Failed to add to cart:', error)
-    alert('Failed to add to cart. Please try again.')
+    showSuccessMessage('❌ Failed to add to cart. Please try again.', 'error')
   } finally {
     isAddingToCart.value = false
   }
 }
 
+// Helper to get product ID
+const getProductId = () => {
+  const urlParams = new URLSearchParams(window.location.search)
+  return urlParams.get('productId') || 'customizable-sofa'
+}
+
+// Show success message
+const showSuccessMessage = (message, type = 'success') => {
+  // Create notification element
+  const notification = document.createElement('div')
+  notification.className = `configurator-notification ${type}`
+  notification.textContent = message
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: ${type === 'error' ? '#dc3545' : '#28a745'};
+    color: white;
+    padding: 16px 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    z-index: 10000;
+    font-weight: 600;
+    animation: slideInRight 0.3s ease-out;
+  `
+  
+  document.body.appendChild(notification)
+  
+  // Auto-remove after 4 seconds
+  setTimeout(() => {
+    if (notification.parentNode) {
+      notification.style.animation = 'slideOutRight 0.3s ease-out'
+      setTimeout(() => {
+        notification.parentNode.removeChild(notification)
+      }, 300)
+    }
+  }, 4000)
+  
+  console.log(`📢 Notification: ${message}`)
+}
+
+// Animation loop
 const animate = () => {
+  if (!renderer || !scene || !camera) return
+  
   requestAnimationFrame(animate)
   
-  // Update controls for smooth damping
   if (controls) {
     controls.update()
   }
@@ -247,62 +466,56 @@ const animate = () => {
   renderer.render(scene, camera)
 }
 
-// Handle window resize
-const handleResize = () => {
-  if (!camera || !renderer || !canvasContainer.value) return
-  
-  const width = canvasContainer.value.clientWidth
-  const height = canvasContainer.value.clientHeight
-  
-  camera.aspect = width / height
-  camera.updateProjectionMatrix()
-  renderer.setSize(width, height)
-}
-
 // Lifecycle
 onMounted(() => {
-  console.log('🚀 Component mounted, initializing...')
+  console.log('🚀 Fullscreen configurator mounted')
   
-  // Check if we're in an iframe
-  const isInIframe = window !== window.parent
-  if (isInIframe) {
-    console.log('🖼️ Running inside iframe (Shopify product page)')
-    // Add iframe-specific styles or behavior if needed
-    document.body.style.margin = '0'
-    document.body.style.padding = '0'
-  } else {
-    console.log('🌐 Running as standalone page')
+  // Initialize 3D scene
+  setTimeout(() => {
+    initThreeJS()
+  }, 100)
+  
+  // Send ready message to Shopify
+  if (shopifyService.isEmbeddedInShopify()) {
+    window.parent.postMessage({
+      type: 'CONFIGURATOR_READY',
+      data: {
+        mode: 'fullscreen',
+        productId: getProductId()
+      }
+    }, '*')
   }
-  
-  initThreeJS()
-  
-  // Add resize listener
-  window.addEventListener('resize', handleResize)
 })
 
-// Cleanup
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
+  console.log('🧹 Cleaning up configurator...')
+  
+  // Cleanup Three.js
+  if (renderer) {
+    renderer.dispose()
+  }
+  if (scene) {
+    scene.clear()
+  }
 })
 </script>
 
 <style scoped>
-.configurator-container {
+/* Fullscreen Layout */
+.configurator-fullscreen {
   display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  font-family: Arial, sans-serif;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  background: white;
+  height: 100vh;
+  width: 100vw;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #ffffff;
 }
 
+/* Left Side: 3D Viewer */
 .viewer-section {
   flex: 1;
   position: relative;
-  background: #fafafa;
+  background: #f8f9fa;
+  border-right: 1px solid #e1e5e9;
 }
 
 .viewer-container {
@@ -310,26 +523,29 @@ onUnmounted(() => {
   height: 100%;
 }
 
+/* Loading Overlay */
 .loading-overlay {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(255, 255, 255, 0.9);
+  width: 100%;
+  height: 100%;
+  background: rgba(248, 249, 250, 0.95);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  z-index: 5;
 }
 
 .loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #3498db;
+  width: 60px;
+  height: 60px;
+  border: 4px solid #e1e5e9;
+  border-top: 4px solid #0066cc;
   border-radius: 50%;
   animation: spin 1s linear infinite;
+  margin-bottom: 20px;
 }
 
 @keyframes spin {
@@ -337,130 +553,208 @@ onUnmounted(() => {
   100% { transform: rotate(360deg); }
 }
 
-.config-panel {
-  height: auto;
-  min-height: 160px;
-  max-height: 200px;
+/* Right Side: Configuration Panel */
+.config-section {
+  width: 400px;
   background: white;
-  border-top: 2px solid #e1e5e9;
-  overflow: visible;
-  /* Enhanced safe area padding for mobile */
-  padding-bottom: max(env(safe-area-inset-bottom, 30px), 30px);
-  /* Push entire panel up to avoid navigation overlap */
-  margin-bottom: 20px;
+  border-left: 1px solid #e1e5e9;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
 }
 
 .config-content {
-  padding: 15px 20px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.config-header {
-  margin-bottom: 15px;
-  text-align: center;
-}
-
-.config-header h3 {
-  margin: 0;
-  font-size: 18px;
-  color: #1a1a1a;
-  font-weight: 600;
-}
-
-.config-options {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  align-items: center;
+  padding: 24px;
   flex: 1;
-}
-
-.config-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #28a745;
-}
-
-.config-group {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
 }
 
-.config-group label {
-  font-weight: 600;
-  color: #4a4a4a;
+/* Header */
+.config-header {
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e1e5e9;
+  padding-bottom: 20px;
+}
+
+.config-header h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+}
+
+.product-description {
   font-size: 14px;
+  color: #666;
   margin: 0;
 }
 
-.color-options {
+/* Price Section */
+.price-section {
+  margin-bottom: 32px;
+  padding: 16px 0;
+  border-bottom: 1px solid #e1e5e9;
+}
+
+.current-price {
   display: flex;
-  justify-content: center;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.currency {
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+}
+
+.amount {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+/* Configuration Options */
+.config-options {
+  flex: 1;
+  margin-bottom: 24px;
+}
+
+.option-group {
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.option-group:last-child {
+  border-bottom: none;
+}
+
+.option-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 4px 0;
+}
+
+.option-subtitle {
+  font-size: 14px;
+  color: #666;
+  margin: 0 0 16px 0;
+}
+
+/* Color Grid */
+.color-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
-  flex-wrap: wrap;
-  max-width: 100%;
-  padding: 0 10px;
+}
+
+.color-option {
+  padding: 16px;
+  border: 2px solid #e1e5e9;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: white;
+}
+
+.color-option:hover {
+  border-color: #0066cc;
+  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.15);
+}
+
+.color-option.active {
+  border-color: #0066cc;
+  background: #f0f7ff;
+  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.2);
 }
 
 .color-swatch {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  cursor: pointer;
+  margin-bottom: 8px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+.color-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.color-price {
+  font-size: 11px;
+  color: #666;
+  font-weight: 500;
+}
+
+/* Size and Material Options */
+.size-options, .material-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.size-option, .material-option {
+  padding: 12px 16px;
   border: 2px solid #e1e5e9;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.color-swatch:hover {
-  transform: scale(1.1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.color-swatch.active {
+.size-option.active, .material-option.active {
   border-color: #0066cc;
-  transform: scale(1.15);
-  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.3);
+  background: #f0f7ff;
 }
 
+.size-name, .material-name {
+  font-weight: 600;
+  color: #333;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.size-dimensions, .material-description {
+  font-size: 12px;
+  color: #666;
+}
+
+/* Add to Cart Button */
 .cart-section {
-  width: 100%;
-  display: flex;
-  justify-content: center;
+  margin-top: auto;
+  padding-top: 24px;
+  border-top: 1px solid #e1e5e9;
 }
 
 .add-to-cart-btn {
-  background: linear-gradient(135deg, #0066cc, #0052a3);
+  width: 100%;
+  background: linear-gradient(135deg, #ff6b35, #f7931e);
   color: white;
   border: none;
-  padding: 14px 28px;
-  border-radius: 25px;
-  font-weight: 600;
+  padding: 18px 24px;
+  border-radius: 8px;
   font-size: 16px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.3);
-  min-width: 200px;
-  max-width: 280px;
-  width: auto;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(255, 107, 53, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .add-to-cart-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #0052a3, #004080);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
 }
 
 .add-to-cart-btn:disabled {
@@ -470,167 +764,72 @@ onUnmounted(() => {
   box-shadow: none;
 }
 
-/* Desktop/Tablet Layout - Side by side */
-@media (min-width: 769px) {
-  .config-options {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    gap: 30px;
-    padding: 0 10px;
-  }
-  
-  .config-group {
-    flex: 1;
-    align-items: flex-start;
-  }
-  
-  .cart-section {
-    width: auto;
-    justify-content: flex-end;
-    flex-shrink: 0;
-  }
-  
-  .add-to-cart-btn {
-    min-width: 220px;
-    max-width: 300px;
-    padding: 16px 32px;
-    font-size: 17px;
-  }
-}
-
-/* Mobile Optimizations */
+/* Mobile Responsive */
 @media (max-width: 768px) {
-  .configurator-container {
-    height: 100vh;
-    border-radius: 0;
-    /* Ensure container accounts for safe areas */
-    padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
-  }
-  
-  .viewer-section {
-    /* Reduce 3D area to ensure controls are visible */
-    flex: 1;
-    min-height: calc(100vh - 280px);
-  }
-  
-  .config-panel {
-    min-height: 220px;
-    max-height: 260px;
-    /* Strong bottom margin to push above navigation */
-    margin-bottom: max(env(safe-area-inset-bottom, 50px), 50px);
-    padding-bottom: 30px;
-    /* Add box shadow to make it more visible */
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
-  }
-  
-  .config-content {
-    padding: 25px 20px 20px 20px;
-    display: flex;
+  .configurator-fullscreen {
     flex-direction: column;
-    height: 100%;
+    height: 100vh;
   }
   
-  .config-header h3 {
-    font-size: 16px;
-    margin-bottom: 15px;
-  }
-  
-  .config-options {
-    gap: 15px;
-  }
-  
-  .color-options {
-    gap: 15px;
-    padding: 0;
-  }
-  
-  .color-swatch {
-    width: 40px;
-    height: 40px;
-    border-width: 3px;
-  }
-  
-  .cart-section {
-    margin-top: 10px;
-  }
-  
-  .add-to-cart-btn {
-    width: 100%;
-    max-width: 320px;
-    padding: 16px 20px;
-    font-size: 18px;
-    font-weight: 700;
-    /* Strong margin to ensure button visibility */
-    margin-bottom: 20px;
-    /* Add min-height for easier tapping */
-    min-height: 56px;
-  }
-}
-
-/* Extra small phones */
-@media (max-width: 480px) {
   .viewer-section {
-    min-height: calc(100vh - 300px);
+    flex: 1;
+    min-height: 60vh;
   }
   
-  .config-panel {
-    min-height: 240px;
-    max-height: 280px;
-    /* Extra large margin for small phones to clear navigation */
-    margin-bottom: max(env(safe-area-inset-bottom, 60px), 60px);
-    padding-bottom: 40px;
-  }
-  
-  .config-options {
-    gap: 12px;
-  }
-  
-  .color-options {
-    gap: 10px;
-  }
-  
-  .color-swatch {
-    width: 36px;
-    height: 36px;
-  }
-  
-  .add-to-cart-btn {
-    font-size: 16px;
-    padding: 14px 18px;
-    margin-bottom: 25px;
-    min-height: 52px;
-  }
-}
-
-/* Landscape orientation fixes */
-@media (max-height: 600px) and (orientation: landscape) {
-  .config-panel {
-    min-height: 140px;
-    max-height: 160px;
-    margin-bottom: 20px;
+  .config-section {
+    width: 100%;
+    max-height: 40vh;
+    border-left: none;
+    border-top: 1px solid #e1e5e9;
   }
   
   .config-content {
-    padding: 15px;
+    padding: 16px;
   }
   
-  .config-options {
+  .color-grid {
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 8px;
   }
   
-  .color-options {
-    gap: 8px;
+  .color-option {
+    padding: 12px 8px;
   }
   
   .color-swatch {
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
   }
   
-  .add-to-cart-btn {
-    padding: 10px 16px;
-    font-size: 14px;
+  .config-header h2 {
+    font-size: 20px;
+  }
+  
+  .current-price .amount {
+    font-size: 28px;
+  }
+}
+
+/* Notification animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
   }
 }
 </style>

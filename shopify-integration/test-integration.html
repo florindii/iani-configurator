@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Configurator Integration Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .product-page {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin: 40px 0;
+        }
+        
+        .product-images {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .product-images img {
+            max-width: 100%;
+            height: 300px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        
+        .product-info h1 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .price {
+            font-size: 24px;
+            font-weight: 600;
+            color: #e74c3c;
+            margin: 10px 0;
+        }
+        
+        .color-options {
+            margin: 20px 0;
+        }
+        
+        .color-option {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin: 5px;
+            border: 2px solid #ddd;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .color-option.active {
+            border-color: #007bff;
+            transform: scale(1.1);
+        }
+        
+        .add-to-cart-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px 10px 10px 0;
+            transition: background 0.3s ease;
+        }
+        
+        .add-to-cart-btn:hover {
+            background: #0056b3;
+        }
+        
+        .test-info {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .test-info h2 {
+            color: #1976d2;
+            margin-top: 0;
+        }
+        
+        @media (max-width: 768px) {
+            .product-page {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="test-info">
+        <h2>🧪 3D Configurator Integration Test</h2>
+        <p><strong>Purpose:</strong> Test the modal-based 3D configurator integration</p>
+        <p><strong>Expected behavior:</strong></p>
+        <ul>
+            <li>Click "Customize This Sofa in 3D" → Opens configurator in fullscreen modal</li>
+            <li>In configurator: "Add Custom Sofa" → Adds to cart + closes modal</li>
+            <li>In configurator: "Apply Selection" → Updates product page + closes modal</li>
+            <li>Press Escape or click outside → Closes modal</li>
+        </ul>
+    </div>
+    
+    <div class="product-page">
+        <div class="product-images">
+            <img src="https://via.placeholder.com/400x300/4A90E2/FFFFFF?text=Blue+Sofa" alt="Blue Sofa">
+        </div>
+        
+        <div class="product-info">
+            <h1>Customizable Modern Sofa</h1>
+            <p class="price">$299.99</p>
+            
+            <div class="color-options">
+                <div class="color-option active" style="background: #4A90E2;" data-value="blue" title="Blue"></div>
+                <div class="color-option" style="background: #E74C3C;" data-value="red" title="Red"></div>
+                <div class="color-option" style="background: #2ECC71;" data-value="green" title="Green"></div>
+                <div class="color-option" style="background: #8B4513;" data-value="brown" title="Brown"></div>
+            </div>
+            
+            <!-- 3D CONFIGURATOR INTEGRATION -->
+            <div class="configurator-section" style="margin: 20px 0;">
+                <button onclick="openConfigurator()" class="configurator-trigger-btn">
+                    🎨 Customize This Sofa in 3D
+                </button>
+                <p class="configurator-description">
+                    See your custom sofa in real-time 3D and add it directly to your cart
+                </p>
+            </div>
+            
+            <select name="id" style="display: none;">
+                <option value="variant-blue">Blue Sofa</option>
+                <option value="variant-red">Red Sofa</option>
+                <option value="variant-green">Green Sofa</option>
+                <option value="variant-brown">Brown Sofa</option>
+            </select>
+            
+            <button class="add-to-cart-btn">Add to Cart</button>
+            <button class="add-to-cart-btn" style="background: #28a745;">Buy It Now</button>
+        </div>
+    </div>
+    
+    <!-- Hidden configurator container -->
+    <div id="configurator-container" style="display: none;">
+        <iframe 
+            id="configurator-iframe"
+            src=""
+            style="width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; z-index: 9999; border: none; background: rgba(0,0,0,0.8);"
+        ></iframe>
+    </div>
+    
+    <!-- Success notification container -->
+    <div id="notification-container"></div>
+
+    <style>
+    /* Configurator Trigger Button Styles */
+    .configurator-trigger-btn {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        color: white;
+        border: none;
+        padding: 16px 32px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+        margin: 15px 0;
+        width: 100%;
+        max-width: 300px;
+        display: block;
+    }
+
+    .configurator-trigger-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(255, 107, 53, 0.4);
+    }
+
+    .configurator-description {
+        color: #666;
+        font-size: 14px;
+        margin: 8px 0 20px 0;
+        max-width: 300px;
+    }
+
+    /* Success Notification Styles */
+    .configurator-success, .configurator-error {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+        background: #28a745;
+        color: white;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        animation: slideInRight 0.3s ease-out;
+        max-width: 300px;
+    }
+    
+    .configurator-error {
+        background: #dc3545;
+    }
+
+    @keyframes slideInRight {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    </style>
+
+    <script>
+    // 3D Configurator Integration Script
+    (function() {
+        'use strict';
+        
+        let configuratorIframe = null;
+        let isConfiguratorOpen = false;
+        
+        // Configuration - Update these values for your store
+        const CONFIG = {
+            configuratorUrl: 'http://localhost:5173', // Local development
+            // configuratorUrl: 'https://iani-configurator.vercel.app', // Production
+            client: 'ianii',
+            productId: 'test-product-123',
+            currency: 'USD'
+        };
+        
+        // Open configurator function
+        window.openConfigurator = function() {
+            console.log('🎨 Opening 3D Configurator...');
+            
+            if (isConfiguratorOpen) {
+                console.log('⚠️ Configurator already open');
+                return;
+            }
+            
+            const container = document.getElementById('configurator-container');
+            const iframe = document.getElementById('configurator-iframe');
+            
+            if (!container || !iframe) {
+                console.error('❌ Configurator elements not found');
+                return;
+            }
+            
+            // Build configurator URL with parameters
+            const configuratorUrl = buildConfiguratorUrl();
+            console.log('🔗 Loading configurator:', configuratorUrl);
+            
+            // Set iframe source and show container
+            iframe.src = configuratorUrl;
+            container.style.display = 'block';
+            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+            
+            isConfiguratorOpen = true;
+            configuratorIframe = iframe;
+            
+            // Add event listener for configurator messages
+            window.addEventListener('message', handleConfiguratorMessage);
+        };
+        
+        // Close configurator function
+        window.closeConfigurator = function() {
+            console.log('❌ Closing 3D Configurator...');
+            
+            const container = document.getElementById('configurator-container');
+            const iframe = document.getElementById('configurator-iframe');
+            
+            if (container) container.style.display = 'none';
+            if (iframe) iframe.src = ''; // Clear iframe source
+            
+            document.body.style.overflow = ''; // Restore scrolling
+            isConfiguratorOpen = false;
+            configuratorIframe = null;
+            
+            // Remove event listener
+            window.removeEventListener('message', handleConfiguratorMessage);
+        };
+        
+        // Build configurator URL with parameters
+        function buildConfiguratorUrl() {
+            const params = new URLSearchParams({
+                client: CONFIG.client,
+                embedded: 'true',
+                productId: CONFIG.productId,
+                currency: CONFIG.currency,
+                shopifyIntegration: 'true',
+                timestamp: Date.now()
+            });
+            
+            return `${CONFIG.configuratorUrl}?${params.toString()}`;
+        }
+        
+        // Handle messages from configurator
+        function handleConfiguratorMessage(event) {
+            // Security: Accept messages from localhost or your domain
+            const allowedOrigins = ['http://localhost:5173', 'https://iani-configurator.vercel.app'];
+            if (!allowedOrigins.some(origin => event.origin.includes(origin.replace('https://', '').replace('http://', '')))) {
+                console.log('🚫 Message from unauthorized origin:', event.origin);
+                return;
+            }
+            
+            console.log('📨 Message from configurator:', event.data);
+            
+            const messageData = event.data;
+            
+            switch (messageData.type) {
+                case 'CONFIGURATOR_READY':
+                    console.log('✅ Configurator loaded successfully');
+                    break;
+                    
+                case 'CONFIGURATOR_CLOSED':
+                    closeConfigurator();
+                    break;
+                    
+                case 'CONFIGURATOR_CART_SUCCESS':
+                    handleCartSuccess(messageData.data);
+                    break;
+                    
+                case 'APPLY_CONFIGURATION':
+                    handleApplyConfiguration(messageData.data);
+                    break;
+                    
+                case 'CONFIGURATOR_ERROR':
+                    handleConfiguratorError(messageData.data);
+                    break;
+                    
+                default:
+                    console.log('🔄 Unknown message type:', messageData.type);
+            }
+        }
+        
+        // Handle successful cart addition
+        function handleCartSuccess(data) {
+            console.log('🛒 Cart addition successful:', data);
+            closeConfigurator();
+            
+            showSuccessMessage(`✅ Custom ${data.productName || 'sofa'} added to cart! (${data.color || 'Selected color'})`);
+        }
+        
+        // Handle apply configuration to product page
+        function handleApplyConfiguration(data) {
+            console.log('🎨 Applying configuration:', data);
+            closeConfigurator();
+            
+            // Update product page with selected configuration
+            updateProductVariant(data);
+            
+            showSuccessMessage(`🎨 Color updated to ${data.color}! Use "Add to Cart" below to purchase.`);
+        }
+        
+        // Handle configurator errors
+        function handleConfiguratorError(data) {
+            console.error('❌ Configurator error:', data);
+            
+            showSuccessMessage(`❌ ${data.message || 'Something went wrong. Please try again.'}`, 'error');
+            
+            // Auto-close on error after delay
+            setTimeout(() => {
+                closeConfigurator();
+            }, 3000);
+        }
+        
+        // Update product variant
+        function updateProductVariant(configData) {
+            try {
+                // Update variant selector
+                const variantSelector = document.querySelector('select[name="id"]');
+                if (variantSelector && configData.color) {
+                    const optionValue = `variant-${configData.color.toLowerCase()}`;
+                    variantSelector.value = optionValue;
+                }
+                
+                // Update price display
+                const priceElement = document.querySelector('.price');
+                if (priceElement && configData.price) {
+                    priceElement.textContent = `$${configData.price.toFixed(2)}`;
+                }
+                
+                // Update color selection
+                document.querySelectorAll('.color-option').forEach(el => {
+                    el.classList.remove('active');
+                    if (el.dataset.value === configData.color.toLowerCase()) {
+                        el.classList.add('active');
+                    }
+                });
+                
+                console.log('✅ Product page updated with configuration');
+                
+            } catch (error) {
+                console.error('❌ Error updating product variant:', error);
+            }
+        }
+        
+        // Show success/error message
+        function showSuccessMessage(message, type = 'success') {
+            const container = document.getElementById('notification-container') || document.body;
+            
+            const notification = document.createElement('div');
+            notification.className = `configurator-${type === 'error' ? 'error' : 'success'}`;
+            notification.textContent = message;
+            
+            container.appendChild(notification);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 5000);
+            
+            console.log(`📢 Notification: ${message}`);
+        }
+        
+        // Handle escape key to close configurator
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && isConfiguratorOpen) {
+                closeConfigurator();
+            }
+        });
+        
+        // Handle click outside to close
+        document.getElementById('configurator-container').addEventListener('click', function(event) {
+            if (event.target === this) {
+                closeConfigurator();
+            }
+        });
+        
+        console.log('🚀 3D Configurator integration test loaded');
+        
+    })();
+    </script>
+</body>
+</html>

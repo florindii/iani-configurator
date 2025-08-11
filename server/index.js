@@ -33,8 +33,54 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' })); // Increase limit for 3D preview images
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// ✅ Multi-Client Product Variants System
+const clientVariants = {
+  // CLIENT 1: ianii (your store)
+  'ianii': {
+    blue: { id: '44770052309049', sku: 'SOFA-BLUE', price: 299.99, color: 'blue', available: true },
+    red: { id: '44770045395001', sku: 'SOFA-RED', price: 319.99, color: 'red', available: true },
+    green: { id: '44770045427769', sku: 'SOFA-GREEN', price: 309.99, color: 'green', available: true },
+    brown: { id: '44770045460537', sku: 'SOFA-BROWN', price: 329.99, color: 'brown', available: true },
+    purple: { id: '44770045493305', sku: 'SOFA-PURPLE', price: 349.99, color: 'purple', available: true },
+    orange: { id: '44770045526073', sku: 'SOFA-ORANGE', price: 339.99, color: 'orange', available: true }
+  },
+  // CLIENT 2: demo-furniture (demo client)
+  'demo-furniture': {
+    blue: { id: 'demo_blue_001', sku: 'DEMO-BLUE', price: 399.99, color: 'blue', available: true },
+    red: { id: 'demo_red_002', sku: 'DEMO-RED', price: 429.99, color: 'red', available: true },
+    green: { id: 'demo_green_003', sku: 'DEMO-GREEN', price: 419.99, color: 'green', available: true },
+    brown: { id: 'demo_brown_004', sku: 'DEMO-BROWN', price: 449.99, color: 'brown', available: true },
+    purple: { id: 'demo_purple_005', sku: 'DEMO-PURPLE', price: 479.99, color: 'purple', available: true },
+    orange: { id: 'demo_orange_006', sku: 'DEMO-ORANGE', price: 459.99, color: 'orange', available: true }
+  },
+  // CLIENT 3: luxury-living (luxury demo)
+  'luxury-living': {
+    black: { id: 'lux_black_001', sku: 'LUX-BLACK', price: 1299.99, color: 'black', available: true },
+    white: { id: 'lux_white_002', sku: 'LUX-WHITE', price: 1399.99, color: 'white', available: true },
+    gray: { id: 'lux_gray_003', sku: 'LUX-GRAY', price: 1349.99, color: 'gray', available: true },
+    brown: { id: 'lux_brown_004', sku: 'LUX-BROWN', price: 1429.99, color: 'brown', available: true }
+  },
+  // Legacy support
+  '7976588148793': {
+    blue: { id: '44770052309049', sku: 'SOFA-BLUE', price: 299.99, color: 'blue', available: true },
+    red: { id: '44770045395001', sku: 'SOFA-RED', price: 319.99, color: 'red', available: true },
+    green: { id: '44770045427769', sku: 'SOFA-GREEN', price: 309.99, color: 'green', available: true },
+    brown: { id: '44770045460537', sku: 'SOFA-BROWN', price: 329.99, color: 'brown', available: true },
+    purple: { id: '44770045493305', sku: 'SOFA-PURPLE', price: 349.99, color: 'purple', available: true },
+    orange: { id: '44770045526073', sku: 'SOFA-ORANGE', price: 339.99, color: 'orange', available: true }
+  },
+  'default-sofa-product': {
+    blue: { id: '44770052309049', sku: 'SOFA-BLUE', price: 299.99, color: 'blue', available: true },
+    red: { id: '44770045395001', sku: 'SOFA-RED', price: 319.99, color: 'red', available: true },
+    green: { id: '44770045427769', sku: 'SOFA-GREEN', price: 309.99, color: 'green', available: true },
+    brown: { id: '44770045460537', sku: 'SOFA-BROWN', price: 329.99, color: 'brown', available: true },
+    purple: { id: '44770045493305', sku: 'SOFA-PURPLE', price: 349.99, color: 'purple', available: true },
+    orange: { id: '44770045526073', sku: 'SOFA-ORANGE', price: 339.99, color: 'orange', available: true }
+  }
+};
 
 // File upload configuration
 const storage = multer.diskStorage({
@@ -130,7 +176,182 @@ app.post('/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// NEW API ENDPOINTS FOR SHOPIFY INTEGRATION
+// ✅ ENHANCED API ENDPOINTS FOR SHOPIFY INTEGRATION
+
+// ✅ Multi-Client API: Get variants by client ID (with auto-generation)
+app.get('/api/clients/:clientId/variants', (req, res) => {
+  try {
+    const { clientId } = req.params;
+    let variants = clientVariants[clientId];
+    
+    console.log('📦 Fetching variants for client:', clientId);
+    
+    // If client not found, auto-generate variants
+    if (!variants || Object.keys(variants).length === 0) {
+      console.log('🎉 Auto-generating variants for new client:', clientId);
+      variants = generateClientVariants(clientId);
+      
+      // Cache the generated variants
+      clientVariants[clientId] = variants;
+    }
+    
+    console.log('✅ Available variants:', Object.keys(variants));
+    res.json(variants);
+  } catch (error) {
+    console.error('❌ Error fetching client variants:', error);
+    res.status(500).json({ error: 'Failed to fetch client variants' });
+  }
+});
+
+// ✨ Auto-generate variants for any client
+function generateClientVariants(clientName) {
+  const basePrice = 299.99;
+  const priceMultiplier = 1 + (clientName.length % 5) * 0.1;
+  
+  return {
+    blue: { 
+      id: `auto_${clientName}_blue`, 
+      sku: `${clientName.toUpperCase()}-BLUE`, 
+      price: Math.round(basePrice * priceMultiplier * 100) / 100, 
+      color: 'blue', 
+      available: true 
+    },
+    red: { 
+      id: `auto_${clientName}_red`, 
+      sku: `${clientName.toUpperCase()}-RED`, 
+      price: Math.round(basePrice * priceMultiplier * 1.1 * 100) / 100, 
+      color: 'red', 
+      available: true 
+    },
+    green: { 
+      id: `auto_${clientName}_green`, 
+      sku: `${clientName.toUpperCase()}-GREEN`, 
+      price: Math.round(basePrice * priceMultiplier * 1.05 * 100) / 100, 
+      color: 'green', 
+      available: true 
+    },
+    brown: { 
+      id: `auto_${clientName}_brown`, 
+      sku: `${clientName.toUpperCase()}-BROWN`, 
+      price: Math.round(basePrice * priceMultiplier * 1.15 * 100) / 100, 
+      color: 'brown', 
+      available: true 
+    },
+    purple: { 
+      id: `auto_${clientName}_purple`, 
+      sku: `${clientName.toUpperCase()}-PURPLE`, 
+      price: Math.round(basePrice * priceMultiplier * 1.2 * 100) / 100, 
+      color: 'purple', 
+      available: true 
+    },
+    orange: { 
+      id: `auto_${clientName}_orange`, 
+      sku: `${clientName.toUpperCase()}-ORANGE`, 
+      price: Math.round(basePrice * priceMultiplier * 1.12 * 100) / 100, 
+      color: 'orange', 
+      available: true 
+    }
+  };
+}
+
+// Legacy: Get product variants (backward compatibility)
+app.get('/api/products/:productId/variants', (req, res) => {
+  try {
+    const { productId } = req.params;
+    const variants = clientVariants[productId] || {};
+    
+    console.log('📦 Legacy: Fetching variants for product:', productId);
+    console.log('✅ Available variants:', Object.keys(variants));
+    res.json(variants);
+  } catch (error) {
+    console.error('❌ Error fetching variants:', error);
+    res.status(500).json({ error: 'Failed to fetch variants' });
+  }
+});
+
+// Enhanced configuration save with variant mapping
+app.post('/api/configurations', async (req, res) => {
+  try {
+    const { productId, variantId, configurationData, previewImage, totalPrice, customerId, customerEmail } = req.body;
+    
+    const configId = `config_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const configuration = {
+      id: configId,
+      productId,
+      variantId,
+      configurationData,
+      previewImage,
+      totalPrice,
+      customerId,
+      customerEmail,
+      status: 'saved',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Store configuration
+    db.configurations.push(configuration);
+    saveDb();
+    
+    console.log('✅ Configuration saved with ID:', configId);
+    res.json({ success: true, configuration });
+  } catch (error) {
+    console.error('❌ Error saving configuration:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get specific configuration
+app.get('/api/configurations/:configId', (req, res) => {
+  try {
+    const { configId } = req.params;
+    const configuration = db.configurations.find(c => c.id === configId);
+    
+    if (!configuration) {
+      return res.status(404).json({ error: 'Configuration not found' });
+    }
+    
+    console.log('📖 Retrieved configuration:', configId);
+    res.json(configuration);
+  } catch (error) {
+    console.error('❌ Error fetching configuration:', error);
+    res.status(500).json({ error: 'Failed to fetch configuration' });
+  }
+});
+
+// Upload preview image endpoint
+app.post('/api/upload-preview', async (req, res) => {
+  try {
+    const { imageData, configurationId } = req.body;
+    
+    if (!imageData || !configurationId) {
+      return res.status(400).json({ error: 'Missing imageData or configurationId' });
+    }
+    
+    // Create uploads directory if it doesn't exist
+    const uploadsDir = path.join(__dirname, 'uploads', 'previews');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    
+    // Convert base64 to file
+    const base64Data = imageData.replace(/^data:image\/png;base64,/, '');
+    const filename = `preview_${configurationId}_${Date.now()}.png`;
+    const filepath = path.join(uploadsDir, filename);
+    
+    fs.writeFileSync(filepath, base64Data, 'base64');
+    
+    const previewUrl = `${req.protocol}://${req.get('host')}/uploads/previews/${filename}`;
+    
+    console.log('📸 Preview image saved:', previewUrl);
+    res.json({ success: true, url: previewUrl, filename });
+    
+  } catch (error) {
+    console.error('❌ Preview upload error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // Get product configuration
 app.get('/api/products/:productId/configuration', (req, res) => {
@@ -217,58 +438,95 @@ app.patch('/api/configurations/:configId', (req, res) => {
   }
 });
 
-// ✅ NEW: Cart Integration API
+// ✅ ENHANCED Multi-Client Cart Integration API
 app.post('/api/cart/add', async (req, res) => {
   try {
     const {
-      productId,
-      configurationId,
-      configurationData,
-      totalPrice,
+      clientId,
       shop,
+      productId,
+      variantId,
+      sku,
+      configurationData,
+      configurationId,
+      totalPrice,
+      currency,
       customerId,
-      customerEmail
+      customerEmail,
+      quantity = 1,
+      properties = {}
     } = req.body;
 
-    console.log('🛒 Processing cart addition:', {
+    console.log('🛒 Processing multi-client cart addition:', {
+      clientId,
       productId,
+      variantId,
+      sku,
       configurationId,
       totalPrice,
-      shop
+      currency,
+      quantity,
+      color: configurationData?.color
     });
 
-    // Create a unique variant title based on configuration
-    const variantTitle = `Custom ${configurationData.material} ${configurationData.color} ${configurationData.size}`;
+    // Get client-specific variants
+    const productVars = clientVariants[clientId || productId] || {};
+    let selectedVariant = Object.values(productVars).find(v => v.id === variantId);
     
-    // Create a mock variant ID for now (in production, you'd create actual Shopify variants)
-    const mockVariantId = `variant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const mockCartItemId = `cart_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // If variant not found, check if it's a fallback variant
+    if (!selectedVariant) {
+      if (variantId && (variantId.startsWith('fallback_') || variantId.startsWith('demo_') || variantId.startsWith('lux_'))) {
+        console.log('⚠️ Using fallback/demo variant:', variantId);
+        selectedVariant = {
+          id: variantId,
+          sku: sku || `${(clientId || 'UNKNOWN').toUpperCase()}-${configurationData?.color?.toUpperCase() || 'UNKNOWN'}`,
+          price: totalPrice || 299.99,
+          color: configurationData?.color || 'unknown',
+          available: true
+        };
+      } else {
+        console.error('❌ Invalid variant for client:', clientId, 'variantId:', variantId, 'Available:', Object.keys(productVars));
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid variant selected',
+          clientId,
+          variantId,
+          availableVariants: Object.keys(productVars),
+          availableClients: Object.keys(clientVariants),
+          message: `Variant ${variantId} not found for client ${clientId}`
+        });
+      }
+    }
 
-    // For development: simulate cart addition
-    const cartResult = {
-      success: true,
-      variantId: mockVariantId,
-      cartItemId: mockCartItemId,
-      variantTitle,
-      price: totalPrice,
-      configurationId,
-      message: 'Configuration added to cart successfully'
-    };
-
-    // Save cart item to our database
+    // Create cart item with client context
+    const cartItemId = `cart_${clientId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const variantTitle = `Custom ${configurationData.color} Sofa (${selectedVariant.sku}) - ${clientId}`;
+    
     const cartItem = {
-      id: mockCartItemId,
-      configurationId,
+      id: cartItemId,
+      clientId,
       productId,
-      variantId: mockVariantId,
-      variantTitle,
-      price: totalPrice,
-      quantity: 1,
+      variantId: selectedVariant.id,
+      sku: selectedVariant.sku,
+      title: variantTitle,
+      price: selectedVariant.price,
+      currency: currency || 'USD',
+      quantity,
+      configurationId,
+      configurationData,
       shop,
       customerId,
       customerEmail,
       status: 'in_cart',
-      configurationData,
+      properties: {
+        'Configuration ID': configurationId,
+        'Client': clientId,
+        'Custom Color': configurationData.color,
+        'Product SKU': selectedVariant.sku,
+        'Configured At': new Date().toLocaleString(),
+        'Configuration URL': `${req.protocol}://${req.get('host')}/configurator?client=${clientId}&config=${configurationId}`,
+        ...properties
+      },
       createdAt: new Date().toISOString()
     };
 
@@ -279,19 +537,72 @@ app.post('/api/cart/add', async (req, res) => {
     db.cartItems.push(cartItem);
     saveDb();
 
-    console.log('✅ Cart item created:', cartItem);
+    // Update configuration status
+    const config = db.configurations.find(c => c.id === configurationId);
+    if (config) {
+      config.status = 'in_cart';
+      config.cartItemId = cartItemId;
+      config.shopifyVariantId = selectedVariant.id;
+      config.clientId = clientId;
+      config.updatedAt = new Date().toISOString();
+      saveDb();
+    }
 
-    res.json(cartResult);
+    console.log('✅ Multi-client cart item created:', {
+      id: cartItemId,
+      client: clientId,
+      variant: selectedVariant.sku,
+      price: selectedVariant.price,
+      currency: currency || 'USD',
+      color: configurationData.color
+    });
+
+    // Return success with detailed info
+    res.json({
+      success: true,
+      cartItem: {
+        id: cartItemId,
+        clientId,
+        variantId: selectedVariant.id,
+        sku: selectedVariant.sku,
+        title: variantTitle,
+        price: selectedVariant.price,
+        currency: currency || 'USD',
+        quantity,
+        configurationId
+      },
+      variant: selectedVariant,
+      client: clientId,
+      message: `Custom ${configurationData.color} sofa added to cart for ${clientId}!`,
+      configurationUrl: `${req.protocol}://${req.get('host')}/configurator?client=${clientId}&config=${configurationId}`,
+      shareableUrl: `${req.protocol}://${req.get('host')}/configurator?client=${clientId}&config=${configurationId}&productId=${productId}`
+    });
+    
   } catch (error) {
-    console.error('❌ Cart addition error:', error);
+    console.error('❌ Multi-client cart addition error:', error);
+    console.error('❌ Error stack:', error.stack);
     res.status(500).json({ 
-      error: 'Failed to add to cart',
-      message: error.message 
+      success: false,
+      error: 'Failed to add item to cart',
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
 
-// Get cart items for a shop
+// 🔍 Debug endpoint to check what variants are available
+app.get('/api/debug/variants/:productId?', (req, res) => {
+  const { productId } = req.params;
+  const targetProduct = productId || 'default-sofa-product';
+  
+  res.json({
+    requestedProduct: targetProduct,
+    availableProducts: Object.keys(productVariants),
+    variants: productVariants[targetProduct] || {},
+    allVariants: productVariants,
+    timestamp: new Date().toISOString()
+  });
+});
 app.get('/api/cart/:shop', (req, res) => {
   try {
     const { shop } = req.params;
@@ -339,6 +650,9 @@ app.post('/api/generate-preview', (req, res) => {
 app.use('/glbs', express.static(path.join(__dirname, 'glbs')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/previews', express.static(path.join(__dirname, 'previews')));
+
+// ✅ Enhanced static file serving with better paths
+app.use('/uploads/previews', express.static(path.join(__dirname, 'uploads', 'previews')));
 
 // ✅ NEW: Serve models from public/models directory (for Vue app compatibility)
 app.use('/models', express.static(path.join(__dirname, '../public/models')));

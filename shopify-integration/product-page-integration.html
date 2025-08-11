@@ -1,0 +1,385 @@
+<!-- 3D Configurator Integration for Shopify Product Pages -->
+<!-- Add this code to your product page template -->
+
+<!-- 1. Add the trigger button in your product page -->
+<div class="configurator-section" style="margin: 20px 0;">
+  <button onclick="openConfigurator()" class="configurator-trigger-btn">
+    🎨 Customize This Sofa in 3D
+  </button>
+  <p class="configurator-description">
+    See your custom sofa in real-time 3D and add it directly to your cart
+  </p>
+</div>
+
+<!-- 2. Hidden configurator container -->
+<div id="configurator-container" style="display: none;">
+  <iframe 
+    id="configurator-iframe"
+    src=""
+    style="width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; z-index: 9999; border: none; background: rgba(0,0,0,0.8);"
+  ></iframe>
+</div>
+
+<!-- 3. Success notification container -->
+<div id="notification-container"></div>
+
+<style>
+/* Configurator Trigger Button Styles */
+.configurator-trigger-btn {
+  background: linear-gradient(135deg, #ff6b35, #f7931e);
+  color: white;
+  border: none;
+  padding: 16px 32px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+  margin: 15px 0;
+  width: 100%;
+  max-width: 300px;
+  display: block;
+}
+
+.configurator-trigger-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 107, 53, 0.4);
+}
+
+.configurator-description {
+  color: #666;
+  font-size: 14px;
+  margin: 8px 0 20px 0;
+  max-width: 300px;
+}
+
+/* Success Notification Styles */
+.configurator-success {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  background: #28a745;
+  color: white;
+  padding: 15px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .configurator-trigger-btn {
+    font-size: 14px;
+    padding: 14px 24px;
+  }
+  
+  .configurator-success {
+    right: 10px;
+    left: 10px;
+    top: 10px;
+  }
+}
+</style>
+
+<script>
+// 3D Configurator Integration Script
+(function() {
+  'use strict';
+  
+  let configuratorIframe = null;
+  let isConfiguratorOpen = false;
+  
+  // Configuration - Update these values for your store
+  const CONFIG = {
+    configuratorUrl: 'https://iani-configurator.vercel.app',
+    client: 'ianii', // Your client name
+    productId: '{{ product.id }}', // Shopify liquid variable
+    currency: '{{ shop.currency }}' // Shopify liquid variable
+  };
+  
+  // Open configurator function
+  window.openConfigurator = function() {
+    console.log('🎨 Opening 3D Configurator...');
+    
+    if (isConfiguratorOpen) {
+      console.log('⚠️ Configurator already open');
+      return;
+    }
+    
+    const container = document.getElementById('configurator-container');
+    const iframe = document.getElementById('configurator-iframe');
+    
+    if (!container || !iframe) {
+      console.error('❌ Configurator elements not found');
+      return;
+    }
+    
+    // Build configurator URL with parameters
+    const configuratorUrl = buildConfiguratorUrl();
+    console.log('🔗 Loading configurator:', configuratorUrl);
+    
+    // Set iframe source and show container
+    iframe.src = configuratorUrl;
+    container.style.display = 'block';
+    document.body.style.overflow = 'hidden'; // Prevent background scrolling
+    
+    isConfiguratorOpen = true;
+    configuratorIframe = iframe;
+    
+    // Add event listener for configurator messages
+    window.addEventListener('message', handleConfiguratorMessage);
+    
+    // Track opening event (optional analytics)
+    if (typeof gtag !== 'undefined') {
+      gtag('event', 'configurator_opened', {
+        'product_id': CONFIG.productId,
+        'client': CONFIG.client
+      });
+    }
+  };
+  
+  // Close configurator function
+  window.closeConfigurator = function() {
+    console.log('❌ Closing 3D Configurator...');
+    
+    const container = document.getElementById('configurator-container');
+    const iframe = document.getElementById('configurator-iframe');
+    
+    if (container) container.style.display = 'none';
+    if (iframe) iframe.src = ''; // Clear iframe source
+    
+    document.body.style.overflow = ''; // Restore scrolling
+    isConfiguratorOpen = false;
+    configuratorIframe = null;
+    
+    // Remove event listener
+    window.removeEventListener('message', handleConfiguratorMessage);
+  };
+  
+  // Build configurator URL with parameters
+  function buildConfiguratorUrl() {
+    const params = new URLSearchParams({
+      client: CONFIG.client,
+      embedded: 'true',
+      productId: CONFIG.productId,
+      currency: CONFIG.currency,
+      shopifyIntegration: 'true',
+      timestamp: Date.now()
+    });
+    
+    return `${CONFIG.configuratorUrl}?${params.toString()}`;
+  }
+  
+  // Handle messages from configurator
+  function handleConfiguratorMessage(event) {
+    // Security: Only accept messages from your configurator domain
+    if (!event.origin.includes('iani-configurator.vercel.app') && 
+        !event.origin.includes('localhost')) {
+      return;
+    }
+    
+    console.log('📨 Message from configurator:', event.data);
+    
+    const messageData = event.data;
+    
+    switch (messageData.type) {
+      case 'CONFIGURATOR_READY':
+        console.log('✅ Configurator loaded successfully');
+        break;
+        
+      case 'CONFIGURATOR_CLOSED':
+        closeConfigurator();
+        break;
+        
+      case 'CONFIGURATOR_CART_SUCCESS':
+        handleCartSuccess(messageData.data);
+        break;
+        
+      case 'APPLY_CONFIGURATION':
+        handleApplyConfiguration(messageData.data);
+        break;
+        
+      case 'CONFIGURATOR_ERROR':
+        handleConfiguratorError(messageData.data);
+        break;
+        
+      default:
+        console.log('🔄 Unknown message type:', messageData.type);
+    }
+  }
+  
+  // Handle successful cart addition
+  function handleCartSuccess(data) {
+    console.log('🛒 Cart addition successful:', data);
+    closeConfigurator();
+    
+    showSuccessMessage(`✅ Custom ${data.productName || 'sofa'} added to cart! (${data.color || 'Selected color'})`);
+    
+    // Optional: Refresh cart drawer or update cart count
+    if (window.CartJS && window.CartJS.getCart) {
+      window.CartJS.getCart();
+    }
+    
+    // Track conversion event
+    if (typeof gtag !== 'undefined') {
+      gtag('event', 'add_to_cart', {
+        'currency': CONFIG.currency,
+        'value': data.price || 0,
+        'items': [{
+          'item_id': data.variantId || CONFIG.productId,
+          'item_name': data.productName || 'Custom Sofa',
+          'category': 'Furniture',
+          'quantity': 1,
+          'price': data.price || 0
+        }]
+      });
+    }
+  }
+  
+  // Handle apply configuration to product page
+  function handleApplyConfiguration(data) {
+    console.log('🎨 Applying configuration:', data);
+    closeConfigurator();
+    
+    // Update product page with selected configuration
+    updateProductVariant(data);
+    
+    showSuccessMessage(`🎨 Color updated to ${data.color}! Use "Add to Cart" below to purchase.`);
+  }
+  
+  // Handle configurator errors
+  function handleConfiguratorError(data) {
+    console.error('❌ Configurator error:', data);
+    
+    showSuccessMessage(`❌ ${data.message || 'Something went wrong. Please try again.'}`, 'error');
+    
+    // Auto-close on error after delay
+    setTimeout(() => {
+      closeConfigurator();
+    }, 3000);
+  }
+  
+  // Update Shopify product variant
+  function updateProductVariant(configData) {
+    try {
+      // Update variant selector if exists
+      const variantSelector = document.querySelector('select[name="id"]') || 
+                             document.querySelector('input[name="id"]:checked') ||
+                             document.querySelector('.variant-selector');
+      
+      if (variantSelector && configData.variantId) {
+        if (variantSelector.tagName === 'SELECT') {
+          variantSelector.value = configData.variantId;
+        }
+        
+        // Trigger change event
+        variantSelector.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      
+      // Update price display
+      const priceElement = document.querySelector('.price') || 
+                          document.querySelector('.product-price') ||
+                          document.querySelector('[data-price]');
+      
+      if (priceElement && configData.price) {
+        const formattedPrice = `${CONFIG.currency} ${configData.price.toFixed(2)}`;
+        priceElement.textContent = formattedPrice;
+      }
+      
+      // Update color display if available
+      const colorElements = document.querySelectorAll('.color-option, .variant-option');
+      colorElements.forEach(el => {
+        el.classList.remove('active', 'selected');
+        if (el.dataset.value === configData.color || 
+            el.textContent.toLowerCase().includes(configData.color.toLowerCase())) {
+          el.classList.add('active', 'selected');
+        }
+      });
+      
+      console.log('✅ Product page updated with configuration');
+      
+    } catch (error) {
+      console.error('❌ Error updating product variant:', error);
+    }
+  }
+  
+  // Show success/error message
+  function showSuccessMessage(message, type = 'success') {
+    const container = document.getElementById('notification-container');
+    if (!container) return;
+    
+    const notification = document.createElement('div');
+    notification.className = `configurator-${type === 'error' ? 'error' : 'success'}`;
+    notification.textContent = message;
+    
+    // Add error-specific styles
+    if (type === 'error') {
+      notification.style.background = '#dc3545';
+    }
+    
+    container.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 5000);
+    
+    console.log(`📢 Notification: ${message}`);
+  }
+  
+  // Handle escape key to close configurator
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape' && isConfiguratorOpen) {
+      closeConfigurator();
+    }
+  });
+  
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', function() {
+    if (isConfiguratorOpen) {
+      closeConfigurator();
+    }
+  });
+  
+  console.log('🚀 3D Configurator integration loaded');
+  
+})();
+</script>
+
+<!-- 
+INTEGRATION INSTRUCTIONS:
+
+1. Add this code to your product page template (usually product.liquid)
+2. Update the CONFIG object with your actual values:
+   - configuratorUrl: Your deployed configurator URL
+   - client: Your client identifier
+   
+3. Make sure your product page has:
+   - A variant selector (select[name="id"])
+   - A price display element (.price or .product-price)
+   
+4. Test the integration:
+   - Click "Customize This Sofa in 3D" button
+   - Configurator should open in modal
+   - Test both "Add to Cart" and "Apply Selection" options
+   
+5. Optional enhancements:
+   - Add Google Analytics tracking
+   - Integrate with your existing cart system
+   - Customize button styling to match your theme
+-->
