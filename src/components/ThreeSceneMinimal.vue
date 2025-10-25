@@ -1,9 +1,55 @@
-<!-- Fullscreen 3D Configurator - Roostr Style Layout -->
+<!-- Updated 3D Configurator with Clickable Mesh Parts -->
 <template>
   <div class="configurator-fullscreen">
     <!-- Left Side: 3D Viewer -->
     <div class="viewer-section">
       <div ref="canvasContainer" class="viewer-container"></div>
+      
+      <!-- Interactive Hotspot Overlays -->
+      <div class="hotspot-overlays">
+        <div 
+          v-for="hotspot in visibleHotspots" 
+          :key="hotspot.id"
+          :class="['hotspot-marker', { 
+            'active': activeHotspot?.id === hotspot.id,
+            'highlighted': hoveredHotspot?.id === hotspot.id 
+          }]"
+          :style="{
+            left: hotspot.screenPosition.x + 'px',
+            top: hotspot.screenPosition.y + 'px'
+          }"
+          @mouseenter="onHotspotHover(hotspot)"
+          @mouseleave="onHotspotLeave"
+          @click="selectHotspot(hotspot)"
+        >
+          <div class="hotspot-pulse"></div>
+          <div class="hotspot-icon">{{ hotspot.icon }}</div>
+          <div class="hotspot-tooltip">{{ hotspot.name }} - Click mesh or hotspot</div>
+        </div>
+      </div>
+      
+      <!-- Debug Info Panel -->
+      <div v-if="showDebugInfo" class="debug-panel">
+        <h4>🔍 Model Debug Info</h4>
+        <div class="debug-stats">
+          <div>Total Meshes: {{ debugStats.totalMeshes }}</div>
+          <div>Cushions: {{ debugStats.cushions }}</div>
+          <div>Frame: {{ debugStats.frame }}</div>
+          <div>Pillows: {{ debugStats.pillows }}</div>
+          <div>Legs: {{ debugStats.legs }}</div>
+        </div>
+        <button @click="exportModelStructure">Export Structure</button>
+      </div>
+      
+      <!-- Debug Toggle -->
+      <div class="debug-toggle" @click="showDebugInfo = !showDebugInfo">
+        🔍
+      </div>
+      
+      <!-- Click Instructions -->
+      <div class="click-instructions">
+        <div class="instruction-text">💡 Click on different parts of the sofa to customize them</div>
+      </div>
       
       <!-- Loading Overlay -->
       <div v-if="isLoading" class="loading-overlay">
@@ -18,7 +64,9 @@
         <!-- Header -->
         <div class="config-header">
           <h2>🛋️ Customize Your Sofa</h2>
-          <p class="product-description">Configure your sofa and add it to your cart</p>
+          <p class="product-description">
+            {{ activeHotspot ? `Customizing: ${activeHotspot.name}` : 'Click on sofa parts or hotspots to customize' }}
+          </p>
         </div>
 
         <!-- Price Display -->
@@ -31,16 +79,50 @@
 
         <!-- Configuration Options -->
         <div class="config-options">
-          <!-- Color Selection -->
-          <div class="option-group">
-            <h3 class="option-title">Color</h3>
+          
+          <!-- Default Overview -->
+          <div v-if="!activeHotspot" class="overview-section">
+            <div class="quick-overview">
+              <h3>✨ How to Customize</h3>
+              <p>Click directly on the sofa parts or use the hotspots:</p>
+              <div class="feature-list">
+                <div class="feature-item" @click="selectHotspotById('cushions')">
+                  <span class="feature-icon">🟦</span>
+                  <span class="feature-name">Cushions</span>
+                  <span class="feature-desc">Click the seat cushions</span>
+                </div>
+                <div class="feature-item" @click="selectHotspotById('frame')">
+                  <span class="feature-icon">🔲</span>
+                  <span class="feature-name">Frame</span>
+                  <span class="feature-desc">Click the main body</span>
+                </div>
+                <div class="feature-item" @click="selectHotspotById('pillows')">
+                  <span class="feature-icon">🟨</span>
+                  <span class="feature-name">Pillows</span>
+                  <span class="feature-desc">Click decorative pillows</span>
+                </div>
+                <div class="feature-item" @click="selectHotspotById('legs')">
+                  <span class="feature-icon">⚫</span>
+                  <span class="feature-name">Legs</span>
+                  <span class="feature-desc">Click the sofa legs</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cushions Customization -->
+          <div v-else-if="activeHotspot.id === 'cushions'" class="option-group">
+            <div class="back-button" @click="clearSelection()">
+              ← Back to Overview
+            </div>
+            <h3 class="option-title">🟦 Cushion Colors</h3>
             <p class="option-subtitle">{{ getSelectedColorLabel() }}</p>
             <div class="color-grid">
               <div 
                 v-for="color in colorOptions" 
                 :key="color.value"
-                :class="['color-option', { active: configuration.color === color.value }]"
-                @click="updateColor(color.value)"
+                :class="['color-option', { active: configuration.cushionColor === color.value }]"
+                @click="updateCushionColor(color.value)"
                 :title="`${color.label} - $${color.price}`"
               >
                 <div 
@@ -53,26 +135,85 @@
             </div>
           </div>
 
-          <!-- Additional Options Placeholder -->
-          <div class="option-group">
-            <h3 class="option-title">Size</h3>
-            <p class="option-subtitle">2-Seater</p>
-            <div class="size-options">
-              <div class="size-option active">
-                <span class="size-name">2-Seater</span>
-                <span class="size-dimensions">150cm × 85cm</span>
+          <!-- Frame Customization -->
+          <div v-else-if="activeHotspot.id === 'frame'" class="option-group">
+            <div class="back-button" @click="clearSelection()">
+              ← Back to Overview
+            </div>
+            <h3 class="option-title">🔲 Frame Material</h3>
+            <p class="option-subtitle">{{ getFrameLabel() }}</p>
+            <div class="material-options">
+              <div 
+                v-for="frame in frameOptions" 
+                :key="frame.value"
+                :class="['material-option', { active: configuration.frameMaterial === frame.value }]"
+                @click="updateFrameMaterial(frame.value)"
+              >
+                <span class="material-name">{{ frame.label }}</span>
+                <span class="material-description">{{ frame.description }}</span>
+                <span class="material-price">+${{ frame.extraCost }}</span>
               </div>
             </div>
           </div>
 
-          <!-- Material Options Placeholder -->
-          <div class="option-group">
-            <h3 class="option-title">Material</h3>
-            <p class="option-subtitle">Premium Fabric</p>
-            <div class="material-options">
-              <div class="material-option active">
-                <span class="material-name">Premium Fabric</span>
-                <span class="material-description">Durable & comfortable</span>
+          <!-- Pillows Customization -->
+          <div v-else-if="activeHotspot.id === 'pillows'" class="option-group">
+            <div class="back-button" @click="clearSelection()">
+              ← Back to Overview
+            </div>
+            <h3 class="option-title">🟨 Decorative Pillows</h3>
+            <p class="option-subtitle">{{ getPillowLabel() }}</p>
+            <div class="pillow-options">
+              <div 
+                v-for="pillow in pillowOptions" 
+                :key="pillow.value"
+                :class="['pillow-option', { active: configuration.pillowStyle === pillow.value }]"
+                @click="updatePillowStyle(pillow.value)"
+              >
+                <div class="pillow-preview" :style="{ backgroundColor: pillow.color }"></div>
+                <span class="pillow-name">{{ pillow.label }}</span>
+                <span class="pillow-price">+${{ pillow.extraCost }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Legs Customization -->
+          <div v-else-if="activeHotspot.id === 'legs'" class="option-group">
+            <div class="back-button" @click="clearSelection()">
+              ← Back to Overview
+            </div>
+            <h3 class="option-title">⚫ Sofa Legs</h3>
+            <p class="option-subtitle">{{ getLegLabel() }}</p>
+            <div class="leg-options">
+              <div 
+                v-for="leg in legOptions" 
+                :key="leg.value"
+                :class="['leg-option', { active: configuration.legStyle === leg.value }]"
+                @click="updateLegStyle(leg.value)"
+              >
+                <div class="leg-preview">
+                  <div class="leg-shape" :style="{ backgroundColor: leg.color }"></div>
+                </div>
+                <span class="leg-name">{{ leg.label }}</span>
+                <span class="leg-price">+${{ leg.extraCost }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Size Selection (always visible) -->
+          <div class="option-group size-selector">
+            <h3 class="option-title">📏 Sofa Size</h3>
+            <p class="option-subtitle">{{ getSizeLabel() }}</p>
+            <div class="size-options">
+              <div 
+                v-for="size in sizeOptions"
+                :key="size.value"
+                :class="['size-option', { active: configuration.size === size.value }]"
+                @click="updateSize(size.value)"
+              >
+                <span class="size-name">{{ size.label }}</span>
+                <span class="size-dimensions">{{ size.dimensions }}</span>
+                <span class="size-price">+${{ size.extraCost }}</span>
               </div>
             </div>
           </div>
@@ -85,7 +226,7 @@
             :disabled="!model || isAddingToCart"
             class="add-to-cart-btn">
             <span v-if="isAddingToCart">Adding to Cart...</span>
-            <span v-else>Add to Cart - ${{ calculatedPrice.toFixed(2) }}</span>
+            <span v-else">Add to Cart - ${{ calculatedPrice.toFixed(2) }}</span>
           </button>
         </div>
       </div>
@@ -98,25 +239,82 @@ import { onMounted, onUnmounted, ref, computed } from 'vue'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import shopifyService from '../services/shopifyService'
 
 // Refs
 const canvasContainer = ref(null)
 const isLoading = ref(true)
 const isAddingToCart = ref(false)
-const calculatedPrice = ref(299.99)
+const showDebugInfo = ref(false)
+
+// Debug Stats
+const debugStats = ref({
+  totalMeshes: 0,
+  cushions: 0,
+  frame: 0,
+  pillows: 0,
+  legs: 0
+})
+
+// Hotspot System
+const activeHotspot = ref(null)
+const hoveredHotspot = ref(null)
+const visibleHotspots = ref([])
+const clickedMesh = ref(null) // Track the specific mesh that was clicked
 
 // Three.js variables
-let scene, camera, renderer, model, controls
+let scene, camera, renderer, model, controls, raycaster, mouse
+
+// Store references to different parts of the sofa
+let sofaParts = {
+  cushions: [],
+  frame: [],
+  pillows: [],
+  legs: [],
+  all: []
+}
 
 // Configuration state
 const configuration = ref({
-  color: 'blue',
-  size: '2-seater',
-  material: 'fabric'
+  cushionColor: 'blue',
+  frameMaterial: 'oak',
+  pillowStyle: 'classic',
+  legStyle: 'wooden',
+  size: '2-seater'
 })
 
-// Color options with pricing
+// Hotspot definitions
+const hotspotDefinitions = ref([
+  {
+    id: 'cushions',
+    name: 'Seat Cushions',
+    icon: '🟦',
+    position: { x: 0, y: 0.5, z: 0.3 },
+    meshNames: ['seat', 'cushion', 'Cushion']
+  },
+  {
+    id: 'frame',
+    name: 'Frame & Armrests',
+    icon: '🔲', 
+    position: { x: -1.2, y: 0.3, z: 0 },
+    meshNames: ['frame', 'armrest', 'Frame', 'Armrest']
+  },
+  {
+    id: 'pillows',
+    name: 'Decorative Pillows',
+    icon: '🟨',
+    position: { x: -0.5, y: 0.8, z: -0.3 },
+    meshNames: ['pillow', 'Pillow']
+  },
+  {
+    id: 'legs',
+    name: 'Sofa Legs',
+    icon: '⚫',
+    position: { x: 0, y: -0.3, z: 0.5 },
+    meshNames: ['leg', 'Leg', 'support']
+  }
+])
+
+// Configuration Options
 const colorOptions = ref([
   { label: 'Ocean Blue', value: 'blue', hex: '#4A90E2', price: 299.99 },
   { label: 'Crimson Red', value: 'red', hex: '#E74C3C', price: 319.99 },
@@ -126,10 +324,769 @@ const colorOptions = ref([
   { label: 'Sunset Orange', value: 'orange', hex: '#E67E22', price: 314.99 }
 ])
 
-// Helper functions
+const frameOptions = ref([
+  { label: 'Oak Wood', value: 'oak', description: 'Natural oak finish', extraCost: 0 },
+  { label: 'Walnut', value: 'walnut', description: 'Dark walnut stain', extraCost: 50 },
+  { label: 'Metal Frame', value: 'metal', description: 'Brushed steel', extraCost: 75 },
+  { label: 'White Oak', value: 'white-oak', description: 'Light bleached oak', extraCost: 25 }
+])
+
+const pillowOptions = ref([
+  { label: 'Classic', value: 'classic', color: '#E8E8E8', extraCost: 0 },
+  { label: 'Velvet Blue', value: 'velvet-blue', color: '#3A5FCD', extraCost: 35 },
+  { label: 'Golden', value: 'golden', color: '#DAA520', extraCost: 40 },
+  { label: 'Burgundy', value: 'burgundy', color: '#8B0000', extraCost: 35 }
+])
+
+const legOptions = ref([
+  { label: 'Wooden Legs', value: 'wooden', color: '#8B4513', extraCost: 0 },
+  { label: 'Metal Legs', value: 'metal', color: '#696969', extraCost: 60 },
+  { label: 'Brass Legs', value: 'brass', color: '#B5651D', extraCost: 80 },
+  { label: 'Black Metal', value: 'black-metal', color: '#2F4F4F', extraCost: 65 }
+])
+
+const sizeOptions = ref([
+  { label: '2-Seater', value: '2-seater', dimensions: '150cm × 85cm', extraCost: 0 },
+  { label: '3-Seater', value: '3-seater', dimensions: '200cm × 85cm', extraCost: 200 },
+  { label: 'L-Shape', value: 'l-shape', dimensions: '250cm × 200cm', extraCost: 400 }
+])
+
+// Computed price
+const calculatedPrice = computed(() => {
+  let basePrice = 299.99
+  
+  const selectedColor = colorOptions.value.find(c => c.value === configuration.value.cushionColor)
+  if (selectedColor) basePrice = selectedColor.price
+  
+  const selectedFrame = frameOptions.value.find(f => f.value === configuration.value.frameMaterial)
+  if (selectedFrame) basePrice += selectedFrame.extraCost
+  
+  const selectedPillow = pillowOptions.value.find(p => p.value === configuration.value.pillowStyle)
+  if (selectedPillow) basePrice += selectedPillow.extraCost
+  
+  const selectedLeg = legOptions.value.find(l => l.value === configuration.value.legStyle)
+  if (selectedLeg) basePrice += selectedLeg.extraCost
+  
+  const selectedSize = sizeOptions.value.find(s => s.value === configuration.value.size)
+  if (selectedSize) basePrice += selectedSize.extraCost
+  
+  return basePrice
+})
+
+// Helper functions for labels
 const getSelectedColorLabel = () => {
-  const selected = colorOptions.value.find(c => c.value === configuration.value.color)
+  const selected = colorOptions.value.find(c => c.value === configuration.value.cushionColor)
   return selected ? selected.label : 'Select Color'
+}
+
+const getFrameLabel = () => {
+  const selected = frameOptions.value.find(f => f.value === configuration.value.frameMaterial)
+  return selected ? selected.label : 'Select Material'
+}
+
+const getPillowLabel = () => {
+  const selected = pillowOptions.value.find(p => p.value === configuration.value.pillowStyle)
+  return selected ? selected.label : 'Select Style'
+}
+
+const getLegLabel = () => {
+  const selected = legOptions.value.find(l => l.value === configuration.value.legStyle)
+  return selected ? selected.label : 'Select Style'
+}
+
+const getSizeLabel = () => {
+  const selected = sizeOptions.value.find(s => s.value === configuration.value.size)
+  return selected ? selected.label : 'Select Size'
+}
+
+// MESH CLICKING FUNCTIONALITY
+const onMouseClick = (event) => {
+  if (!camera || !scene) return
+  clearSelection()
+  const rect = canvasContainer.value.getBoundingClientRect()
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+  
+  raycaster.setFromCamera(mouse, camera)
+  const intersects = raycaster.intersectObjects(scene.children, true)
+  
+  if (intersects.length > 0) {
+    const targetMesh = intersects[0].object
+    console.log('🖱️ Clicked mesh:', targetMesh.name, 'Type:', targetMesh.userData.partType)
+    
+    // Update the clicked mesh to the NEW mesh (this deselects the previous one)
+    clickedMesh.value = targetMesh
+    
+    // Initialize custom config for this mesh if it doesn't exist
+    if (!targetMesh.userData.customConfig) {
+      targetMesh.userData.customConfig = {
+        cushionColor: configuration.value.cushionColor,
+        frameMaterial: configuration.value.frameMaterial,
+        pillowStyle: configuration.value.pillowStyle,
+        legStyle: configuration.value.legStyle
+      }
+    }
+    
+    // Update the global configuration to match this mesh's current config
+    const partType = targetMesh.userData.partType
+    if (partType === 'cushion') {
+      configuration.value.cushionColor = targetMesh.userData.customConfig.cushionColor
+    } else if (partType === 'frame') {
+      configuration.value.frameMaterial = targetMesh.userData.customConfig.frameMaterial
+    } else if (partType === 'pillow') {
+      configuration.value.pillowStyle = targetMesh.userData.customConfig.pillowStyle
+    } else if (partType === 'leg') {
+      configuration.value.legStyle = targetMesh.userData.customConfig.legStyle
+    }
+    
+    // Determine which hotspot this mesh belongs to
+    const hotspotId = identifyMeshHotspot(targetMesh)
+    if (hotspotId) {
+      console.log("🚀 ~ onMouseClick ~ hotspotId:", hotspotId)
+      const hotspot = hotspotDefinitions.value.find(h => h.id === hotspotId)
+      if (hotspot) {
+        selectHotspot(hotspot)
+        
+        // Add visual feedback
+        highlightClickedMesh(targetMesh)
+      }
+    }
+  }
+}
+
+const identifyMeshHotspot = (mesh) => {
+  const name = mesh.name.toLowerCase()
+  const partType = mesh.userData.partType
+  
+  // Identify which hotspot category this mesh belongs to
+  if (name.includes('leg') || name.includes('support') || partType === 'leg') {
+    return 'legs'
+  } else if (name.includes('seat') || name.includes('cushion') || partType === 'cushion') {
+    return 'cushions'  
+  } else if (name.includes('pillow') || partType === 'pillow') {
+    return 'pillows'
+  } else if (name.includes('frame') || name.includes('arm') || name.includes('back') || partType === 'frame') {
+    return 'frame'
+  }
+  
+  return null
+}
+
+const highlightClickedMesh = (mesh) => {
+  // Remove previous highlights from ALL meshes
+  sofaParts.all.forEach(part => {
+    if (part.userData.isHighlighted) {
+      if (part.userData.originalEmissive) {
+        part.material.emissive.copy(part.userData.originalEmissive)
+      }
+      part.userData.isHighlighted = false
+    }
+  })
+  
+  // Highlight the newly clicked mesh
+  if (mesh.material) {
+    if (!mesh.userData.originalEmissive) {
+      mesh.userData.originalEmissive = mesh.material.emissive.clone()
+    }
+    mesh.material.emissive.setHex(0x666666)
+    mesh.userData.isHighlighted = true
+    console.log('✨ Highlighted mesh:', mesh.name)
+  }
+}
+
+// Debug functions
+const exportModelStructure = () => {
+  if (!model) return
+  
+  const structure = []
+  model.traverse((child) => {
+    if (child.isMesh) {
+      structure.push({
+        name: child.name,
+        type: child.type,
+        parent: child.parent ? child.parent.name : 'ROOT',
+        position: [
+          parseFloat(child.position.x.toFixed(3)),
+          parseFloat(child.position.y.toFixed(3)),
+          parseFloat(child.position.z.toFixed(3))
+        ],
+        material: child.material ? {
+          type: child.material.type,
+          color: child.material.color ? `#${child.material.color.getHexString()}` : null,
+          roughness: child.material.roughness || 0,
+          metalness: child.material.metalness || 0
+        } : null
+      })
+    }
+  })
+  
+  console.log('📋 COMPLETE MODEL STRUCTURE:')
+  console.log(JSON.stringify(structure, null, 2))
+  
+  // Copy to clipboard if possible
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(JSON.stringify(structure, null, 2))
+    console.log('✅ Structure copied to clipboard!')
+  }
+}
+
+// Hotspot interaction functions
+const onHotspotHover = (hotspot) => {
+  hoveredHotspot.value = hotspot
+  highlightMeshes(hotspot.meshNames, true)
+}
+
+const onHotspotLeave = () => {
+  if (hoveredHotspot.value) {
+    highlightMeshes(hoveredHotspot.value.meshNames, false)
+  }
+  hoveredHotspot.value = null
+}
+
+const selectHotspot = (hotspot) => {
+  activeHotspot.value = hotspot
+  // Clear clicked mesh when selecting via hotspot - this makes hotspot selection update ALL parts
+  clickedMesh.value = null
+  console.log('🎯 Selected hotspot:', hotspot.name)
+}
+
+const selectHotspotById = (id) => {
+  const hotspot = hotspotDefinitions.value.find(h => h.id === id)
+  if (hotspot) {
+    selectHotspot(hotspot)
+  }
+}
+
+const clearSelection = () => {
+  activeHotspot.value = null
+  clickedMesh.value = null // Also clear the clicked mesh
+  
+  // Remove highlights from all meshes
+  sofaParts.all.forEach(part => {
+    if (part.userData.isHighlighted) {
+      if (part.userData.originalEmissive) {
+        part.material.emissive.copy(part.userData.originalEmissive)
+      }
+      part.userData.isHighlighted = false
+    }
+  })
+}
+
+// Mesh highlighting function
+const highlightMeshes = (meshNames, highlight) => {
+  if (!model) return
+  
+  const targetParts = sofaParts.all.filter(part => 
+    meshNames.some(name => 
+      part.name.toLowerCase().includes(name.toLowerCase()) ||
+      part.userData.partType?.includes(name.toLowerCase())
+    )
+  )
+  
+  targetParts.forEach(part => {
+    if (part.material) {
+      if (highlight) {
+        if (!part.userData.originalEmissive) {
+          part.userData.originalEmissive = part.material.emissive.clone()
+        }
+        part.material.emissive.setHex(0x444444)
+      } else {
+        if (part.userData.originalEmissive) {
+          part.material.emissive.copy(part.userData.originalEmissive)
+        }
+      }
+    }
+  })
+}
+
+// Update hotspot screen positions
+const updateHotspotPositions = () => {
+  if (!camera || !model) return
+  
+  visibleHotspots.value = hotspotDefinitions.value.map(hotspot => {
+    const vector = new THREE.Vector3(
+      hotspot.position.x,
+      hotspot.position.y, 
+      hotspot.position.z
+    )
+    
+    vector.applyMatrix4(model.matrixWorld)
+    vector.project(camera)
+    
+    const rect = canvasContainer.value?.getBoundingClientRect()
+    if (!rect) return { ...hotspot, screenPosition: { x: -1000, y: -1000 } }
+    
+    const x = ((vector.x + 1) / 2) * rect.width
+    const y = ((-vector.y + 1) / 2) * rect.height
+    
+    return {
+      ...hotspot,
+      screenPosition: { x, y },
+      visible: vector.z < 1
+    }
+  }).filter(h => h.visible)
+}
+
+// Configuration update functions
+const updateCushionColor = (colorValue) => {
+  console.log('🎨 Updating cushion color to:', colorValue)
+  configuration.value.cushionColor = colorValue
+  updateCushionColors()
+}
+
+const updateFrameMaterial = (material) => {
+  console.log('🪵 Updating frame material to:', material)
+  configuration.value.frameMaterial = material
+  updateFrameMaterials()
+}
+
+const updatePillowStyle = (style) => {
+  console.log('🟨 Updating pillow style to:', style)
+  configuration.value.pillowStyle = style
+  updatePillowStyles()
+}
+
+const updateLegStyle = (style) => {
+  console.log('⚫ Updating leg style to:', style)
+  configuration.value.legStyle = style
+  updateLegStyles()
+}
+
+const updateSize = (size) => {
+  console.log('📏 Updating sofa size to:', size)
+  configuration.value.size = size
+  updateSofaSize(size)
+}
+
+// Real-time 3D model update functions (work with existing model parts only)
+const updateCushionColors = () => {
+  console.log('🟦 updateCushionColors called - Parts available:', sofaParts.cushions.length)
+  
+  // If we have a specific clicked mesh, only update that one
+  if (clickedMesh.value && clickedMesh.value.userData.partType === 'cushion') {
+    const newColorHex = getColorHex(configuration.value.cushionColor)
+    console.log('🟦 Applying cushion color to clicked mesh only:', clickedMesh.value.name)
+    
+    if (clickedMesh.value.material) {
+      clickedMesh.value.material.color.setHex(newColorHex)
+      clickedMesh.value.material.roughness = 0.8
+      clickedMesh.value.material.metalness = 0.1
+      clickedMesh.value.material.needsUpdate = true
+      
+      // Save the configuration to this specific mesh
+      if (!clickedMesh.value.userData.customConfig) {
+        clickedMesh.value.userData.customConfig = {}
+      }
+      clickedMesh.value.userData.customConfig.cushionColor = configuration.value.cushionColor
+      
+      console.log(`   - New color: #${clickedMesh.value.material.color.getHexString()}`)
+      console.log(`   - Saved config to mesh:`, clickedMesh.value.userData.customConfig)
+    }
+    return
+  }
+  
+  // Otherwise, update all cushions (initial load or hotspot click)
+  if (!sofaParts.cushions.length) {
+    console.log('⚠️ No cushion parts found in the model')
+    return
+  }
+  
+  const newColorHex = getColorHex(configuration.value.cushionColor)
+  console.log('🟦 Applying cushion color:', newColorHex.toString(16), 'to', sofaParts.cushions.length, 'parts')
+  
+  sofaParts.cushions.forEach((cushion, index) => {
+    console.log(`   Updating cushion ${index}: ${cushion.name}`)
+    if (cushion.material) {
+      cushion.material.color.setHex(newColorHex)
+      cushion.material.roughness = 0.8
+      cushion.material.metalness = 0.1
+      cushion.material.needsUpdate = true
+      
+      // Save config to each mesh
+      if (!cushion.userData.customConfig) {
+        cushion.userData.customConfig = {}
+      }
+      cushion.userData.customConfig.cushionColor = configuration.value.cushionColor
+      
+      console.log(`   - New color: #${cushion.material.color.getHexString()}`)
+    }
+  })
+}
+
+const updateFrameMaterials = () => {
+  console.log('🔲 updateFrameMaterials called - Parts available:', sofaParts.frame.length)
+  
+  // If we have a specific clicked mesh, only update that one
+  if (clickedMesh.value && clickedMesh.value.userData.partType === 'frame') {
+    const frameColor = getFrameColor(configuration.value.frameMaterial)
+    const materialProps = getFrameMaterialProperties(configuration.value.frameMaterial)
+    console.log('🔲 Applying frame material to clicked mesh only:', clickedMesh.value.name)
+    
+    if (clickedMesh.value.material) {
+      clickedMesh.value.material.color.setHex(frameColor)
+      clickedMesh.value.material.roughness = materialProps.roughness
+      clickedMesh.value.material.metalness = materialProps.metalness
+      clickedMesh.value.material.needsUpdate = true
+      
+      // Save the configuration to this specific mesh
+      if (!clickedMesh.value.userData.customConfig) {
+        clickedMesh.value.userData.customConfig = {}
+      }
+      clickedMesh.value.userData.customConfig.frameMaterial = configuration.value.frameMaterial
+      
+      console.log(`   - New color: #${clickedMesh.value.material.color.getHexString()}`)
+      console.log(`   - Saved config to mesh:`, clickedMesh.value.userData.customConfig)
+    }
+    return
+  }
+  
+  // Otherwise, update all frame parts (initial load or hotspot click)
+  if (!sofaParts.frame.length) {
+    console.log('⚠️ No frame parts found in the model')
+    return
+  }
+  
+  const frameColor = getFrameColor(configuration.value.frameMaterial)
+  const materialProps = getFrameMaterialProperties(configuration.value.frameMaterial)
+  
+  console.log('🔲 Applying frame material:', configuration.value.frameMaterial, 'color:', frameColor.toString(16))
+  
+  sofaParts.frame.forEach((framePart, index) => {
+    console.log(`   Updating frame ${index}: ${framePart.name}`)
+    if (framePart.material) {
+      framePart.material.color.setHex(frameColor)
+      framePart.material.roughness = materialProps.roughness
+      framePart.material.metalness = materialProps.metalness
+      framePart.material.needsUpdate = true
+      
+      // Save config to each mesh
+      if (!framePart.userData.customConfig) {
+        framePart.userData.customConfig = {}
+      }
+      framePart.userData.customConfig.frameMaterial = configuration.value.frameMaterial
+      
+      console.log(`   - New color: #${framePart.material.color.getHexString()}`)
+    }
+  })
+}
+
+const updatePillowStyles = () => {
+  console.log('🟨 updatePillowStyles called - Parts available:', sofaParts.pillows.length)
+  
+  // If we have a specific clicked mesh, only update that one
+  if (clickedMesh.value && clickedMesh.value.userData.partType === 'pillow') {
+    const pillowColor = getPillowColor(configuration.value.pillowStyle)
+    const pillowProps = getPillowMaterialProperties(configuration.value.pillowStyle)
+    console.log('🟨 Applying pillow style to clicked mesh only:', clickedMesh.value.name)
+    
+    if (clickedMesh.value.material) {
+      clickedMesh.value.material.color.setHex(pillowColor)
+      clickedMesh.value.material.roughness = pillowProps.roughness
+      clickedMesh.value.material.metalness = pillowProps.metalness
+      clickedMesh.value.material.needsUpdate = true
+      
+      // Save the configuration to this specific mesh
+      if (!clickedMesh.value.userData.customConfig) {
+        clickedMesh.value.userData.customConfig = {}
+      }
+      clickedMesh.value.userData.customConfig.pillowStyle = configuration.value.pillowStyle
+      
+      console.log(`   - New color: #${clickedMesh.value.material.color.getHexString()}`)
+      console.log(`   - Saved config to mesh:`, clickedMesh.value.userData.customConfig)
+    }
+    return
+  }
+  
+  // Otherwise, update all pillows (initial load or hotspot click)
+  if (!sofaParts.pillows.length) {
+    console.log('⚠️ No pillow parts found in the model')
+    return
+  }
+  
+  const pillowColor = getPillowColor(configuration.value.pillowStyle)
+  const pillowProps = getPillowMaterialProperties(configuration.value.pillowStyle)
+  
+  console.log('🟨 Applying pillow style:', configuration.value.pillowStyle, 'color:', pillowColor.toString(16))
+  
+  sofaParts.pillows.forEach((pillow, index) => {
+    console.log(`   Updating pillow ${index}: ${pillow.name}`)
+    if (pillow.material) {
+      pillow.material.color.setHex(pillowColor)
+      pillow.material.roughness = pillowProps.roughness
+      pillow.material.metalness = pillowProps.metalness
+      pillow.material.needsUpdate = true
+      
+      // Save config to each mesh
+      if (!pillow.userData.customConfig) {
+        pillow.userData.customConfig = {}
+      }
+      pillow.userData.customConfig.pillowStyle = configuration.value.pillowStyle
+      
+      console.log(`   - New color: #${pillow.material.color.getHexString()}`)
+    }
+  })
+}
+
+const updateLegStyles = () => {
+  console.log('⚫ updateLegStyles called - Parts available:', sofaParts.legs.length)
+  
+  // If we have a specific clicked mesh, only update that one
+  if (clickedMesh.value && clickedMesh.value.userData.partType === 'leg') {
+    const legColor = getLegColor(configuration.value.legStyle)
+    const legProps = getLegMaterialProperties(configuration.value.legStyle)
+    console.log('⚫ Applying leg style to clicked mesh only:', clickedMesh.value.name)
+    
+    if (clickedMesh.value.material) {
+      clickedMesh.value.material.color.setHex(legColor)
+      clickedMesh.value.material.roughness = legProps.roughness
+      clickedMesh.value.material.metalness = legProps.metalness
+      clickedMesh.value.material.needsUpdate = true
+      
+      // Save the configuration to this specific mesh
+      if (!clickedMesh.value.userData.customConfig) {
+        clickedMesh.value.userData.customConfig = {}
+      }
+      clickedMesh.value.userData.customConfig.legStyle = configuration.value.legStyle
+      
+      console.log(`   - Updated material: #${clickedMesh.value.material.color.getHexString()}`)
+      console.log(`   - Saved config to mesh:`, clickedMesh.value.userData.customConfig)
+      
+      if (configuration.value.legStyle.includes('metal') || configuration.value.legStyle.includes('brass')) {
+        clickedMesh.value.material.metalness = 0.8
+        clickedMesh.value.material.roughness = 0.3
+        console.log(`   - Applied metallic properties`)
+      }
+    }
+    return
+  }
+  
+  // Otherwise, update all legs (initial load or hotspot click)
+  if (!sofaParts.legs.length) {
+    console.log('⚠️ No leg parts found in the model - working with existing parts only')
+    return
+  }
+  
+  const legColor = getLegColor(configuration.value.legStyle)
+  const legProps = getLegMaterialProperties(configuration.value.legStyle)
+  
+  console.log('⚫ Applying leg style:', configuration.value.legStyle, 'color:', legColor.toString(16))
+  
+  sofaParts.legs.forEach((leg, index) => {
+    console.log(`   Updating existing leg ${index}: ${leg.name}`)
+    if (leg.material) {
+      leg.material.color.setHex(legColor)
+      leg.material.roughness = legProps.roughness
+      leg.material.metalness = legProps.metalness
+      leg.material.needsUpdate = true
+      
+      // Save config to each mesh
+      if (!leg.userData.customConfig) {
+        leg.userData.customConfig = {}
+      }
+      leg.userData.customConfig.legStyle = configuration.value.legStyle
+      
+      console.log(`   - Updated material: #${leg.material.color.getHexString()}`)
+      
+      if (configuration.value.legStyle.includes('metal') || configuration.value.legStyle.includes('brass')) {
+        leg.material.metalness = 0.8
+        leg.material.roughness = 0.3
+        console.log(`   - Applied metallic properties`)
+      }
+    }
+  })
+}
+
+const updateSofaSize = (size) => {
+  if (!model) return
+  
+  const scaleFactors = {
+    '2-seater': { x: 1.0, y: 1.0, z: 1.0 },
+    '3-seater': { x: 1.3, y: 1.0, z: 1.0 },
+    'l-shape': { x: 1.2, y: 1.0, z: 1.4 }
+  }
+  
+  const scale = scaleFactors[size] || scaleFactors['2-seater']
+  model.scale.set(scale.x, scale.y, scale.z)
+  
+  console.log('📏 Scaled sofa to:', scale)
+}
+
+// ENHANCED model analysis - identify parts for clicking
+const identifySofaParts = () => {
+  if (!model) return
+  
+  sofaParts = {
+    cushions: [],
+    frame: [],
+    pillows: [],
+    legs: [],
+    all: []
+  }
+  
+  console.log('🔍 Starting comprehensive model analysis for clicking...')
+  
+  model.traverse((child) => {
+    if (child.isMesh) {
+      const name = child.name.toLowerCase()
+      const parentName = child.parent ? child.parent.name.toLowerCase() : ''
+      
+      console.log(`🔍 Analyzing clickable mesh: "${child.name}" (parent: "${child.parent ? child.parent.name : 'ROOT'}")`)
+      
+      child.castShadow = true
+      child.receiveShadow = true
+      
+      // CRITICAL: Clone material for each mesh so they can be customized independently
+      if (child.material) {
+        child.material = child.material.clone()
+        child.userData.originalMaterial = child.material.clone()
+        child.userData.originalEmissive = child.material.emissive ? child.material.emissive.clone() : new THREE.Color(0x000000)
+        child.userData.originalColor = child.material.color.clone()
+      }
+      
+      sofaParts.all.push(child)
+      
+      // Enhanced part identification
+      let identified = false
+      
+      const cushionPatterns = ['cushion', 'seat', 'back', 'pad']
+      const framePatterns = ['frame', 'armrest', 'arm', 'base', 'body', 'structure']
+      const pillowPatterns = ['pillow', 'throw', 'decorative']
+      const legPatterns = ['leg', 'foot', 'feet', 'support', 'stand']
+      
+      if (cushionPatterns.some(pattern => name.includes(pattern) || parentName.includes(pattern))) {
+        sofaParts.cushions.push(child)
+        child.userData.partType = 'cushion'
+        console.log(`✅ IDENTIFIED AS CUSHION: ${child.name}`)
+        identified = true
+      } else if (framePatterns.some(pattern => name.includes(pattern) || parentName.includes(pattern))) {
+        sofaParts.frame.push(child)
+        child.userData.partType = 'frame'
+        console.log(`✅ IDENTIFIED AS FRAME: ${child.name}`)
+        identified = true
+      } else if (pillowPatterns.some(pattern => name.includes(pattern) || parentName.includes(pattern))) {
+        sofaParts.pillows.push(child)
+        child.userData.partType = 'pillow'
+        console.log(`✅ IDENTIFIED AS PILLOW: ${child.name}`)
+        identified = true
+      } else if (legPatterns.some(pattern => name.includes(pattern) || parentName.includes(pattern))) {
+        sofaParts.legs.push(child)
+        child.userData.partType = 'leg'
+        console.log(`✅ IDENTIFIED AS LEG: ${child.name}`)
+        identified = true
+      }
+      
+      // Fallback identification based on position
+      if (!identified) {
+        const worldPos = new THREE.Vector3()
+        child.getWorldPosition(worldPos)
+        
+        console.log(`❓ UNIDENTIFIED: ${child.name}, analyzing position y:${worldPos.y.toFixed(2)}`)
+        
+        if (worldPos.y < -0.1) {
+          sofaParts.legs.push(child)
+          child.userData.partType = 'leg'
+          console.log(`🦵 GUESSED AS LEG (low position): ${child.name}`)
+        } else if (worldPos.y > 0.5) {
+          sofaParts.pillows.push(child)
+          child.userData.partType = 'pillow'
+          console.log(`🟨 GUESSED AS PILLOW (high position): ${child.name}`)
+        } else if (worldPos.y > 0.2) {
+          sofaParts.cushions.push(child)
+          child.userData.partType = 'cushion'
+          console.log(`🟦 GUESSED AS CUSHION (elevated): ${child.name}`)
+        } else {
+          sofaParts.frame.push(child)
+          child.userData.partType = 'frame'
+          console.log(`🔲 GUESSED AS FRAME (default): ${child.name}`)
+        }
+      }
+      
+      // Make mesh clickable
+      child.userData.isClickable = true
+    }
+  })
+  
+  console.log('🎯 FINAL CLICKABLE PARTS:')
+  console.log(`   🟦 Cushions: ${sofaParts.cushions.length}`, sofaParts.cushions.map(p => p.name))
+  console.log(`   🔲 Frame: ${sofaParts.frame.length}`, sofaParts.frame.map(p => p.name))
+  console.log(`   🟨 Pillows: ${sofaParts.pillows.length}`, sofaParts.pillows.map(p => p.name))
+  console.log(`   ⚫ Legs: ${sofaParts.legs.length}`, sofaParts.legs.map(p => p.name))
+  console.log(`   📊 Total: ${sofaParts.all.length}`)
+  
+  updateDebugStats()
+}
+
+const updateDebugStats = () => {
+  debugStats.value = {
+    totalMeshes: sofaParts.all.length,
+    cushions: sofaParts.cushions.length,
+    frame: sofaParts.frame.length,
+    pillows: sofaParts.pillows.length,
+    legs: sofaParts.legs.length
+  }
+}
+
+// Helper functions for colors and materials
+const getColorHex = (colorValue) => {
+  const colorMap = {
+    blue: 0x4A90E2,
+    red: 0xE74C3C,
+    green: 0x2ECC71,
+    brown: 0x8B4513,
+    purple: 0x9B59B6,
+    orange: 0xE67E22
+  }
+  return colorMap[colorValue] || 0x4A90E2
+}
+
+const getFrameColor = (material) => {
+  const colorMap = {
+    oak: 0x8B4513,
+    walnut: 0x654321,
+    metal: 0x808080,
+    'white-oak': 0xF5E6D3
+  }
+  return colorMap[material] || 0x8B4513
+}
+
+const getPillowColor = (style) => {
+  const pillow = pillowOptions.value.find(p => p.value === style)
+  return pillow ? parseInt(pillow.color.replace('#', '0x')) : 0xE8E8E8
+}
+
+const getLegColor = (style) => {
+  const leg = legOptions.value.find(l => l.value === style)
+  return leg ? parseInt(leg.color.replace('#', '0x')) : 0x8B4513
+}
+
+const getFrameMaterialProperties = (material) => {
+  const properties = {
+    oak: { roughness: 0.8, metalness: 0.0 },
+    walnut: { roughness: 0.7, metalness: 0.0 },
+    metal: { roughness: 0.3, metalness: 0.8 },
+    'white-oak': { roughness: 0.9, metalness: 0.0 }
+  }
+  return properties[material] || properties.oak
+}
+
+const getPillowMaterialProperties = (style) => {
+  const properties = {
+    classic: { roughness: 0.8, metalness: 0.0 },
+    'velvet-blue': { roughness: 0.9, metalness: 0.0 },
+    golden: { roughness: 0.6, metalness: 0.2 },
+    burgundy: { roughness: 0.8, metalness: 0.0 }
+  }
+  return properties[style] || properties.classic
+}
+
+const getLegMaterialProperties = (style) => {
+  const properties = {
+    wooden: { roughness: 0.8, metalness: 0.0 },
+    metal: { roughness: 0.2, metalness: 0.9 },
+    brass: { roughness: 0.3, metalness: 0.8 },
+    'black-metal': { roughness: 0.2, metalness: 0.9 }
+  }
+  return properties[style] || properties.wooden
 }
 
 // Initialize Three.js scene
@@ -139,64 +1096,62 @@ const initThreeJS = async () => {
     return
   }
 
-  console.log('🔧 Initializing Three.js scene...')
+  console.log('🔧 Initializing Three.js scene with mesh clicking...')
   
   try {
-    // Scene setup
     scene = new THREE.Scene()
     scene.background = new THREE.Color(0xf8f9fa)
     
-    // Camera setup
     const width = canvasContainer.value.clientWidth
     const height = canvasContainer.value.clientHeight
     
-    camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000)
-    camera.position.set(4, 3, 4)
+    camera = new THREE.PerspectiveCamera(50, width / height, 3, 1000)
+    // camera.position.set(4, 3, 4)
+    camera.position.set(100, 100, 100).multiplyScalar(0.5);
+
     
-    // Renderer setup
     renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setSize(width, height)
     renderer.setPixelRatio(window.devicePixelRatio)
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
-    renderer.outputEncoding = THREE.sRGBEncoding
+    renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.2
     
     canvasContainer.value.appendChild(renderer.domElement)
     
-    // Enhanced Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4)
     scene.add(ambientLight)
     
-    const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8)
-    directionalLight1.position.set(10, 10, 5)
+    const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1)
+    directionalLight1.position.set(1, 1, 200).normalize()
     directionalLight1.castShadow = true
     directionalLight1.shadow.mapSize.width = 2048
     directionalLight1.shadow.mapSize.height = 2048
     scene.add(directionalLight1)
     
     const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.3)
-    directionalLight2.position.set(-5, 5, -5)
+    directionalLight2.position.set(5, 5, 5)
     scene.add(directionalLight2)
     
-    // Controls
     controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.05
-    controls.minDistance = 2
-    controls.maxDistance = 10
-    controls.maxPolarAngle = Math.PI / 2.2
+    // controls.minDistance = 2
+    // controls.maxDistance = 10
+    // controls.maxPolarAngle = Math.PI
     controls.autoRotate = false
-    controls.autoRotateSpeed = 1
     
-    // Load 3D model
+    raycaster = new THREE.Raycaster()
+    mouse = new THREE.Vector2()
+    
+    // Add click event listener for mesh interaction
+    canvasContainer.value.addEventListener('click', onMouseClick)
+    
     await loadModel()
-    
-    // Start animation loop
     animate()
     
-    // Handle window resize
     const handleResize = () => {
       if (!canvasContainer.value || !camera || !renderer) return
       
@@ -210,7 +1165,7 @@ const initThreeJS = async () => {
     
     window.addEventListener('resize', handleResize)
     
-    console.log('✅ Three.js scene initialized successfully')
+    console.log('✅ Three.js scene with clickable meshes initialized successfully')
     
   } catch (error) {
     console.error('❌ Failed to initialize Three.js:', error)
@@ -218,17 +1173,16 @@ const initThreeJS = async () => {
   }
 }
 
-// Load 3D model - Use original Couch.glb
+// Load 3D model with analysis for clicking
 const loadModel = async () => {
-  console.log('📦 Loading original Couch.glb model...')
+  console.log('📦 Loading Couch.glb with clickable mesh analysis...')
   
   try {
     const loader = new GLTFLoader()
     
-    // Load the original sofa model
     const gltf = await new Promise((resolve, reject) => {
       loader.load(
-        '/models/Couch.glb', // Your original model path
+        '/models/armalite_ar-10t_battle_rifle.glb',
         (gltf) => resolve(gltf),
         (progress) => {
           console.log('📈 Loading progress:', (progress.loaded / progress.total * 100) + '%')
@@ -236,43 +1190,24 @@ const loadModel = async () => {
         (error) => reject(error)
       )
     })
+
+    console.log('gltf', gltf.scene.children[0]);
+    console.log('gltf', gltf.scene.children[0].userData);
+
+    model = gltf.scene.children[0]
+    // model.scale.setScalar(1)
+    // model.position.set(0, 0, 0)
     
-    model = gltf.scene
-    
-    // Scale and position the model appropriately
-    model.scale.setScalar(1)
-    model.position.set(0, 0, 0)
-    
-    // Enable shadows
-    model.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true
-        child.receiveShadow = true
-        
-        // Store original material for color changes
-        if (child.material) {
-          child.userData.originalMaterial = child.material.clone()
-          
-          // Apply initial color
-          if (child.material.map) {
-            // If has texture, tint it
-            child.material.color.setHex(getColorHex(configuration.value.color))
-          } else {
-            // If no texture, apply solid color
-            child.material.color.setHex(getColorHex(configuration.value.color))
-          }
-        }
-      }
-    })
+    // Analyze parts for clicking
+    identifySofaParts()
     
     scene.add(model)
     
-    // Auto-frame the model
+    // Auto-frame
     const box = new THREE.Box3().setFromObject(model)
     const center = box.getCenter(new THREE.Vector3())
     const size = box.getSize(new THREE.Vector3())
     
-    // Position camera to frame the model nicely
     const maxDim = Math.max(size.x, size.y, size.z)
     const fov = camera.fov * (Math.PI / 180)
     const cameraDistance = maxDim / (2 * Math.tan(fov / 2)) * 1.5
@@ -284,173 +1219,74 @@ const loadModel = async () => {
     )
     camera.lookAt(center)
     
-    // Update controls target
     if (controls) {
       controls.target.copy(center)
       controls.update()
     }
     
+    // Apply initial configuration
+    // setTimeout(() => {
+    //   updateCushionColors()
+    //   updateFrameMaterials()
+    //   updatePillowStyles()
+    //   updateLegStyles()
+    // }, 500)
+    
     isLoading.value = false
-    console.log('✅ Original Couch model loaded successfully')
+    console.log('✅ Model with clickable parts loaded successfully')
     
   } catch (error) {
-    console.error('❌ Failed to load Couch model:', error)
-    console.log('🔄 Falling back to basic model...')
+    console.error('❌ Failed to load model:', error)
+    console.log('🔄 Creating fallback...')
     
-    // Fallback to basic model if Couch.glb fails
-    const geometry = new THREE.BoxGeometry(3, 1.2, 1.5)
-    const material = new THREE.MeshLambertMaterial({ color: getColorHex(configuration.value.color) })
-    
-    model = new THREE.Mesh(geometry, material)
-    model.position.set(0, 0.6, 0)
-    model.castShadow = true
-    model.receiveShadow = true
-    
-    scene.add(model)
-    
-    // Store material reference for color updates
-    model.userData.materials = [material]
-    
+    createFallbackModel()
     isLoading.value = false
   }
 }
 
-// Update model color
-const updateColor = (colorValue) => {
-  console.log('🎨 Updating color to:', colorValue)
+// Create simple fallback model if loading fails (no extra legs)
+const createFallbackModel = () => {
+  const sofaGroup = new THREE.Group()
   
-  configuration.value.color = colorValue
+  // Main body
+  const bodyGeo = new THREE.BoxGeometry(2.5, 0.8, 1.2)
+  const bodyMat = new THREE.MeshLambertMaterial({ color: getFrameColor(configuration.value.frameMaterial) })
+  const body = new THREE.Mesh(bodyGeo, bodyMat)
+  body.position.set(0, 0.4, 0)
+  body.name = 'SofaBody'
+  body.userData.partType = 'frame'
+  body.userData.isClickable = true
+  sofaParts.frame.push(body)
+  sofaGroup.add(body)
   
-  // Update model color
-  if (model) {
-    const newColorHex = getColorHex(colorValue)
-    
-    if (model.traverse) {
-      // GLTF model - traverse all meshes
-      model.traverse((child) => {
-        if (child.isMesh && child.material) {
-          if (child.material.map) {
-            // If has texture, tint it
-            child.material.color.setHex(newColorHex)
-          } else {
-            // If no texture, apply solid color
-            child.material.color.setHex(newColorHex)
-          }
-        }
-      })
-    } else if (model.userData && model.userData.materials) {
-      // Fallback model - update stored materials
-      model.userData.materials.forEach(material => {
-        material.color.setHex(newColorHex)
-      })
-    } else if (model.material) {
-      // Simple mesh
-      model.material.color.setHex(newColorHex)
+  // Seat cushion
+  const seatGeo = new THREE.BoxGeometry(2.3, 0.2, 1.0)
+  const seatMat = new THREE.MeshLambertMaterial({ color: getColorHex(configuration.value.cushionColor) })
+  const seat = new THREE.Mesh(seatGeo, seatMat)
+  seat.position.set(0, 0.9, 0)
+  seat.name = 'SeatCushion'
+  seat.userData.partType = 'cushion'
+  seat.userData.isClickable = true
+  sofaParts.cushions.push(seat)
+  sofaGroup.add(seat)
+  
+  sofaParts.all = [...sofaParts.cushions, ...sofaParts.frame]
+  
+  sofaParts.all.forEach(part => {
+    part.castShadow = true
+    part.receiveShadow = true
+    if (part.material) {
+      part.userData.originalMaterial = part.material.clone()
+      part.userData.originalEmissive = new THREE.Color(0x000000)
+      part.userData.originalColor = part.material.color.clone()
     }
-  }
+  })
   
-  // Update calculated price
-  const selectedColor = colorOptions.value.find(c => c.value === colorValue)
-  if (selectedColor) {
-    calculatedPrice.value = selectedColor.price
-  }
-}
-
-// Get color hex value
-const getColorHex = (colorValue) => {
-  const colorMap = {
-    blue: 0x4A90E2,
-    red: 0xE74C3C,
-    green: 0x2ECC71,
-    brown: 0x8B4513,
-    purple: 0x9B59B6,
-    orange: 0xE67E22
-  }
-  return colorMap[colorValue] || 0x4A90E2
-}
-
-// Add to cart function - integrates with Shopify
-const addToCart = async () => {
-  console.log('🛒 Adding to cart...')
+  model = sofaGroup
+  scene.add(model)
   
-  try {
-    isAddingToCart.value = true
-    
-    // Get selected configuration
-    const selectedColor = colorOptions.value.find(c => c.value === configuration.value.color)
-    
-    // If embedded in Shopify, send message to parent
-    if (shopifyService.isEmbeddedInShopify()) {
-      // Send configuration to Shopify parent window
-      window.parent.postMessage({
-        type: 'CONFIGURATOR_ADD_TO_CART',
-        data: {
-          productId: getProductId(),
-          variantId: `variant-${configuration.value.color}`,
-          color: configuration.value.color,
-          colorLabel: selectedColor?.label || 'Selected Color',
-          price: calculatedPrice.value,
-          quantity: 1,
-          configuration: configuration.value
-        }
-      }, '*')
-      
-      // Show success message
-      showSuccessMessage(`✅ ${selectedColor?.label || 'Custom'} sofa added to cart!`)
-      
-    } else {
-      // Standalone mode - simulate cart addition
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      showSuccessMessage(`✅ ${selectedColor?.label || 'Custom'} sofa added to cart! (Demo mode)`)
-    }
-    
-  } catch (error) {
-    console.error('❌ Failed to add to cart:', error)
-    showSuccessMessage('❌ Failed to add to cart. Please try again.', 'error')
-  } finally {
-    isAddingToCart.value = false
-  }
-}
-
-// Helper to get product ID
-const getProductId = () => {
-  const urlParams = new URLSearchParams(window.location.search)
-  return urlParams.get('productId') || 'customizable-sofa'
-}
-
-// Show success message
-const showSuccessMessage = (message, type = 'success') => {
-  // Create notification element
-  const notification = document.createElement('div')
-  notification.className = `configurator-notification ${type}`
-  notification.textContent = message
-  notification.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: ${type === 'error' ? '#dc3545' : '#28a745'};
-    color: white;
-    padding: 16px 24px;
-    border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-    z-index: 10000;
-    font-weight: 600;
-    animation: slideInRight 0.3s ease-out;
-  `
-  
-  document.body.appendChild(notification)
-  
-  // Auto-remove after 4 seconds
-  setTimeout(() => {
-    if (notification.parentNode) {
-      notification.style.animation = 'slideOutRight 0.3s ease-out'
-      setTimeout(() => {
-        notification.parentNode.removeChild(notification)
-      }, 300)
-    }
-  }, 4000)
-  
-  console.log(`📢 Notification: ${message}`)
+  updateDebugStats()
+  console.log('✅ Created fallback clickable sofa model (no extra parts)')
 }
 
 // Animation loop
@@ -463,34 +1299,78 @@ const animate = () => {
     controls.update()
   }
   
+  updateHotspotPositions()
   renderer.render(scene, camera)
 }
 
-// Lifecycle
-onMounted(() => {
-  console.log('🚀 Fullscreen configurator mounted')
+// Add to cart function
+const addToCart = async () => {
+  console.log('🛒 Adding configured sofa to cart...')
   
-  // Initialize 3D scene
+  try {
+    isAddingToCart.value = true
+    
+    const fullConfiguration = {
+      cushionColor: configuration.value.cushionColor,
+      frameMaterial: configuration.value.frameMaterial,
+      pillowStyle: configuration.value.pillowStyle,
+      legStyle: configuration.value.legStyle,
+      size: configuration.value.size
+    }
+    
+    const cartData = {
+      productId: 'customizable-sofa',
+      configuration: fullConfiguration,
+      price: Number(calculatedPrice.value),
+      quantity: 1,
+      timestamp: new Date().toISOString()
+    }
+    
+    console.log('📦 Cart data:', cartData)
+    
+    // Simulate cart addition
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    
+    // Show success notification
+    const notification = document.createElement('div')
+    notification.textContent = `✅ Custom sofa added to cart! (${calculatedPrice.value.toFixed(2)})`
+    notification.style.cssText = `
+      position: fixed; top: 20px; right: 20px; background: #28a745;
+      color: white; padding: 16px 24px; border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 10000;
+      font-weight: 600;
+    `
+    
+    document.body.appendChild(notification)
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification)
+      }
+    }, 4000)
+    
+  } catch (error) {
+    console.error('❌ Failed to add to cart:', error)
+  } finally {
+    isAddingToCart.value = false
+  }
+}
+
+// Lifecycle
+onMounted(async () => {
+  console.log('🚀 Clickable mesh configurator mounted')
+  
   setTimeout(() => {
     initThreeJS()
   }, 100)
-  
-  // Send ready message to Shopify
-  if (shopifyService.isEmbeddedInShopify()) {
-    window.parent.postMessage({
-      type: 'CONFIGURATOR_READY',
-      data: {
-        mode: 'fullscreen',
-        productId: getProductId()
-      }
-    }, '*')
-  }
 })
 
 onUnmounted(() => {
   console.log('🧹 Cleaning up configurator...')
   
-  // Cleanup Three.js
+  if (canvasContainer.value) {
+    canvasContainer.value.removeEventListener('click', onMouseClick)
+  }
+  
   if (renderer) {
     renderer.dispose()
   }
@@ -501,7 +1381,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* Fullscreen Layout */
 .configurator-fullscreen {
   display: flex;
   height: 100vh;
@@ -510,7 +1389,6 @@ onUnmounted(() => {
   background: #ffffff;
 }
 
-/* Left Side: 3D Viewer */
 .viewer-section {
   flex: 1;
   position: relative;
@@ -521,6 +1399,187 @@ onUnmounted(() => {
 .viewer-container {
   width: 100%;
   height: 100%;
+  cursor: pointer;
+}
+
+/* Click Instructions */
+.click-instructions {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  background: rgba(0, 102, 204, 0.9);
+  color: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 15;
+  animation: pulse-instruction 3s infinite;
+}
+
+@keyframes pulse-instruction {
+  0%, 70%, 100% { opacity: 0.9; }
+  35% { opacity: 0.7; }
+}
+
+/* Debug Panel */
+.debug-panel {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  min-width: 200px;
+  z-index: 15;
+}
+
+.debug-panel h4 {
+  margin: 0 0 12px 0;
+  color: #4CAF50;
+}
+
+.debug-stats div {
+  margin: 4px 0;
+}
+
+.debug-panel button {
+  background: #2196F3;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  margin-top: 8px;
+}
+
+.debug-toggle {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  z-index: 16;
+}
+
+.debug-toggle:hover {
+  background: rgba(0, 0, 0, 0.9);
+}
+
+/* Hotspot System */
+.hotspot-overlays {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.hotspot-marker {
+  position: absolute;
+  pointer-events: all;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  transition: all 0.3s ease;
+}
+
+.hotspot-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  border: 2px solid rgba(0, 102, 204, 0.6);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: pulse 2s infinite;
+}
+
+.hotspot-marker.highlighted .hotspot-pulse {
+  border-color: rgba(255, 107, 53, 0.8);
+  animation-duration: 1s;
+}
+
+.hotspot-marker.active .hotspot-pulse {
+  border-color: rgba(40, 167, 69, 0.8);
+  border-width: 3px;
+}
+
+.hotspot-icon {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  background: white;
+  border: 2px solid #0066cc;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s ease;
+  z-index: 2;
+}
+
+.hotspot-marker.highlighted .hotspot-icon {
+  background: #ff6b35;
+  border-color: #ff6b35;
+  color: white;
+  transform: scale(1.2);
+}
+
+.hotspot-marker.active .hotspot-icon {
+  background: #28a745;
+  border-color: #28a745;
+  color: white;
+  transform: scale(1.1);
+}
+
+.hotspot-tooltip {
+  position: absolute;
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.hotspot-marker:hover .hotspot-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-4px);
+}
+
+@keyframes pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
 }
 
 /* Loading Overlay */
@@ -535,7 +1594,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  z-index: 5;
+  z-index: 20;
 }
 
 .loading-spinner {
@@ -553,9 +1612,9 @@ onUnmounted(() => {
   100% { transform: rotate(360deg); }
 }
 
-/* Right Side: Configuration Panel */
+/* Configuration Panel */
 .config-section {
-  width: 400px;
+  width: 420px;
   background: white;
   border-left: 1px solid #e1e5e9;
   display: flex;
@@ -570,7 +1629,6 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-/* Header */
 .config-header {
   margin-bottom: 24px;
   border-bottom: 1px solid #e1e5e9;
@@ -590,7 +1648,6 @@ onUnmounted(() => {
   margin: 0;
 }
 
-/* Price Section */
 .price-section {
   margin-bottom: 32px;
   padding: 16px 0;
@@ -615,7 +1672,6 @@ onUnmounted(() => {
   color: #1a1a1a;
 }
 
-/* Configuration Options */
 .config-options {
   flex: 1;
   margin-bottom: 24px;
@@ -631,6 +1687,22 @@ onUnmounted(() => {
   border-bottom: none;
 }
 
+.back-button {
+  display: inline-block;
+  color: #0066cc;
+  cursor: pointer;
+  font-size: 14px;
+  margin-bottom: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.back-button:hover {
+  background: #f0f7ff;
+  color: #0052a3;
+}
+
 .option-title {
   font-size: 18px;
   font-weight: 600;
@@ -644,7 +1716,62 @@ onUnmounted(() => {
   margin: 0 0 16px 0;
 }
 
-/* Color Grid */
+.overview-section {
+  margin-bottom: 32px;
+}
+
+.quick-overview h3 {
+  font-size: 18px;
+  color: #1a1a1a;
+  margin: 0 0 12px 0;
+}
+
+.quick-overview p {
+  color: #666;
+  margin: 0 0 20px 0;
+}
+
+.feature-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.feature-item {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  border: 2px solid #e1e5e9;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  background: white;
+}
+
+.feature-item:hover {
+  border-color: #0066cc;
+  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.15);
+  transform: translateY(-2px);
+}
+
+.feature-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.feature-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.feature-desc {
+  font-size: 12px;
+  color: #666;
+}
+
 .color-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -667,12 +1794,14 @@ onUnmounted(() => {
 .color-option:hover {
   border-color: #0066cc;
   box-shadow: 0 2px 8px rgba(0, 102, 204, 0.15);
+  transform: translateY(-2px);
 }
 
 .color-option.active {
   border-color: #0066cc;
   background: #f0f7ff;
   box-shadow: 0 4px 12px rgba(0, 102, 204, 0.2);
+  transform: translateY(-1px);
 }
 
 .color-swatch {
@@ -681,6 +1810,11 @@ onUnmounted(() => {
   border-radius: 50%;
   margin-bottom: 8px;
   border: 2px solid rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.color-option:hover .color-swatch {
+  transform: scale(1.1);
 }
 
 .color-name {
@@ -696,40 +1830,79 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
-/* Size and Material Options */
-.size-options, .material-options {
+.material-options, .pillow-options, .leg-options, .size-options {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.size-option, .material-option {
+.material-option, .pillow-option, .leg-option, .size-option {
   padding: 12px 16px;
   border: 2px solid #e1e5e9;
   border-radius: 6px;
   background: white;
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
 }
 
-.size-option.active, .material-option.active {
+.material-option:hover, .pillow-option:hover, .leg-option:hover, .size-option:hover {
+  border-color: #0066cc;
+  background: #f9f9f9;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 102, 204, 0.1);
+}
+
+.material-option.active, .pillow-option.active, .leg-option.active, .size-option.active {
   border-color: #0066cc;
   background: #f0f7ff;
+  box-shadow: 0 3px 10px rgba(0, 102, 204, 0.15);
 }
 
-.size-name, .material-name {
+.material-name, .pillow-name, .leg-name, .size-name {
   font-weight: 600;
   color: #333;
   display: block;
   margin-bottom: 4px;
 }
 
-.size-dimensions, .material-description {
+.material-description, .size-dimensions {
   font-size: 12px;
   color: #666;
+  margin-bottom: 4px;
 }
 
-/* Add to Cart Button */
+.material-price, .pillow-price, .leg-price, .size-price {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  font-size: 12px;
+  color: #28a745;
+  font-weight: 600;
+}
+
+.pillow-preview, .leg-preview {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.leg-shape {
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+}
+
+.size-selector {
+  border-top: 2px solid #e1e5e9;
+  padding-top: 24px;
+  margin-top: 24px;
+}
+
 .cart-section {
   margin-top: auto;
   padding-top: 24px;
@@ -755,6 +1928,7 @@ onUnmounted(() => {
 .add-to-cart-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+  background: linear-gradient(135deg, #ff5722, #e68900);
 }
 
 .add-to-cart-btn:disabled {
@@ -787,49 +1961,9 @@ onUnmounted(() => {
     padding: 16px;
   }
   
-  .color-grid {
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 8px;
-  }
-  
-  .color-option {
-    padding: 12px 8px;
-  }
-  
-  .color-swatch {
-    width: 32px;
-    height: 32px;
-  }
-  
-  .config-header h2 {
-    font-size: 20px;
-  }
-  
-  .current-price .amount {
-    font-size: 28px;
-  }
-}
-
-/* Notification animations */
-@keyframes slideInRight {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-@keyframes slideOutRight {
-  from {
-    transform: translateX(0);
-    opacity: 1;
-  }
-  to {
-    transform: translateX(100%);
-    opacity: 0;
+  .click-instructions {
+    font-size: 12px;
+    padding: 8px 12px;
   }
 }
 </style>

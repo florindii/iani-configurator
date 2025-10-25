@@ -1,0 +1,641 @@
+<!-- UPDATED: Shopify Integration for 3D Configurator -->
+<!-- Add this to your product page template (product.liquid) -->
+
+<!-- Hide the default add to cart button when 3D configurator is enabled -->
+{% if product.metafields.custom.enable_3d_configurator == 'true' %}
+<style>
+  /* Hide default product form */
+  .product-form:not(.configurator-form) {
+    display: none !important;
+  }
+</style>
+{% endif %}
+
+<!-- 1. Replace/modify your existing product form section -->
+<div class="product-form configurator-form">
+  <!-- Standard Shopify product form (hidden, controlled by configurator) -->
+  <form action="/cart/add" method="post" enctype="multipart/form-data" id="product-form-{{ product.id }}" style="display: none;">
+    <select name="id" id="product-select-{{ product.id }}">
+      {% for variant in product.variants %}
+        <option 
+          value="{{ variant.id }}"
+          data-color="{{ variant.option1 | downcase }}"
+          data-price="{{ variant.price | divided_by: 100.0 }}"
+          {% if variant == product.selected_or_first_available_variant %}selected="selected"{% endif %}>
+          {{ variant.title }} - {{ variant.price | money }}
+        </option>
+      {% endfor %}
+    </select>
+    <input type="number" name="quantity" value="1" min="1" />
+    <input type="hidden" name="properties[Configuration]" id="config-data" />
+    <input type="hidden" name="properties[Color]" id="config-color" />
+    <input type="hidden" name="properties[Configured in 3D]" value="Yes" />
+  </form>
+
+  {% if product.metafields.custom.enable_3d_configurator == 'true' %}
+    <!-- 3D Configurator Integration -->
+    <div class="configurator-section">
+      <div class="configurator-preview">
+        <div class="configurator-icon">🛋️</div>
+        <h3>Interactive 3D Configurator</h3>
+        <p>Customize colors and see your sofa in real-time 3D</p>
+        <button onclick="open3DConfigurator()" class="btn-configurator-launch">
+          🎨 Launch 3D Configurator
+        </button>
+      </div>
+      
+      <!-- Configuration Summary (shown after configurator use) -->
+      <div id="config-summary" class="config-summary" style="display: none;">
+        <h4>Your Configuration:</h4>
+        <div class="config-details">
+          <span class="config-color">Color: <strong id="selected-color">Blue</strong></span>
+          <span class="config-price">Price: <strong id="selected-price">${{ product.price | divided_by: 100.0 }}</strong></span>
+        </div>
+        <button onclick="open3DConfigurator()" class="btn-configurator-edit">
+          ✏️ Edit Configuration
+        </button>
+      </div>
+    </div>
+  {% else %}
+    <!-- Standard Add to Cart for non-configurator products -->
+    <div class="standard-cart-section">
+      <button 
+        type="submit" 
+        form="product-form-{{ product.id }}"
+        class="btn product-form__cart-submit">
+        <span>Add to cart - {{ product.price | money }}</span>
+      </button>
+    </div>
+  {% endif %}
+</div>
+
+<!-- 2. 3D Configurator Modal Container -->
+<div id="configurator-container" class="configurator-modal" style="display: none;">
+  <div class="configurator-backdrop" onclick="closeConfigurator()"></div>
+  <div class="configurator-content">
+    <button class="configurator-close" onclick="closeConfigurator()" aria-label="Close configurator">×</button>
+    <iframe 
+      id="configurator-iframe"
+      src=""
+      frameborder="0"
+      allow="fullscreen"
+      title="3D Product Configurator">
+    </iframe>
+  </div>
+</div>
+
+<style>
+/* Updated Configurator Integration Styles */
+.configurator-section {
+  margin: 20px 0;
+}
+
+.configurator-preview {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  padding: 30px;
+  text-align: center;
+  color: white;
+  margin-bottom: 20px;
+}
+
+.configurator-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.configurator-preview h3 {
+  font-size: 24px;
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.configurator-preview p {
+  font-size: 16px;
+  margin-bottom: 24px;
+  opacity: 0.9;
+}
+
+.btn-configurator-launch,
+.btn-configurator-edit {
+  background: linear-gradient(135deg, #ff6b35, #f7931e);
+  color: white;
+  border: none;
+  padding: 16px 32px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.btn-configurator-edit {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  padding: 12px 24px;
+  font-size: 14px;
+  margin-top: 12px;
+}
+
+.btn-configurator-launch:hover,
+.btn-configurator-edit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(255, 107, 53, 0.3);
+}
+
+/* Configuration Summary */
+.config-summary {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  border: 2px solid #e9ecef;
+}
+
+.config-summary h4 {
+  margin-bottom: 12px;
+  color: #495057;
+}
+
+.config-details {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.config-color,
+.config-price {
+  color: #6c757d;
+}
+
+.config-details strong {
+  color: #495057;
+}
+
+/* Modal Styles */
+.configurator-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.configurator-modal.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.configurator-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.configurator-content {
+  position: relative;
+  width: 95vw;
+  height: 95vh;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+}
+
+.configurator-modal.active .configurator-content {
+  transform: scale(1);
+}
+
+.configurator-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border-radius: 50%;
+  font-size: 28px;
+  cursor: pointer;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.configurator-close:hover {
+  background: rgba(0, 0, 0, 0.9);
+  transform: scale(1.1);
+}
+
+#configurator-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* Success/Error Notifications */
+.cart-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 16px 24px;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  z-index: 10001;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  max-width: 300px;
+}
+
+.cart-notification.show {
+  transform: translateX(0);
+}
+
+.cart-notification.success {
+  background: #28a745;
+}
+
+.cart-notification.error {
+  background: #dc3545;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .configurator-content {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+  
+  .configurator-preview {
+    padding: 20px;
+  }
+  
+  .configurator-preview h3 {
+    font-size: 20px;
+  }
+  
+  .btn-configurator-launch {
+    width: 100%;
+    padding: 14px 24px;
+    font-size: 15px;
+  }
+  
+  .config-details {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .cart-notification {
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+}
+
+/* Animation keyframes */
+@keyframes slideInNotification {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+</style>
+
+<script>
+// Enhanced 3D Configurator Integration for Shopify
+(function() {
+  'use strict';
+  
+  let configuratorOpen = false;
+  const productId = {{ product.id }};
+  
+  // Configuration - ⚠️ UPDATE THIS TO YOUR DEPLOYED URL
+  const CONFIG = {
+    configuratorUrl: 'https://iani-configurator.vercel.app', // UPDATE THIS!
+    clientId: 'ianii',
+    productId: productId
+  };
+  
+  // Product variants mapping
+  const variants = [
+    {% for variant in product.variants %}
+      {
+        id: '{{ variant.id }}',
+        color: '{{ variant.option1 | downcase }}',
+        price: {{ variant.price | divided_by: 100.0 }},
+        title: '{{ variant.title }}',
+        available: {{ variant.available }}
+      }{% unless forloop.last %},{% endunless %}
+    {% endfor %}
+  ];
+  
+  console.log('🛍️ Shopify Product Variants:', variants);
+  
+  // Open 3D Configurator
+  window.open3DConfigurator = function() {
+    console.log('🎨 Opening 3D Configurator for product:', productId);
+    
+    if (configuratorOpen) return;
+    
+    const container = document.getElementById('configurator-container');
+    const iframe = document.getElementById('configurator-iframe');
+    
+    if (!container || !iframe) {
+      console.error('❌ Configurator elements not found');
+      showNotification('❌ Configurator failed to load', 'error');
+      return;
+    }
+    
+    // Build URL with clean parameters
+    const configuratorUrl = buildConfiguratorUrl();
+    
+    // Load configurator with smooth animation
+    iframe.src = configuratorUrl;
+    container.style.display = 'flex';
+    container.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    configuratorOpen = true;
+    
+    // Listen for messages from configurator
+    window.addEventListener('message', handleConfiguratorMessage);
+    
+    console.log('🚀 Configurator opened:', configuratorUrl);
+  };
+  
+  // Close configurator
+  window.closeConfigurator = function() {
+    console.log('❌ Closing configurator');
+    
+    const container = document.getElementById('configurator-container');
+    const iframe = document.getElementById('configurator-iframe');
+    
+    if (container) {
+      container.classList.remove('active');
+      // Wait for animation to complete
+      setTimeout(() => {
+        container.style.display = 'none';
+      }, 300);
+    }
+    
+    if (iframe) iframe.src = '';
+    
+    document.body.style.overflow = '';
+    configuratorOpen = false;
+    
+    window.removeEventListener('message', handleConfiguratorMessage);
+  };
+  
+  // Build configurator URL with product data
+  function buildConfiguratorUrl() {
+    const params = new URLSearchParams({
+      embedded: 'true',
+      client: CONFIG.clientId,
+      productId: CONFIG.productId,
+      shopifyIntegration: 'true',
+      variants: JSON.stringify(variants)
+    });
+    
+    return `${CONFIG.configuratorUrl}?${params.toString()}`;
+  }
+  
+  // Handle messages from configurator iframe
+  function handleConfiguratorMessage(event) {
+    // Security check - only accept messages from your configurator domain
+    const allowedOrigins = [
+      'https://iani-configurator.vercel.app',
+      'http://localhost:5173'  // For local development
+    ];
+    
+    if (!allowedOrigins.some(origin => event.origin.includes(origin.replace('https://', '').replace('http://', '')))) {
+      console.warn('🚫 Unauthorized message origin:', event.origin);
+      return;
+    }
+    
+    const { type, data } = event.data || {};
+    console.log('📨 Message from configurator:', type, data);
+    
+    switch (type) {
+      case 'CONFIGURATOR_READY':
+        console.log('✅ Configurator ready');
+        break;
+        
+      case 'CONFIGURATOR_ADD_TO_CART':
+        handleAddToCart(data);
+        break;
+        
+      case 'CONFIGURATOR_CLOSE':
+        closeConfigurator();
+        break;
+        
+      default:
+        console.log('🔄 Unknown message type:', type);
+    }
+  }
+  
+  // Handle add to cart from configurator
+  async function handleAddToCart(configData) {
+    console.log('🛒 Processing cart addition:', configData);
+    
+    try {
+      // Find the matching Shopify variant
+      const variant = findVariantByColor(configData.color);
+      
+      if (!variant) {
+        throw new Error(`No variant found for color: ${configData.color}`);
+      }
+      
+      console.log('📦 Selected variant:', variant);
+      
+      // Update hidden form with configuration data
+      const configDataInput = document.getElementById('config-data');
+      const configColorInput = document.getElementById('config-color');
+      const variantSelect = document.getElementById('product-select-{{ product.id }}');
+      
+      if (configDataInput) {
+        configDataInput.value = JSON.stringify(configData.configuration);
+      }
+      
+      if (configColorInput) {
+        configColorInput.value = configData.colorLabel;
+      }
+      
+      if (variantSelect) {
+        variantSelect.value = variant.id;
+      }
+      
+      // Add to Shopify cart using Fetch API
+      const cartResponse = await fetch('/cart/add.js', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          id: variant.id,
+          quantity: configData.quantity || 1,
+          properties: {
+            'Configuration': JSON.stringify(configData.configuration),
+            'Color': configData.colorLabel,
+            'Configured in 3D': 'Yes',
+            'Configuration Date': new Date().toLocaleString(),
+            'Price': `$${configData.price}`
+          }
+        })
+      });
+      
+      if (cartResponse.ok) {
+        const cartResult = await cartResponse.json();
+        console.log('✅ Added to Shopify cart:', cartResult);
+        
+        // Close configurator
+        closeConfigurator();
+        
+        // Update configuration summary
+        updateConfigurationSummary(configData);
+        
+        // Show success notification
+        showNotification(`✅ ${configData.colorLabel} sofa added to cart!`, 'success');
+        
+        // Update cart count
+        updateCartUI();
+        
+        // Optional: Trigger cart drawer or redirect
+        setTimeout(() => {
+          // Uncomment if you have a cart drawer
+          // if (window.theme && window.theme.openCartDrawer) {
+          //   window.theme.openCartDrawer();
+          // }
+          
+          // Or redirect to cart page
+          // window.location.href = '/cart';
+        }, 1000);
+        
+      } else {
+        const errorData = await cartResponse.json().catch(() => ({}));
+        throw new Error(errorData.description || 'Failed to add to cart');
+      }
+      
+    } catch (error) {
+      console.error('❌ Cart addition failed:', error);
+      showNotification(`❌ ${error.message}`, 'error');
+    }
+  }
+  
+  // Find variant by color
+  function findVariantByColor(color) {
+    return variants.find(variant => 
+      variant.color === color.toLowerCase() || 
+      variant.title.toLowerCase().includes(color.toLowerCase())
+    );
+  }
+  
+  // Update configuration summary display
+  function updateConfigurationSummary(configData) {
+    const summary = document.getElementById('config-summary');
+    const colorSpan = document.getElementById('selected-color');
+    const priceSpan = document.getElementById('selected-price');
+    
+    if (summary && colorSpan && priceSpan) {
+      colorSpan.textContent = configData.colorLabel;
+      priceSpan.textContent = `$${configData.price}`;
+      summary.style.display = 'block';
+    }
+  }
+  
+  // Update cart UI elements
+  function updateCartUI() {
+    fetch('/cart.js')
+      .then(response => response.json())
+      .then(cart => {
+        // Update cart count elements
+        const cartCountElements = document.querySelectorAll('.cart-count, [data-cart-count]');
+        cartCountElements.forEach(el => {
+          el.textContent = cart.item_count;
+        });
+        
+        console.log('🛒 Cart updated:', cart.item_count, 'items');
+      })
+      .catch(err => console.warn('Could not update cart UI:', err));
+  }
+  
+  // Show notification
+  function showNotification(message, type = 'success') {
+    const notification = document.createElement('div');
+    notification.className = `cart-notification ${type}`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Trigger animation
+    setTimeout(() => notification.classList.add('show'), 100);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      notification.classList.remove('show');
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      }, 300);
+    }, 5000);
+  }
+  
+  // Handle escape key
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape' && configuratorOpen) {
+      closeConfigurator();
+    }
+  });
+  
+  console.log('🚀 3D Configurator integration loaded for product:', productId);
+  console.log('🔧 Available variants:', variants.length);
+  
+})();
+</script>
+
+<!-- 
+🚀 INTEGRATION COMPLETE!
+
+📋 SETUP CHECKLIST:
+1. ✅ Update CONFIG.configuratorUrl to your deployed Vercel app URL
+2. ✅ Make sure your product has variants with colors as option1
+3. ✅ Add metafield 'enable_3d_configurator' = true to products that should have configurator
+4. ✅ Test the integration:
+   - Click "Launch 3D Configurator" → Opens modal
+   - Configure product → Click "Add to Cart" in configurator
+   - Product should be added to Shopify cart with configuration data
+   - Modal closes automatically
+   - Success notification appears
+
+🔧 TROUBLESHOOTING:
+- Check browser console for errors
+- Verify configurator URL loads in new tab
+- Ensure Shopify variants match configurator colors
+- Test with actual Shopify store (not development store for cart)
+
+💡 FEATURES:
+✅ Modal-based configurator (no page navigation)
+✅ Real Shopify cart integration
+✅ Configuration data saved with order
+✅ Success/error notifications
+✅ Mobile responsive
+✅ Escape key to close
+✅ Configuration summary after use
+✅ Cart count updates
+-->
