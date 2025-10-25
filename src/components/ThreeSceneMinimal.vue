@@ -1209,9 +1209,9 @@ const initThreeJS = async () => {
     const width = canvasContainer.value.clientWidth
     const height = canvasContainer.value.clientHeight
     
-    camera = new THREE.PerspectiveCamera(50, width / height, 3, 1000)
-    // camera.position.set(4, 3, 4)
-    camera.position.set(100, 100, 100).multiplyScalar(0.5);
+    camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 2000)
+    // Set initial camera position - will be adjusted per model
+    camera.position.set(4, 3, 4)
 
     
     renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -1261,9 +1261,9 @@ const initThreeJS = async () => {
     controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.05
-    // controls.minDistance = 2
-    // controls.maxDistance = 10
-    // controls.maxPolarAngle = Math.PI
+    controls.minDistance = 0.1  // Allow very close zoom
+    controls.maxDistance = 100  // Allow far zoom out
+    controls.maxPolarAngle = Math.PI // Allow full rotation
     controls.autoRotate = false
     
     raycaster = new THREE.Raycaster()
@@ -1305,7 +1305,7 @@ const loadModel = async () => {
     
     const gltf = await new Promise((resolve, reject) => {
       loader.load(
-        '/models/low-poly_akmsu.glb',
+        '/models/akm__free_lowpoly.glb',
         (gltf) => resolve(gltf),
         (progress) => {
           console.log('📈 Loading progress:', (progress.loaded / progress.total * 100) + '%')
@@ -1326,25 +1326,57 @@ const loadModel = async () => {
     
     scene.add(model)
     
-    // Auto-frame
+    // Smart auto-framing that works with different model sizes
     const box = new THREE.Box3().setFromObject(model)
     const center = box.getCenter(new THREE.Vector3())
     const size = box.getSize(new THREE.Vector3())
     
+    console.log('📎 Model info:', {
+      center: center,
+      size: size,
+      maxDimension: Math.max(size.x, size.y, size.z)
+    })
+    
     const maxDim = Math.max(size.x, size.y, size.z)
     const fov = camera.fov * (Math.PI / 180)
-    const cameraDistance = maxDim / (2 * Math.tan(fov / 2)) * 1.5
     
+    // Calculate appropriate distance based on model size
+    let cameraDistance = maxDim / (2 * Math.tan(fov / 2))
+    
+    // Adjust distance based on model size to prevent clipping
+    if (maxDim < 1) {
+      // Very small models (like watches, small objects)
+      cameraDistance *= 2
+    } else if (maxDim < 5) {
+      // Medium models (furniture, appliances)
+      cameraDistance *= 1.5
+    } else {
+      // Large models
+      cameraDistance *= 1.2
+    }
+    
+    console.log('📷 Camera distance calculated:', cameraDistance)
+    
+    // Position camera at calculated distance
     camera.position.set(
-      center.x + cameraDistance * 0.8,
-      center.y + cameraDistance * 0.6, 
-      center.z + cameraDistance * 0.8
+      center.x + cameraDistance * 0.7,
+      center.y + cameraDistance * 0.5, 
+      center.z + cameraDistance * 0.7
     )
     camera.lookAt(center)
     
     if (controls) {
       controls.target.copy(center)
       controls.update()
+      
+      // Adjust zoom limits based on model size
+      controls.minDistance = maxDim * 0.1  // Allow close zoom relative to model
+      controls.maxDistance = maxDim * 10   // Allow far zoom relative to model
+      
+      console.log('🔍 Zoom limits:', {
+        minDistance: controls.minDistance,
+        maxDistance: controls.maxDistance
+      })
     }
     
     // Apply initial configuration
