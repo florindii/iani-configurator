@@ -402,7 +402,8 @@ const getSizeLabel = () => {
 // MESH CLICKING FUNCTIONALITY
 const onMouseClick = (event) => {
   if (!camera || !scene) return
-  clearSelection()
+  
+  
   const rect = canvasContainer.value.getBoundingClientRect()
   mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
   mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
@@ -413,9 +414,30 @@ const onMouseClick = (event) => {
   if (intersects.length > 0) {
     const targetMesh = intersects[0].object
     console.log('🖱️ Clicked mesh:', targetMesh.name, 'Type:', targetMesh.userData.partType)
+    console.log('🔍 Material info:', {
+      isArray: Array.isArray(targetMesh.material),
+      materialCount: Array.isArray(targetMesh.material) ? targetMesh.material.length : 1,
+      materialUuid: Array.isArray(targetMesh.material) ? targetMesh.material.map(m => m.uuid) : targetMesh.material?.uuid,
+      hasClonedMaterial: !!targetMesh.userData.hasClonedMaterial
+    })
     
-    // Update the clicked mesh to the NEW mesh (this deselects the previous one)
+    // Log all materials in the scene to check for duplicates
+    const allMaterials = new Set()
+    model.traverse(child => {
+      if (child.isMesh && child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach(mat => allMaterials.add(mat.uuid))
+        } else {
+          allMaterials.add(child.material.uuid)
+        }
+      }
+    })
+    console.log('🎨 Total unique materials in scene:', allMaterials.size)
+    
+    // Update the clicked mesh to the NEW mesh
+    console.log("targetMesh",targetMesh);
     clickedMesh.value = targetMesh
+    console.log('🎯 Set clickedMesh to:', clickedMesh.value.name)
     
     // Initialize custom config for this mesh if it doesn't exist
     if (!targetMesh.userData.customConfig) {
@@ -451,6 +473,8 @@ const onMouseClick = (event) => {
         highlightClickedMesh(targetMesh)
       }
     }
+  }else {
+  clearSelection() 
   }
 }
 
@@ -473,6 +497,7 @@ const identifyMeshHotspot = (mesh) => {
 }
 
 const highlightClickedMesh = (mesh) => {
+  console.log("🚀 ~ highlightClickedMesh ~ mesh:", mesh)
   // Remove previous highlights from ALL meshes
   sofaParts.all.forEach(part => {
     if (part.userData.isHighlighted) {
@@ -545,9 +570,10 @@ const onHotspotLeave = () => {
 
 const selectHotspot = (hotspot) => {
   activeHotspot.value = hotspot
-  // Clear clicked mesh when selecting via hotspot - this makes hotspot selection update ALL parts
-  clickedMesh.value = null
+  // DO NOT clear clicked mesh here - we want to preserve it for individual mesh updates
+  // clickedMesh.value = null // REMOVED - this was causing the bug!
   console.log('🎯 Selected hotspot:', hotspot.name)
+  console.log('🎯 Current clickedMesh:', clickedMesh.value ? clickedMesh.value.name : 'none')
 }
 
 const selectHotspotById = (id) => {
@@ -559,7 +585,9 @@ const selectHotspotById = (id) => {
 
 const clearSelection = () => {
   activeHotspot.value = null
-  clickedMesh.value = null // Also clear the clicked mesh
+  clickedMesh.value = null // Clear the clicked mesh when going back to overview
+  
+  console.log('🗑️ Cleared selection - activeHotspot and clickedMesh reset')
   
   // Remove highlights from all meshes
   sofaParts.all.forEach(part => {
@@ -668,18 +696,28 @@ const updateCushionColors = () => {
     console.log('🟦 Applying cushion color to clicked mesh only:', clickedMesh.value.name)
     
     if (clickedMesh.value.material) {
-      clickedMesh.value.material.color.setHex(newColorHex)
-      clickedMesh.value.material.roughness = 0.8
-      clickedMesh.value.material.metalness = 0.1
-      clickedMesh.value.material.needsUpdate = true
+      // Handle material arrays
+      if (Array.isArray(clickedMesh.value.material)) {
+        clickedMesh.value.material.forEach((mat, index) => {
+          mat.color.setHex(newColorHex)
+          mat.roughness = 0.8
+          mat.metalness = 0.1
+          mat.needsUpdate = true
+          console.log(`   - Updated material ${index}: #${mat.color.getHexString()}`)
+        })
+      } else {
+        clickedMesh.value.material.color.setHex(newColorHex)
+        clickedMesh.value.material.roughness = 0.8
+        clickedMesh.value.material.metalness = 0.1
+        clickedMesh.value.material.needsUpdate = true
+        console.log(`   - New color: #${clickedMesh.value.material.color.getHexString()}`)
+      }
       
       // Save the configuration to this specific mesh
       if (!clickedMesh.value.userData.customConfig) {
         clickedMesh.value.userData.customConfig = {}
       }
       clickedMesh.value.userData.customConfig.cushionColor = configuration.value.cushionColor
-      
-      console.log(`   - New color: #${clickedMesh.value.material.color.getHexString()}`)
       console.log(`   - Saved config to mesh:`, clickedMesh.value.userData.customConfig)
     }
     return
@@ -715,28 +753,60 @@ const updateCushionColors = () => {
 
 const updateFrameMaterials = () => {
   console.log('🔲 updateFrameMaterials called - Parts available:', sofaParts.frame.length)
-  
+  console.log('clickedMesh.value',clickedMesh.value);
+  console.log('frame',clickedMesh.value.userData.partType);
+
   // If we have a specific clicked mesh, only update that one
   if (clickedMesh.value && clickedMesh.value.userData.partType === 'frame') {
     const frameColor = getFrameColor(configuration.value.frameMaterial)
     const materialProps = getFrameMaterialProperties(configuration.value.frameMaterial)
     console.log('🔲 Applying frame material to clicked mesh only:', clickedMesh.value.name)
+    console.log('🔍 Target mesh material UUID(s):', Array.isArray(clickedMesh.value.material) ? clickedMesh.value.material.map(m => m.uuid) : clickedMesh.value.material.uuid)
     
     if (clickedMesh.value.material) {
-      clickedMesh.value.material.color.setHex(frameColor)
-      clickedMesh.value.material.roughness = materialProps.roughness
-      clickedMesh.value.material.metalness = materialProps.metalness
-      clickedMesh.value.material.needsUpdate = true
+      // Handle material arrays
+      if (Array.isArray(clickedMesh.value.material)) {
+        clickedMesh.value.material.forEach((mat, index) => {
+          console.log(`🎨 Updating array material ${index} with UUID: ${mat.uuid}`)
+          mat.color.setHex(frameColor)
+          mat.roughness = materialProps.roughness
+          mat.metalness = materialProps.metalness
+          mat.needsUpdate = true
+          console.log(`   - Updated material ${index}: #${mat.color.getHexString()}`)
+        })
+      } else {
+        console.log(`🎨 Updating single material with UUID: ${clickedMesh.value.material.uuid}`)
+        clickedMesh.value.material.color.setHex(frameColor)
+        clickedMesh.value.material.roughness = materialProps.roughness
+        clickedMesh.value.material.metalness = materialProps.metalness
+        clickedMesh.value.material.needsUpdate = true
+        console.log(`   - New color: #${clickedMesh.value.material.color.getHexString()}`)
+      }
       
       // Save the configuration to this specific mesh
       if (!clickedMesh.value.userData.customConfig) {
         clickedMesh.value.userData.customConfig = {}
       }
       clickedMesh.value.userData.customConfig.frameMaterial = configuration.value.frameMaterial
-      
-      console.log(`   - New color: #${clickedMesh.value.material.color.getHexString()}`)
       console.log(`   - Saved config to mesh:`, clickedMesh.value.userData.customConfig)
     }
+    
+    // SAFETY CHECK: Verify no other meshes were affected
+    console.log('🔎 SAFETY CHECK: Verifying other meshes were not affected...')
+    let affectedCount = 0
+    sofaParts.all.forEach(part => {
+      if (part !== clickedMesh.value && part.material) {
+        const currentColor = Array.isArray(part.material) 
+          ? part.material[0].color.getHexString() 
+          : part.material.color.getHexString()
+        const targetColor = frameColor.toString(16).padStart(6, '0')
+        if (currentColor === targetColor) {
+          console.warn(`⚠️ UNEXPECTED: ${part.name} also has the target color!`)
+          affectedCount++
+        }
+      }
+    })
+    console.log(`🔎 Safety check complete: ${affectedCount} unexpected matches found`)
     return
   }
   
@@ -780,18 +850,28 @@ const updatePillowStyles = () => {
     console.log('🟨 Applying pillow style to clicked mesh only:', clickedMesh.value.name)
     
     if (clickedMesh.value.material) {
-      clickedMesh.value.material.color.setHex(pillowColor)
-      clickedMesh.value.material.roughness = pillowProps.roughness
-      clickedMesh.value.material.metalness = pillowProps.metalness
-      clickedMesh.value.material.needsUpdate = true
+      // Handle material arrays
+      if (Array.isArray(clickedMesh.value.material)) {
+        clickedMesh.value.material.forEach((mat, index) => {
+          mat.color.setHex(pillowColor)
+          mat.roughness = pillowProps.roughness
+          mat.metalness = pillowProps.metalness
+          mat.needsUpdate = true
+          console.log(`   - Updated material ${index}: #${mat.color.getHexString()}`)
+        })
+      } else {
+        clickedMesh.value.material.color.setHex(pillowColor)
+        clickedMesh.value.material.roughness = pillowProps.roughness
+        clickedMesh.value.material.metalness = pillowProps.metalness
+        clickedMesh.value.material.needsUpdate = true
+        console.log(`   - New color: #${clickedMesh.value.material.color.getHexString()}`)
+      }
       
       // Save the configuration to this specific mesh
       if (!clickedMesh.value.userData.customConfig) {
         clickedMesh.value.userData.customConfig = {}
       }
       clickedMesh.value.userData.customConfig.pillowStyle = configuration.value.pillowStyle
-      
-      console.log(`   - New color: #${clickedMesh.value.material.color.getHexString()}`)
       console.log(`   - Saved config to mesh:`, clickedMesh.value.userData.customConfig)
     }
     return
@@ -837,25 +917,41 @@ const updateLegStyles = () => {
     console.log('⚫ Applying leg style to clicked mesh only:', clickedMesh.value.name)
     
     if (clickedMesh.value.material) {
-      clickedMesh.value.material.color.setHex(legColor)
-      clickedMesh.value.material.roughness = legProps.roughness
-      clickedMesh.value.material.metalness = legProps.metalness
-      clickedMesh.value.material.needsUpdate = true
+      // Handle material arrays
+      if (Array.isArray(clickedMesh.value.material)) {
+        clickedMesh.value.material.forEach((mat, index) => {
+          mat.color.setHex(legColor)
+          mat.roughness = legProps.roughness
+          mat.metalness = legProps.metalness
+          mat.needsUpdate = true
+          console.log(`   - Updated material ${index}: #${mat.color.getHexString()}`)
+          
+          if (configuration.value.legStyle.includes('metal') || configuration.value.legStyle.includes('brass')) {
+            mat.metalness = 0.8
+            mat.roughness = 0.3
+            console.log(`   - Applied metallic properties to material ${index}`)
+          }
+        })
+      } else {
+        clickedMesh.value.material.color.setHex(legColor)
+        clickedMesh.value.material.roughness = legProps.roughness
+        clickedMesh.value.material.metalness = legProps.metalness
+        clickedMesh.value.material.needsUpdate = true
+        console.log(`   - Updated material: #${clickedMesh.value.material.color.getHexString()}`)
+        
+        if (configuration.value.legStyle.includes('metal') || configuration.value.legStyle.includes('brass')) {
+          clickedMesh.value.material.metalness = 0.8
+          clickedMesh.value.material.roughness = 0.3
+          console.log(`   - Applied metallic properties`)
+        }
+      }
       
       // Save the configuration to this specific mesh
       if (!clickedMesh.value.userData.customConfig) {
         clickedMesh.value.userData.customConfig = {}
       }
       clickedMesh.value.userData.customConfig.legStyle = configuration.value.legStyle
-      
-      console.log(`   - Updated material: #${clickedMesh.value.material.color.getHexString()}`)
       console.log(`   - Saved config to mesh:`, clickedMesh.value.userData.customConfig)
-      
-      if (configuration.value.legStyle.includes('metal') || configuration.value.legStyle.includes('brass')) {
-        clickedMesh.value.material.metalness = 0.8
-        clickedMesh.value.material.roughness = 0.3
-        console.log(`   - Applied metallic properties`)
-      }
     }
     return
   }
@@ -911,7 +1007,7 @@ const updateSofaSize = (size) => {
   console.log('📏 Scaled sofa to:', scale)
 }
 
-// ENHANCED model analysis - identify parts for clicking
+// ENHANCED model analysis - identify parts for clicking with PROPER material isolation
 const identifySofaParts = () => {
   if (!model) return
   
@@ -930,81 +1026,89 @@ const identifySofaParts = () => {
       const name = child.name.toLowerCase()
       const parentName = child.parent ? child.parent.name.toLowerCase() : ''
       
-      console.log(`🔍 Analyzing clickable mesh: "${child.name}" (parent: "${child.parent ? child.parent.name : 'ROOT'}")`)
+      console.log(`🔍 Analyzing clickable mesh: "${child.name}" (parent: "${child.parent ? child.parent.name : 'ROOT'}")`)      
       
       child.castShadow = true
       child.receiveShadow = true
       
-      // CRITICAL: Clone material for each mesh so they can be customized independently
+      // CRITICAL: FORCE material cloning for COMPLETE isolation
       if (child.material) {
-        child.material = child.material.clone()
-        child.userData.originalMaterial = child.material.clone()
-        child.userData.originalEmissive = child.material.emissive ? child.material.emissive.clone() : new THREE.Color(0x000000)
-        child.userData.originalColor = child.material.color.clone()
+        // Handle both single materials and material arrays
+        if (Array.isArray(child.material)) {
+          console.log(`🔄 Cloning ${child.material.length} materials for: ${child.name}`)
+          child.material = child.material.map((mat, index) => {
+            const cloned = mat.clone()
+            cloned.uuid = THREE.MathUtils.generateUUID() // Force new UUID
+            console.log(`   Material ${index}: ${mat.uuid} -> ${cloned.uuid}`)
+            return cloned
+          })
+          child.userData.originalMaterial = child.material.map(mat => mat.clone())
+        } else {
+          console.log(`🔄 Cloning single material for: ${child.name}`)
+          const originalUuid = child.material.uuid
+          child.material = child.material.clone()
+          child.material.uuid = THREE.MathUtils.generateUUID() // Force new UUID
+          child.userData.originalMaterial = child.material.clone()
+          console.log(`   Material: ${originalUuid} -> ${child.material.uuid}`)
+        }
+        
+        // Store original properties for single material
+        if (!Array.isArray(child.material)) {
+          child.userData.originalEmissive = child.material.emissive ? child.material.emissive.clone() : new THREE.Color(0x000000)
+          child.userData.originalColor = child.material.color.clone()
+        }
+        
+        // Mark that this mesh has been properly isolated
+        child.userData.hasClonedMaterial = true
       }
       
       sofaParts.all.push(child)
-      
-      // Enhanced part identification
-      let identified = false
-      
-      const cushionPatterns = ['cushion', 'seat', 'back', 'pad']
-      const framePatterns = ['frame', 'armrest', 'arm', 'base', 'body', 'structure']
-      const pillowPatterns = ['pillow', 'throw', 'decorative']
-      const legPatterns = ['leg', 'foot', 'feet', 'support', 'stand']
-      
-      if (cushionPatterns.some(pattern => name.includes(pattern) || parentName.includes(pattern))) {
-        sofaParts.cushions.push(child)
-        child.userData.partType = 'cushion'
-        console.log(`✅ IDENTIFIED AS CUSHION: ${child.name}`)
-        identified = true
-      } else if (framePatterns.some(pattern => name.includes(pattern) || parentName.includes(pattern))) {
-        sofaParts.frame.push(child)
-        child.userData.partType = 'frame'
-        console.log(`✅ IDENTIFIED AS FRAME: ${child.name}`)
-        identified = true
-      } else if (pillowPatterns.some(pattern => name.includes(pattern) || parentName.includes(pattern))) {
-        sofaParts.pillows.push(child)
-        child.userData.partType = 'pillow'
-        console.log(`✅ IDENTIFIED AS PILLOW: ${child.name}`)
-        identified = true
-      } else if (legPatterns.some(pattern => name.includes(pattern) || parentName.includes(pattern))) {
-        sofaParts.legs.push(child)
-        child.userData.partType = 'leg'
-        console.log(`✅ IDENTIFIED AS LEG: ${child.name}`)
-        identified = true
-      }
-      
-      // Fallback identification based on position
-      if (!identified) {
-        const worldPos = new THREE.Vector3()
-        child.getWorldPosition(worldPos)
-        
-        console.log(`❓ UNIDENTIFIED: ${child.name}, analyzing position y:${worldPos.y.toFixed(2)}`)
-        
-        if (worldPos.y < -0.1) {
-          sofaParts.legs.push(child)
-          child.userData.partType = 'leg'
-          console.log(`🦵 GUESSED AS LEG (low position): ${child.name}`)
-        } else if (worldPos.y > 0.5) {
-          sofaParts.pillows.push(child)
-          child.userData.partType = 'pillow'
-          console.log(`🟨 GUESSED AS PILLOW (high position): ${child.name}`)
-        } else if (worldPos.y > 0.2) {
-          sofaParts.cushions.push(child)
-          child.userData.partType = 'cushion'
-          console.log(`🟦 GUESSED AS CUSHION (elevated): ${child.name}`)
-        } else {
-          sofaParts.frame.push(child)
-          child.userData.partType = 'frame'
-          console.log(`🔲 GUESSED AS FRAME (default): ${child.name}`)
-        }
-      }
-      
-      // Make mesh clickable
-      child.userData.isClickable = true
-    }
-  })
+
+// For your rifle model, let's identify parts based on the mesh names
+let identified = false
+
+// Rifle-specific part patterns based on your model
+const receiverPatterns = ['receiver', 'body', 'frame', 'main']
+const barrelPatterns = ['barrel', 'tube', 'pipe']
+const stockPatterns = ['stock', 'butt', 'shoulder']
+const gripPatterns = ['grip', 'handle', 'pistol']
+const triggerPatterns = ['trigger', 'guard']
+const sightPatterns = ['sight', 'scope', 'optic']
+
+if (receiverPatterns.some(pattern => name.includes(pattern))) {
+sofaParts.frame.push(child) // Using 'frame' category for receiver
+  child.userData.partType = 'frame'
+console.log(`✅ IDENTIFIED AS RECEIVER/FRAME: ${child.name}`)
+identified = true
+} else if (barrelPatterns.some(pattern => name.includes(pattern))) {
+sofaParts.legs.push(child) // Using 'legs' category for barrel
+  child.userData.partType = 'leg'
+  console.log(`✅ IDENTIFIED AS BARREL: ${child.name}`)
+  identified = true
+} else if (stockPatterns.some(pattern => name.includes(pattern))) {
+sofaParts.cushions.push(child) // Using 'cushions' category for stock
+child.userData.partType = 'cushion'
+console.log(`✅ IDENTIFIED AS STOCK: ${child.name}`)
+identified = true
+} else if (gripPatterns.some(pattern => name.includes(pattern))) {
+sofaParts.pillows.push(child) // Using 'pillows' category for grip
+child.userData.partType = 'pillow'
+console.log(`✅ IDENTIFIED AS GRIP: ${child.name}`)
+identified = true
+}
+
+// If no specific pattern matches, assign based on mesh name analysis
+if (!identified) {
+console.log(`❓ UNIDENTIFIED: ${child.name}, assigning to frame category`)
+sofaParts.frame.push(child)
+child.userData.partType = 'frame'
+console.log(`🔲 ASSIGNED AS FRAME: ${child.name}`)
+}
+
+// Make mesh clickable
+child.userData.isClickable = true
+}
+})
   
   console.log('🎯 FINAL CLICKABLE PARTS:')
   console.log(`   🟦 Cushions: ${sofaParts.cushions.length}`, sofaParts.cushions.map(p => p.name))
@@ -1201,7 +1305,7 @@ const loadModel = async () => {
     
     const gltf = await new Promise((resolve, reject) => {
       loader.load(
-        '/models/armalite_ar-10t_battle_rifle.glb',
+        '/models/low-poly_akmsu.glb',
         (gltf) => resolve(gltf),
         (progress) => {
           console.log('📈 Loading progress:', (progress.loaded / progress.total * 100) + '%')
