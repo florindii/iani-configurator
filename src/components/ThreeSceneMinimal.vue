@@ -1121,19 +1121,38 @@ const initThreeJS = async () => {
     
     canvasContainer.value.appendChild(renderer.domElement)
     
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4)
+    // Enhanced lighting setup for better visibility from all angles
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
     scene.add(ambientLight)
     
-    const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1)
-    directionalLight1.position.set(1, 1, 200).normalize()
-    directionalLight1.castShadow = true
-    directionalLight1.shadow.mapSize.width = 2048
-    directionalLight1.shadow.mapSize.height = 2048
-    scene.add(directionalLight1)
+    // Key light - main directional light
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.8)
+    keyLight.position.set(10, 10, 5)
+    keyLight.castShadow = true
+    keyLight.shadow.mapSize.width = 2048
+    keyLight.shadow.mapSize.height = 2048
+    keyLight.shadow.camera.near = 0.1
+    keyLight.shadow.camera.far = 500
+    keyLight.shadow.camera.left = -50
+    keyLight.shadow.camera.right = 50
+    keyLight.shadow.camera.top = 50
+    keyLight.shadow.camera.bottom = -50
+    scene.add(keyLight)
     
-    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.3)
-    directionalLight2.position.set(5, 5, 5)
-    scene.add(directionalLight2)
+    // Fill light - softer light from the opposite side
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.4)
+    fillLight.position.set(-10, 5, -5)
+    scene.add(fillLight)
+    
+    // Back light - to separate the model from background
+    const backLight = new THREE.DirectionalLight(0xffffff, 0.3)
+    backLight.position.set(0, 5, -10)
+    scene.add(backLight)
+    
+    // Add some hemisphere light for more natural lighting
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4)
+    hemiLight.position.set(0, 20, 0)
+    scene.add(hemiLight)
     
     controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
