@@ -31,7 +31,28 @@
       <!-- Debug Info Panel -->
       <div v-if="showDebugInfo" class="debug-panel">
         <h4>🔍 Model Debug Info</h4>
+        
+        <!-- Model Selection Dropdown -->
+        <div class="model-selector">
+          <label for="model-select">📋 Select Model:</label>
+          <select 
+            id="model-select"
+            v-model="selectedModel" 
+            @change="changeModel" 
+            class="model-dropdown"
+          >
+            <option 
+              v-for="model in availableModels" 
+              :key="model.value" 
+              :value="model.value"
+            >
+              {{ model.name }}
+            </option>
+          </select>
+        </div>
+        
         <div class="debug-stats">
+          <div>Current Model: {{ selectedModel }}</div>
           <div>Total Meshes: {{ debugStats.totalMeshes }}</div>
           <div>Cushions: {{ debugStats.cushions }}</div>
           <div>Frame: {{ debugStats.frame }}</div>
@@ -245,6 +266,21 @@ const canvasContainer = ref(null)
 const isLoading = ref(true)
 const isAddingToCart = ref(false)
 const showDebugInfo = ref(false)
+const selectedModel = ref('armalite_ar-10t_battle_rifle.glb') // Default model
+
+// Available models
+const availableModels = ref([
+  { name: 'AK-47 (Low Poly)', value: 'akm__free_lowpoly.glb' },
+  { name: 'AR-10T Battle Rifle', value: 'armalite_ar-10t_battle_rifle.glb' },
+  { name: 'Canon AT-1 Camera', value: 'canon_at-1_retro_camera.glb' },
+  { name: 'Check Model', value: 'check.glb' },
+  { name: 'Couch', value: 'Couch.glb' },
+  { name: 'Headphones', value: 'headphones_free_model_by_oscar_creative.glb' },
+  { name: 'AKM-SU (Low Poly)', value: 'low-poly_akmsu.glb' },
+  { name: 'Office Chair', value: 'officeChair.glb' },
+  { name: 'Old Fridge', value: 'old_fridge.glb' },
+  { name: 'Old Table Fan', value: 'old_table_fan.glb' }
+])
 
 // Debug Stats
 const debugStats = ref({
@@ -519,7 +555,36 @@ const highlightClickedMesh = (mesh) => {
   }
 }
 
-// Debug functions
+// Model changing functionality
+const changeModel = async () => {
+  console.log('🔄 Changing model to:', selectedModel.value)
+  
+  // Clear current selection
+  clearSelection()
+  
+  // Reset parts arrays
+  sofaParts = {
+    cushions: [],
+    frame: [],
+    pillows: [],
+    legs: [],
+    all: []
+  }
+  
+  // Remove current model from scene
+  if (model && scene) {
+    scene.remove(model)
+  }
+  
+  // Show loading
+  isLoading.value = true
+  
+  try {
+    await loadModel()
+  } catch (error) {
+    console.error('❌ Failed to change model:', error)
+  }
+}
 const exportModelStructure = () => {
   if (!model) return
   
@@ -1298,14 +1363,15 @@ const initThreeJS = async () => {
 
 // Load 3D model with analysis for clicking
 const loadModel = async () => {
-  console.log('📦 Loading Couch.glb with clickable mesh analysis...')
+  const modelPath = `/models/${selectedModel.value}`
+  console.log(`📦 Loading ${selectedModel.value} with clickable mesh analysis...`)
   
   try {
     const loader = new GLTFLoader()
     
     const gltf = await new Promise((resolve, reject) => {
       loader.load(
-        '/models/akm__free_lowpoly.glb',
+        modelPath,
         (gltf) => resolve(gltf),
         (progress) => {
           console.log('📈 Loading progress:', (progress.loaded / progress.total * 100) + '%')
@@ -1589,13 +1655,55 @@ onUnmounted(() => {
   padding: 16px;
   border-radius: 8px;
   font-size: 12px;
-  min-width: 200px;
+  min-width: 220px;
+  max-width: 300px;
   z-index: 15;
 }
 
 .debug-panel h4 {
   margin: 0 0 12px 0;
   color: #4CAF50;
+}
+
+.model-selector {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #444;
+}
+
+.model-selector label {
+  display: block;
+  margin-bottom: 6px;
+  color: #FFD700;
+  font-weight: bold;
+  font-size: 11px;
+}
+
+.model-dropdown {
+  width: 100%;
+  padding: 6px 8px;
+  background: #333;
+  color: white;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.model-dropdown:hover {
+  border-color: #777;
+}
+
+.model-dropdown:focus {
+  outline: none;
+  border-color: #4CAF50;
+  box-shadow: 0 0 0 1px #4CAF50;
+}
+
+.model-dropdown option {
+  background: #333;
+  color: white;
+  padding: 4px;
 }
 
 .debug-stats div {
