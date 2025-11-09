@@ -5,28 +5,7 @@
     <div class="viewer-section">
       <div ref="canvasContainer" class="viewer-container"></div>
       
-      <!-- Interactive Hotspot Overlays -->
-      <div class="hotspot-overlays">
-        <div 
-          v-for="hotspot in visibleHotspots" 
-          :key="hotspot.id"
-          :class="['hotspot-marker', { 
-            'active': activeHotspot?.id === hotspot.id,
-            'highlighted': hoveredHotspot?.id === hotspot.id 
-          }]"
-          :style="{
-            left: hotspot.screenPosition.x + 'px',
-            top: hotspot.screenPosition.y + 'px'
-          }"
-          @mouseenter="onHotspotHover(hotspot)"
-          @mouseleave="onHotspotLeave"
-          @click="selectHotspot(hotspot)"
-        >
-          <div class="hotspot-pulse"></div>
-          <div class="hotspot-icon">{{ hotspot.icon }}</div>
-          <div class="hotspot-tooltip">{{ hotspot.name }} - Click mesh or hotspot</div>
-        </div>
-      </div>
+
       
       <!-- Debug Info Panel -->
       <div v-if="showDebugInfo" class="debug-panel">
@@ -86,7 +65,7 @@
         <div class="config-header">
           <h2>🛋️ Customize Your Sofa</h2>
           <p class="product-description">
-            {{ activeHotspot ? `Customizing: ${activeHotspot.name}` : 'Click on sofa parts or hotspots to customize' }}
+            {{ selectedPart ? `Customizing: ${selectedPart.name}` : 'Click on parts to customize' }}
           </p>
         </div>
 
@@ -102,142 +81,108 @@
         <div class="config-options">
           
           <!-- Default Overview -->
-          <div v-if="!activeHotspot" class="overview-section">
+          <div v-if="!selectedPart" class="overview-section">
             <div class="quick-overview">
               <h3>✨ How to Customize</h3>
-              <p>Click directly on the sofa parts or use the hotspots:</p>
-              <div class="feature-list">
-                <div class="feature-item" @click="selectHotspotById('cushions')">
-                  <span class="feature-icon">🟦</span>
-                  <span class="feature-name">Cushions</span>
-                  <span class="feature-desc">Click the seat cushions</span>
-                </div>
-                <div class="feature-item" @click="selectHotspotById('frame')">
-                  <span class="feature-icon">🔲</span>
-                  <span class="feature-name">Frame</span>
-                  <span class="feature-desc">Click the main body</span>
-                </div>
-                <div class="feature-item" @click="selectHotspotById('pillows')">
-                  <span class="feature-icon">🟨</span>
-                  <span class="feature-name">Pillows</span>
-                  <span class="feature-desc">Click decorative pillows</span>
-                </div>
-                <div class="feature-item" @click="selectHotspotById('legs')">
-                  <span class="feature-icon">⚫</span>
-                  <span class="feature-name">Legs</span>
-                  <span class="feature-desc">Click the sofa legs</span>
-                </div>
-              </div>
+              <p>Click directly on the model parts to customize them</p>
             </div>
           </div>
 
-          <!-- Cushions Customization -->
-          <div v-else-if="activeHotspot.id === 'cushions'" class="option-group">
+          <!-- Main Customization Menu After Mesh Selection -->
+          <div v-else class="customization-menu">
             <div class="back-button" @click="clearSelection()">
               ← Back to Overview
             </div>
-            <h3 class="option-title">🟦 Cushion Colors</h3>
-            <p class="option-subtitle">{{ getSelectedColorLabel() }}</p>
-            <div class="color-grid">
-              <div 
-                v-for="color in colorOptions" 
-                :key="color.value"
-                :class="['color-option', { active: configuration.cushionColor === color.value }]"
-                @click="updateCushionColor(color.value)"
-                :title="`${color.label} - $${color.price}`"
+            <h3 class="option-title">{{ selectedPart.name }}</h3>
+            <p class="option-subtitle">Select customization option</p>
+            
+            <!-- Customization Options Buttons -->
+            <div class="customization-buttons">
+              <button 
+                class="custom-btn colors-btn"
+                @click="showCustomizationPanel = 'colors'"
               >
+                <span class="btn-icon">🟦</span>
+                <span class="btn-text">Colors</span>
+              </button>
+              <button 
+                class="custom-btn frame-btn"
+                @click="showCustomizationPanel = 'frame'"
+              >
+                <span class="btn-icon">🔲</span>
+                <span class="btn-text">Frame</span>
+              </button>
+            </div>
+
+            <!-- Colors Panel -->
+            <div v-if="showCustomizationPanel === 'colors'" class="customization-panel">
+              <h4 class="panel-title">🟦 Available Colors</h4>
+              <p class="panel-subtitle">{{ getSelectedColorLabel() }}</p>
+              
+              <!-- Preset Colors -->
+              <div class="subsection">
+                <h5 class="subsection-title">Preset Colors</h5>
+                <div class="color-grid">
+                  <div 
+                    v-for="color in colorOptions" 
+                    :key="color.value"
+                    :class="['color-option', { active: configuration.cushionColor === color.value && !configuration.isCustomColor }]"
+                    @click="setPresetColor(color.value, color.hex)"
+                    :title="`${color.label} - ${color.price}`"
+                  >
+                    <div 
+                      class="color-swatch"
+                      :style="{ backgroundColor: color.hex }"
+                    ></div>
+                    <span class="color-name">{{ color.label }}</span>
+                    <span class="color-price">${{ color.price.toFixed(0) }}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Custom Color Picker -->
+              <div class="subsection">
+                <h5 class="subsection-title">Custom Color</h5>
+                <div class="custom-color-section">
+                  <input 
+                    type="color" 
+                    v-model="customColor"
+                    @input="setCustomColor"
+                    class="color-picker-input"
+                    title="Pick any custom color"
+                  />
+                  <div 
+                    v-if="configuration.isCustomColor"
+                    class="custom-color-preview"
+                    :style="{ backgroundColor: customColor }"
+                  >
+                    <div class="custom-color-label">{{ customColor.toUpperCase() }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Frame Panel -->
+            <div v-if="showCustomizationPanel === 'frame'" class="customization-panel">
+              <h4 class="panel-title">🔲 Frame Material</h4>
+              <p class="panel-subtitle">{{ getFrameLabel() }}</p>
+              <div class="material-options">
                 <div 
-                  class="color-swatch"
-                  :style="{ backgroundColor: color.hex }"
-                ></div>
-                <span class="color-name">{{ color.label }}</span>
-                <span class="color-price">${{ color.price.toFixed(0) }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Frame Customization -->
-          <div v-else-if="activeHotspot.id === 'frame'" class="option-group">
-            <div class="back-button" @click="clearSelection()">
-              ← Back to Overview
-            </div>
-            <h3 class="option-title">🔲 Frame Material</h3>
-            <p class="option-subtitle">{{ getFrameLabel() }}</p>
-            <div class="material-options">
-              <div 
-                v-for="frame in frameOptions" 
-                :key="frame.value"
-                :class="['material-option', { active: configuration.frameMaterial === frame.value }]"
-                @click="updateFrameMaterial(frame.value)"
-              >
-                <span class="material-name">{{ frame.label }}</span>
-                <span class="material-description">{{ frame.description }}</span>
-                <span class="material-price">+${{ frame.extraCost }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Pillows Customization -->
-          <div v-else-if="activeHotspot.id === 'pillows'" class="option-group">
-            <div class="back-button" @click="clearSelection()">
-              ← Back to Overview
-            </div>
-            <h3 class="option-title">🟨 Decorative Pillows</h3>
-            <p class="option-subtitle">{{ getPillowLabel() }}</p>
-            <div class="pillow-options">
-              <div 
-                v-for="pillow in pillowOptions" 
-                :key="pillow.value"
-                :class="['pillow-option', { active: configuration.pillowStyle === pillow.value }]"
-                @click="updatePillowStyle(pillow.value)"
-              >
-                <div class="pillow-preview" :style="{ backgroundColor: pillow.color }"></div>
-                <span class="pillow-name">{{ pillow.label }}</span>
-                <span class="pillow-price">+${{ pillow.extraCost }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Legs Customization -->
-          <div v-else-if="activeHotspot.id === 'legs'" class="option-group">
-            <div class="back-button" @click="clearSelection()">
-              ← Back to Overview
-            </div>
-            <h3 class="option-title">⚫ Sofa Legs</h3>
-            <p class="option-subtitle">{{ getLegLabel() }}</p>
-            <div class="leg-options">
-              <div 
-                v-for="leg in legOptions" 
-                :key="leg.value"
-                :class="['leg-option', { active: configuration.legStyle === leg.value }]"
-                @click="updateLegStyle(leg.value)"
-              >
-                <div class="leg-preview">
-                  <div class="leg-shape" :style="{ backgroundColor: leg.color }"></div>
+                  v-for="frame in frameOptions" 
+                  :key="frame.value"
+                  :class="['material-option', { active: configuration.frameMaterial === frame.value }]"
+                  @click="updateFrameMaterial(frame.value)"
+                >
+                  <span class="material-name">{{ frame.label }}</span>
+                  <span class="material-description">{{ frame.description }}</span>
+                  <span class="material-price">+${{ frame.extraCost }}</span>
                 </div>
-                <span class="leg-name">{{ leg.label }}</span>
-                <span class="leg-price">+${{ leg.extraCost }}</span>
               </div>
             </div>
           </div>
 
-          <!-- Size Selection (always visible) -->
-          <div class="option-group size-selector">
-            <h3 class="option-title">📏 Sofa Size</h3>
-            <p class="option-subtitle">{{ getSizeLabel() }}</p>
-            <div class="size-options">
-              <div 
-                v-for="size in sizeOptions"
-                :key="size.value"
-                :class="['size-option', { active: configuration.size === size.value }]"
-                @click="updateSize(size.value)"
-              >
-                <span class="size-name">{{ size.label }}</span>
-                <span class="size-dimensions">{{ size.dimensions }}</span>
-                <span class="size-price">+${{ size.extraCost }}</span>
-              </div>
-            </div>
-          </div>
+
+
         </div>
 
         <!-- Add to Cart Button -->
@@ -291,11 +236,9 @@ const debugStats = ref({
   legs: 0
 })
 
-// Hotspot System
-const activeHotspot = ref(null)
-const hoveredHotspot = ref(null)
-const visibleHotspots = ref([])
-const clickedMesh = ref(null) // Track the specific mesh that was clicked
+const showCustomizationPanel = ref(null)
+const selectedPart = ref(null)
+const clickedMesh = ref(null)
 
 // Three.js variables
 let scene, camera, renderer, model, controls, raycaster, mouse
@@ -309,46 +252,18 @@ let sofaParts = {
   all: []
 }
 
+// Custom color state
+const customColor = ref('#4A90E2')
+
 // Configuration state
 const configuration = ref({
   cushionColor: 'blue',
   frameMaterial: 'oak',
-  pillowStyle: 'classic',
-  legStyle: 'wooden',
-  size: '2-seater'
+  isCustomColor: false,
+  customHex: null
 })
 
-// Hotspot definitions
-const hotspotDefinitions = ref([
-  {
-    id: 'cushions',
-    name: 'Seat Cushions',
-    icon: '🟦',
-    position: { x: 0, y: 0.5, z: 0.3 },
-    meshNames: ['seat', 'cushion', 'Cushion']
-  },
-  {
-    id: 'frame',
-    name: 'Frame & Armrests',
-    icon: '🔲', 
-    position: { x: -1.2, y: 0.3, z: 0 },
-    meshNames: ['frame', 'armrest', 'Frame', 'Armrest']
-  },
-  {
-    id: 'pillows',
-    name: 'Decorative Pillows',
-    icon: '🟨',
-    position: { x: -0.5, y: 0.8, z: -0.3 },
-    meshNames: ['pillow', 'Pillow']
-  },
-  {
-    id: 'legs',
-    name: 'Sofa Legs',
-    icon: '⚫',
-    position: { x: 0, y: -0.3, z: 0.5 },
-    meshNames: ['leg', 'Leg', 'support']
-  }
-])
+
 
 // Configuration Options
 const colorOptions = ref([
@@ -381,11 +296,7 @@ const legOptions = ref([
   { label: 'Black Metal', value: 'black-metal', color: '#2F4F4F', extraCost: 65 }
 ])
 
-const sizeOptions = ref([
-  { label: '2-Seater', value: '2-seater', dimensions: '150cm × 85cm', extraCost: 0 },
-  { label: '3-Seater', value: '3-seater', dimensions: '200cm × 85cm', extraCost: 200 },
-  { label: 'L-Shape', value: 'l-shape', dimensions: '250cm × 200cm', extraCost: 400 }
-])
+
 
 // Computed price
 const calculatedPrice = computed(() => {
@@ -402,9 +313,6 @@ const calculatedPrice = computed(() => {
   
   const selectedLeg = legOptions.value.find(l => l.value === configuration.value.legStyle)
   if (selectedLeg) basePrice += selectedLeg.extraCost
-  
-  const selectedSize = sizeOptions.value.find(s => s.value === configuration.value.size)
-  if (selectedSize) basePrice += selectedSize.extraCost
   
   return basePrice
 })
@@ -430,10 +338,7 @@ const getLegLabel = () => {
   return selected ? selected.label : 'Select Style'
 }
 
-const getSizeLabel = () => {
-  const selected = sizeOptions.value.find(s => s.value === configuration.value.size)
-  return selected ? selected.label : 'Select Size'
-}
+
 
 // MESH CLICKING FUNCTIONALITY
 const onMouseClick = (event) => {
@@ -497,40 +402,20 @@ const onMouseClick = (event) => {
       configuration.value.legStyle = targetMesh.userData.customConfig.legStyle
     }
     
-    // Determine which hotspot this mesh belongs to
-    const hotspotId = identifyMeshHotspot(targetMesh)
-    if (hotspotId) {
-      console.log("🚀 ~ onMouseClick ~ hotspotId:", hotspotId)
-      const hotspot = hotspotDefinitions.value.find(h => h.id === hotspotId)
-      if (hotspot) {
-        selectHotspot(hotspot)
-        
-        // Add visual feedback
-        highlightClickedMesh(targetMesh)
-      }
+    // Set the selected part for UI display
+    selectedPart.value = {
+      name: targetMesh.name,
+      type: targetMesh.userData.partType
     }
-  }else {
-  clearSelection() 
+    
+    // Add visual feedback
+    highlightClickedMesh(targetMesh)
+  } else {
+    clearSelection()
   }
 }
 
-const identifyMeshHotspot = (mesh) => {
-  const name = mesh.name.toLowerCase()
-  const partType = mesh.userData.partType
-  
-  // Identify which hotspot category this mesh belongs to
-  if (name.includes('leg') || name.includes('support') || partType === 'leg') {
-    return 'legs'
-  } else if (name.includes('seat') || name.includes('cushion') || partType === 'cushion') {
-    return 'cushions'  
-  } else if (name.includes('pillow') || partType === 'pillow') {
-    return 'pillows'
-  } else if (name.includes('frame') || name.includes('arm') || name.includes('back') || partType === 'frame') {
-    return 'frame'
-  }
-  
-  return null
-}
+
 
 const highlightClickedMesh = (mesh) => {
   console.log("🚀 ~ highlightClickedMesh ~ mesh:", mesh)
@@ -620,39 +505,12 @@ const exportModelStructure = () => {
   }
 }
 
-// Hotspot interaction functions
-const onHotspotHover = (hotspot) => {
-  hoveredHotspot.value = hotspot
-  highlightMeshes(hotspot.meshNames, true)
-}
 
-const onHotspotLeave = () => {
-  if (hoveredHotspot.value) {
-    highlightMeshes(hoveredHotspot.value.meshNames, false)
-  }
-  hoveredHotspot.value = null
-}
-
-const selectHotspot = (hotspot) => {
-  activeHotspot.value = hotspot
-  // DO NOT clear clicked mesh here - we want to preserve it for individual mesh updates
-  // clickedMesh.value = null // REMOVED - this was causing the bug!
-  console.log('🎯 Selected hotspot:', hotspot.name)
-  console.log('🎯 Current clickedMesh:', clickedMesh.value ? clickedMesh.value.name : 'none')
-}
-
-const selectHotspotById = (id) => {
-  const hotspot = hotspotDefinitions.value.find(h => h.id === id)
-  if (hotspot) {
-    selectHotspot(hotspot)
-  }
-}
 
 const clearSelection = () => {
-  activeHotspot.value = null
-  clickedMesh.value = null // Clear the clicked mesh when going back to overview
-  
-  console.log('🗑️ Cleared selection - activeHotspot and clickedMesh reset')
+  selectedPart.value = null
+  clickedMesh.value = null
+  console.log('🗑️ Cleared mesh selection')
   
   // Remove highlights from all meshes
   sofaParts.all.forEach(part => {
@@ -665,65 +523,34 @@ const clearSelection = () => {
   })
 }
 
-// Mesh highlighting function
-const highlightMeshes = (meshNames, highlight) => {
-  if (!model) return
-  
-  const targetParts = sofaParts.all.filter(part => 
-    meshNames.some(name => 
-      part.name.toLowerCase().includes(name.toLowerCase()) ||
-      part.userData.partType?.includes(name.toLowerCase())
-    )
-  )
-  
-  targetParts.forEach(part => {
-    if (part.material) {
-      if (highlight) {
-        if (!part.userData.originalEmissive) {
-          part.userData.originalEmissive = part.material.emissive.clone()
-        }
-        part.material.emissive.setHex(0x444444)
-      } else {
-        if (part.userData.originalEmissive) {
-          part.material.emissive.copy(part.userData.originalEmissive)
-        }
-      }
-    }
-  })
-}
 
-// Update hotspot screen positions
-const updateHotspotPositions = () => {
-  if (!camera || !model) return
-  
-  visibleHotspots.value = hotspotDefinitions.value.map(hotspot => {
-    const vector = new THREE.Vector3(
-      hotspot.position.x,
-      hotspot.position.y, 
-      hotspot.position.z
-    )
-    
-    vector.applyMatrix4(model.matrixWorld)
-    vector.project(camera)
-    
-    const rect = canvasContainer.value?.getBoundingClientRect()
-    if (!rect) return { ...hotspot, screenPosition: { x: -1000, y: -1000 } }
-    
-    const x = ((vector.x + 1) / 2) * rect.width
-    const y = ((-vector.y + 1) / 2) * rect.height
-    
-    return {
-      ...hotspot,
-      screenPosition: { x, y },
-      visible: vector.z < 1
-    }
-  }).filter(h => h.visible)
-}
+
+
 
 // Configuration update functions
+// Set preset color
+const setPresetColor = (colorValue, colorHex) => {
+  console.log('🎨 Setting preset color to:', colorValue)
+  configuration.value.cushionColor = colorValue
+  configuration.value.isCustomColor = false
+  configuration.value.customHex = null
+  updateCushionColors()
+}
+
+// Set custom color
+const setCustomColor = () => {
+  console.log('🎨 Setting custom color to:', customColor.value)
+  configuration.value.cushionColor = 'custom'
+  configuration.value.isCustomColor = true
+  configuration.value.customHex = customColor.value
+  updateCushionColors()
+}
+
 const updateCushionColor = (colorValue) => {
   console.log('🎨 Updating cushion color to:', colorValue)
   configuration.value.cushionColor = colorValue
+  configuration.value.isCustomColor = false
+  configuration.value.customHex = null
   updateCushionColors()
 }
 
@@ -745,164 +572,81 @@ const updateLegStyle = (style) => {
   updateLegStyles()
 }
 
-const updateSize = (size) => {
-  console.log('📏 Updating sofa size to:', size)
-  configuration.value.size = size
-  updateSofaSize(size)
-}
+
 
 // Real-time 3D model update functions (work with existing model parts only)
 const updateCushionColors = () => {
-  console.log('🟦 updateCushionColors called - Parts available:', sofaParts.cushions.length)
+  console.log('🟦 updateCushionColors called')
+  console.log('clickedMesh:', clickedMesh.value ? clickedMesh.value.name : 'none')
   
-  // If we have a specific clicked mesh, only update that one
-  if (clickedMesh.value && clickedMesh.value.userData.partType === 'cushion') {
-    const newColorHex = getColorHex(configuration.value.cushionColor)
-    console.log('🟦 Applying cushion color to clicked mesh only:', clickedMesh.value.name)
+  // If we have a specific clicked mesh, ALWAYS update it regardless of type
+  if (clickedMesh.value && clickedMesh.value.material) {
+    // Support custom colors
+    let newColorHex = 0x4A90E2 // default blue
     
-    if (clickedMesh.value.material) {
-      // Handle material arrays
-      if (Array.isArray(clickedMesh.value.material)) {
-        clickedMesh.value.material.forEach((mat, index) => {
-          mat.color.setHex(newColorHex)
-          mat.roughness = 0.8
-          mat.metalness = 0.1
-          mat.needsUpdate = true
-          console.log(`   - Updated material ${index}: #${mat.color.getHexString()}`)
-        })
-      } else {
-        clickedMesh.value.material.color.setHex(newColorHex)
-        clickedMesh.value.material.roughness = 0.8
-        clickedMesh.value.material.metalness = 0.1
-        clickedMesh.value.material.needsUpdate = true
-        console.log(`   - New color: #${clickedMesh.value.material.color.getHexString()}`)
-      }
-      
-      // Save the configuration to this specific mesh
-      if (!clickedMesh.value.userData.customConfig) {
-        clickedMesh.value.userData.customConfig = {}
-      }
-      clickedMesh.value.userData.customConfig.cushionColor = configuration.value.cushionColor
-      console.log(`   - Saved config to mesh:`, clickedMesh.value.userData.customConfig)
+    if (configuration.value.isCustomColor && configuration.value.customHex) {
+      newColorHex = parseInt(configuration.value.customHex.replace('#', '0x'))
+      console.log('🎨 Using custom color:', configuration.value.customHex)
+    } else {
+      newColorHex = getColorHex(configuration.value.cushionColor)
+      console.log('🎨 Using preset color:', configuration.value.cushionColor)
+    }
+    
+    console.log('🟦 Applying color to clicked mesh:', clickedMesh.value.name, 'Hex:', newColorHex.toString(16))
+    
+    // Handle material arrays
+    if (Array.isArray(clickedMesh.value.material)) {
+      clickedMesh.value.material.forEach((mat, index) => {
+        mat.color.setHex(newColorHex)
+        mat.roughness = 0.8
+        mat.metalness = 0.1
+        mat.needsUpdate = true
+        console.log(`   ✅ Updated material ${index}: #${mat.color.getHexString()}`)
+      })
+    } else {
+      clickedMesh.value.material.color.setHex(newColorHex)
+      clickedMesh.value.material.roughness = 0.8
+      clickedMesh.value.material.metalness = 0.1
+      clickedMesh.value.material.needsUpdate = true
+      console.log(`   ✅ Updated material: #${clickedMesh.value.material.color.getHexString()}`)
     }
     return
   }
   
-  // Otherwise, update all cushions (initial load or hotspot click)
-  if (!sofaParts.cushions.length) {
-    console.log('⚠️ No cushion parts found in the model')
-    return
-  }
-  
-  const newColorHex = getColorHex(configuration.value.cushionColor)
-  console.log('🟦 Applying cushion color:', newColorHex.toString(16), 'to', sofaParts.cushions.length, 'parts')
-  
-  sofaParts.cushions.forEach((cushion, index) => {
-    console.log(`   Updating cushion ${index}: ${cushion.name}`)
-    if (cushion.material) {
-      cushion.material.color.setHex(newColorHex)
-      cushion.material.roughness = 0.8
-      cushion.material.metalness = 0.1
-      cushion.material.needsUpdate = true
-      
-      // Save config to each mesh
-      if (!cushion.userData.customConfig) {
-        cushion.userData.customConfig = {}
-      }
-      cushion.userData.customConfig.cushionColor = configuration.value.cushionColor
-      
-      console.log(`   - New color: #${cushion.material.color.getHexString()}`)
-    }
-  })
+  console.log('⚠️ No clicked mesh available')
 }
 
 const updateFrameMaterials = () => {
-  console.log('🔲 updateFrameMaterials called - Parts available:', sofaParts.frame.length)
-  console.log('clickedMesh.value',clickedMesh.value);
-  console.log('frame',clickedMesh.value.userData.partType);
-
-  // If we have a specific clicked mesh, only update that one
-  if (clickedMesh.value && clickedMesh.value.userData.partType === 'frame') {
+  console.log('🔲 updateFrameMaterials called')
+  console.log('clickedMesh:', clickedMesh.value ? clickedMesh.value.name : 'none')
+  
+  // If we have a specific clicked mesh, ALWAYS update it regardless of type
+  if (clickedMesh.value && clickedMesh.value.material) {
     const frameColor = getFrameColor(configuration.value.frameMaterial)
     const materialProps = getFrameMaterialProperties(configuration.value.frameMaterial)
-    console.log('🔲 Applying frame material to clicked mesh only:', clickedMesh.value.name)
-    console.log('🔍 Target mesh material UUID(s):', Array.isArray(clickedMesh.value.material) ? clickedMesh.value.material.map(m => m.uuid) : clickedMesh.value.material.uuid)
+    console.log('🔲 Applying frame material to clicked mesh:', clickedMesh.value.name)
+    console.log('🎨 Color hex:', frameColor.toString(16), 'Roughness:', materialProps.roughness)
     
-    if (clickedMesh.value.material) {
-      // Handle material arrays
-      if (Array.isArray(clickedMesh.value.material)) {
-        clickedMesh.value.material.forEach((mat, index) => {
-          console.log(`🎨 Updating array material ${index} with UUID: ${mat.uuid}`)
-          mat.color.setHex(frameColor)
-          mat.roughness = materialProps.roughness
-          mat.metalness = materialProps.metalness
-          mat.needsUpdate = true
-          console.log(`   - Updated material ${index}: #${mat.color.getHexString()}`)
-        })
-      } else {
-        console.log(`🎨 Updating single material with UUID: ${clickedMesh.value.material.uuid}`)
-        clickedMesh.value.material.color.setHex(frameColor)
-        clickedMesh.value.material.roughness = materialProps.roughness
-        clickedMesh.value.material.metalness = materialProps.metalness
-        clickedMesh.value.material.needsUpdate = true
-        console.log(`   - New color: #${clickedMesh.value.material.color.getHexString()}`)
-      }
-      
-      // Save the configuration to this specific mesh
-      if (!clickedMesh.value.userData.customConfig) {
-        clickedMesh.value.userData.customConfig = {}
-      }
-      clickedMesh.value.userData.customConfig.frameMaterial = configuration.value.frameMaterial
-      console.log(`   - Saved config to mesh:`, clickedMesh.value.userData.customConfig)
+    // Handle material arrays
+    if (Array.isArray(clickedMesh.value.material)) {
+      clickedMesh.value.material.forEach((mat, index) => {
+        mat.color.setHex(frameColor)
+        mat.roughness = materialProps.roughness
+        mat.metalness = materialProps.metalness
+        mat.needsUpdate = true
+        console.log(`   ✅ Updated material ${index}: #${mat.color.getHexString()}`)
+      })
+    } else {
+      clickedMesh.value.material.color.setHex(frameColor)
+      clickedMesh.value.material.roughness = materialProps.roughness
+      clickedMesh.value.material.metalness = materialProps.metalness
+      clickedMesh.value.material.needsUpdate = true
+      console.log(`   ✅ Updated material: #${clickedMesh.value.material.color.getHexString()}`)
     }
-    
-    // SAFETY CHECK: Verify no other meshes were affected
-    console.log('🔎 SAFETY CHECK: Verifying other meshes were not affected...')
-    let affectedCount = 0
-    sofaParts.all.forEach(part => {
-      if (part !== clickedMesh.value && part.material) {
-        const currentColor = Array.isArray(part.material) 
-          ? part.material[0].color.getHexString() 
-          : part.material.color.getHexString()
-        const targetColor = frameColor.toString(16).padStart(6, '0')
-        if (currentColor === targetColor) {
-          console.warn(`⚠️ UNEXPECTED: ${part.name} also has the target color!`)
-          affectedCount++
-        }
-      }
-    })
-    console.log(`🔎 Safety check complete: ${affectedCount} unexpected matches found`)
     return
   }
   
-  // Otherwise, update all frame parts (initial load or hotspot click)
-  if (!sofaParts.frame.length) {
-    console.log('⚠️ No frame parts found in the model')
-    return
-  }
-  
-  const frameColor = getFrameColor(configuration.value.frameMaterial)
-  const materialProps = getFrameMaterialProperties(configuration.value.frameMaterial)
-  
-  console.log('🔲 Applying frame material:', configuration.value.frameMaterial, 'color:', frameColor.toString(16))
-  
-  sofaParts.frame.forEach((framePart, index) => {
-    console.log(`   Updating frame ${index}: ${framePart.name}`)
-    if (framePart.material) {
-      framePart.material.color.setHex(frameColor)
-      framePart.material.roughness = materialProps.roughness
-      framePart.material.metalness = materialProps.metalness
-      framePart.material.needsUpdate = true
-      
-      // Save config to each mesh
-      if (!framePart.userData.customConfig) {
-        framePart.userData.customConfig = {}
-      }
-      framePart.userData.customConfig.frameMaterial = configuration.value.frameMaterial
-      
-      console.log(`   - New color: #${framePart.material.color.getHexString()}`)
-    }
-  })
+  console.log('⚠️ No clicked mesh available')
 }
 
 const updatePillowStyles = () => {
@@ -1057,20 +801,7 @@ const updateLegStyles = () => {
   })
 }
 
-const updateSofaSize = (size) => {
-  if (!model) return
-  
-  const scaleFactors = {
-    '2-seater': { x: 1.0, y: 1.0, z: 1.0 },
-    '3-seater': { x: 1.3, y: 1.0, z: 1.0 },
-    'l-shape': { x: 1.2, y: 1.0, z: 1.4 }
-  }
-  
-  const scale = scaleFactors[size] || scaleFactors['2-seater']
-  model.scale.set(scale.x, scale.y, scale.z)
-  
-  console.log('📏 Scaled sofa to:', scale)
-}
+
 
 // ENHANCED model analysis - identify parts for clicking with PROPER material isolation
 const identifySofaParts = () => {
@@ -1520,7 +1251,6 @@ const animate = () => {
     controls.update()
   }
   
-  updateHotspotPositions()
   renderer.render(scene, camera)
 }
 
@@ -1742,108 +1472,7 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.9);
 }
 
-/* Hotspot System */
-.hotspot-overlays {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 10;
-}
 
-.hotspot-marker {
-  position: absolute;
-  pointer-events: all;
-  cursor: pointer;
-  transform: translate(-50%, -50%);
-  transition: all 0.3s ease;
-}
-
-.hotspot-pulse {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 40px;
-  height: 40px;
-  border: 2px solid rgba(0, 102, 204, 0.6);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  animation: pulse 2s infinite;
-}
-
-.hotspot-marker.highlighted .hotspot-pulse {
-  border-color: rgba(255, 107, 53, 0.8);
-  animation-duration: 1s;
-}
-
-.hotspot-marker.active .hotspot-pulse {
-  border-color: rgba(40, 167, 69, 0.8);
-  border-width: 3px;
-}
-
-.hotspot-icon {
-  position: relative;
-  width: 32px;
-  height: 32px;
-  background: white;
-  border: 2px solid #0066cc;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: all 0.3s ease;
-  z-index: 2;
-}
-
-.hotspot-marker.highlighted .hotspot-icon {
-  background: #ff6b35;
-  border-color: #ff6b35;
-  color: white;
-  transform: scale(1.2);
-}
-
-.hotspot-marker.active .hotspot-icon {
-  background: #28a745;
-  border-color: #28a745;
-  color: white;
-  transform: scale(1.1);
-}
-
-.hotspot-tooltip {
-  position: absolute;
-  top: -50px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 6px 10px;
-  border-radius: 4px;
-  font-size: 11px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: all 0.3s ease;
-}
-
-.hotspot-marker:hover .hotspot-tooltip {
-  opacity: 1;
-  transform: translateX(-50%) translateY(-4px);
-}
-
-@keyframes pulse {
-  0% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(1.5);
-    opacity: 0;
-  }
-}
 
 /* Loading Overlay */
 .loading-overlay {
@@ -1964,6 +1593,90 @@ onUnmounted(() => {
 .back-button:hover {
   background: #f0f7ff;
   color: #0052a3;
+}
+
+/* Customization Menu */
+.customization-menu {
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.customization-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.custom-btn {
+  padding: 16px;
+  border: 2px solid #e1e5e9;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #333;
+}
+
+.custom-btn:hover {
+  border-color: #0066cc;
+  background: #f0f7ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.15);
+}
+
+.custom-btn.colors-btn {
+  border-color: #4A90E2;
+}
+
+.custom-btn.frame-btn {
+  border-color: #8B4513;
+}
+
+.btn-icon {
+  font-size: 24px;
+}
+
+.btn-text {
+  font-size: 13px;
+}
+
+.customization-panel {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e1e5e9;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 4px 0;
+}
+
+.panel-subtitle {
+  font-size: 13px;
+  color: #666;
+  margin: 0 0 16px 0;
 }
 
 .option-title {
@@ -2093,13 +1806,13 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
-.material-options, .pillow-options, .leg-options, .size-options {
+.material-options, .pillow-options, .leg-options {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.material-option, .pillow-option, .leg-option, .size-option {
+.material-option, .pillow-option, .leg-option {
   padding: 12px 16px;
   border: 2px solid #e1e5e9;
   border-radius: 6px;
@@ -2109,33 +1822,33 @@ onUnmounted(() => {
   position: relative;
 }
 
-.material-option:hover, .pillow-option:hover, .leg-option:hover, .size-option:hover {
+.material-option:hover, .pillow-option:hover, .leg-option:hover {
   border-color: #0066cc;
   background: #f9f9f9;
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(0, 102, 204, 0.1);
 }
 
-.material-option.active, .pillow-option.active, .leg-option.active, .size-option.active {
+.material-option.active, .pillow-option.active, .leg-option.active {
   border-color: #0066cc;
   background: #f0f7ff;
   box-shadow: 0 3px 10px rgba(0, 102, 204, 0.15);
 }
 
-.material-name, .pillow-name, .leg-name, .size-name {
+.material-name, .pillow-name, .leg-name {
   font-weight: 600;
   color: #333;
   display: block;
   margin-bottom: 4px;
 }
 
-.material-description, .size-dimensions {
+.material-description {
   font-size: 12px;
   color: #666;
   margin-bottom: 4px;
 }
 
-.material-price, .pillow-price, .leg-price, .size-price {
+.material-price, .pillow-price, .leg-price {
   position: absolute;
   top: 12px;
   right: 16px;
@@ -2160,11 +1873,7 @@ onUnmounted(() => {
   border-radius: 2px;
 }
 
-.size-selector {
-  border-top: 2px solid #e1e5e9;
-  padding-top: 24px;
-  margin-top: 24px;
-}
+
 
 .cart-section {
   margin-top: auto;
@@ -2228,5 +1937,76 @@ onUnmounted(() => {
     font-size: 12px;
     padding: 8px 12px;
   }
+}
+
+/* Subsection Styles */
+.subsection {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.subsection:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.subsection-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Custom Color Section */
+.custom-color-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.color-picker-input {
+  width: 60px;
+  height: 60px;
+  border: 2px solid #e1e5e9;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.color-picker-input:hover {
+  border-color: #0066cc;
+  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.2);
+}
+
+.color-picker-input:active {
+  transform: scale(0.98);
+}
+
+.custom-color-preview {
+  flex: 1;
+  height: 60px;
+  border-radius: 8px;
+  border: 2px solid rgba(0, 102, 204, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.custom-color-label {
+  background: rgba(255, 255, 255, 0.9);
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #333;
+  letter-spacing: 1px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 </style>
