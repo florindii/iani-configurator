@@ -1021,37 +1021,53 @@ const initThreeJS = async () => {
     
     canvasContainer.value.appendChild(renderer.domElement)
     
-    // Enhanced lighting setup for better visibility from all angles
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
+    // Enhanced lighting setup - Multi-directional for complete coverage
+    // High ambient base for everywhere
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85)
     scene.add(ambientLight)
     
-    // Key light - main directional light
-    const keyLight = new THREE.DirectionalLight(0xffffff, 0.8)
-    keyLight.position.set(10, 10, 5)
-    keyLight.castShadow = true
-    keyLight.shadow.mapSize.width = 2048
-    keyLight.shadow.mapSize.height = 2048
-    keyLight.shadow.camera.near = 0.1
-    keyLight.shadow.camera.far = 500
-    keyLight.shadow.camera.left = -50
-    keyLight.shadow.camera.right = 50
-    keyLight.shadow.camera.top = 50
-    keyLight.shadow.camera.bottom = -50
-    scene.add(keyLight)
+    // Light 1 - Front-right (main)
+    const light1 = new THREE.DirectionalLight(0xffffff, 0.9)
+    light1.position.set(20, 20, 15)
+    light1.castShadow = true
+    light1.shadow.mapSize.width = 2048
+    light1.shadow.mapSize.height = 2048
+    light1.shadow.camera.near = 0.1
+    light1.shadow.camera.far = 500
+    light1.shadow.camera.left = -100
+    light1.shadow.camera.right = 100
+    light1.shadow.camera.top = 100
+    light1.shadow.camera.bottom = -100
+    scene.add(light1)
     
-    // Fill light - softer light from the opposite side
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.4)
-    fillLight.position.set(-10, 5, -5)
-    scene.add(fillLight)
+    // Light 2 - Back-left (fill)
+    const light2 = new THREE.DirectionalLight(0xffffff, 0.8)
+    light2.position.set(-25, 15, -20)
+    scene.add(light2)
     
-    // Back light - to separate the model from background
-    const backLight = new THREE.DirectionalLight(0xffffff, 0.3)
-    backLight.position.set(0, 5, -10)
-    scene.add(backLight)
+    // Light 3 - Top (overhead)
+    const light3 = new THREE.DirectionalLight(0xffffff, 0.7)
+    light3.position.set(0, 25, 0)
+    scene.add(light3)
     
-    // Add some hemisphere light for more natural lighting
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4)
-    hemiLight.position.set(0, 20, 0)
+    // Light 4 - Bottom (under-lighting to prevent completely dark undersides)
+    const light4 = new THREE.DirectionalLight(0xffffff, 0.6)
+    light4.position.set(0, -15, 0)
+    scene.add(light4)
+    
+    // Light 5 - Front-left (cross-fill)
+    const light5 = new THREE.DirectionalLight(0xffffff, 0.7)
+    light5.position.set(-20, 12, 25)
+    scene.add(light5)
+    
+    // Light 6 - Back-right (cross-back)
+    const light6 = new THREE.DirectionalLight(0xffffff, 0.6)
+    light6.position.set(25, 10, -25)
+    scene.add(light6)
+    
+    // Hemisphere light for natural ambient
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x222222, 0.6)
+    hemiLight.position.set(0, 40, 0)
     scene.add(hemiLight)
     
     controls = new OrbitControls(camera, renderer.domElement)
