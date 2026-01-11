@@ -1,0 +1,1 @@
+# This file has been temporarily disabled to resolve build issues\n# It will be re-enabled once the basic Shopify app is working\n

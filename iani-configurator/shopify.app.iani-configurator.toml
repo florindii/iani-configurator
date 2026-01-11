@@ -1,0 +1,23 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "be2ca0e22b7084d40cf3f496a431d29b"
+name = "iani-configurator"
+handle = "iani-configurator-1"
+application_url = "https://parliament-joshua-integrity-containing.trycloudflare.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+
+[webhooks]
+api_version = "2025-07"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = ""
+
+[auth]
+redirect_urls = ["https://parliament-joshua-integrity-containing.trycloudflare.com/auth/callback", "https://parliament-joshua-integrity-containing.trycloudflare.com/auth/shopify/callback", "https://parliament-joshua-integrity-containing.trycloudflare.com/api/auth/callback"]
+
+[pos]
+embedded = false

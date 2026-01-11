@@ -1,0 +1,25 @@
+{
+  "iani": {
+    "configurator": {
+      "loading": "Loading 3D Configurator...",
+      "load_configurator": "Load 3D Configurator",
+      "open_configurator": "Open 3D Configurator",
+      "close": "Close",
+      "fullscreen": "Fullscreen",
+      "modal_title": "3D Product Configurator",
+      "error_loading": "Failed to load configurator",
+      "retry": "Retry",
+      "add_to_cart": "Add to Cart",
+      "adding_to_cart": "Adding...",
+      "added_to_cart": "Added to Cart!",
+      "customize": "Customize",
+      "price": "Price",
+      "total": "Total",
+      "configuration": "Configuration",
+      "color": "Color",
+      "material": "Material",
+      "reset": "Reset",
+      "save": "Save Configuration"
+    }
+  }
+}

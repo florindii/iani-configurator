@@ -1,0 +1,14 @@
+api_version = "2024-10"
+
+[[extensions]]
+uid = "0e60082f-be13-ec6d-3d26-07ead14cab401d5e7bdd"
+type = "theme"
+name = "Iani 3D Configurator"
+handle = "iani-3d-configurator"
+
+[extensions.capabilities]
+network_access = true
+
+[[extensions.targeting]]
+module = "./blocks/3d-configurator.liquid"
+target = "section"
