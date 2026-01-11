@@ -9,3 +9,4 @@ process.on('beforeExit', async () => {
 });
 
 export { db };
+export default db;
