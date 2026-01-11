@@ -211,20 +211,14 @@ const canvasContainer = ref(null)
 const isLoading = ref(true)
 const isAddingToCart = ref(false)
 const showDebugInfo = ref(false)
-const selectedModel = ref('armalite_ar-10t_battle_rifle.glb') // Default model
+const selectedModel = ref('officeChair.glb') // Default model (small file, works on Vercel)
 
-// Available models
+// Available models (only models under 10MB that are deployed to Vercel)
 const availableModels = ref([
-  { name: 'AK-47 (Low Poly)', value: 'akm__free_lowpoly.glb' },
-  { name: 'AR-10T Battle Rifle', value: 'armalite_ar-10t_battle_rifle.glb' },
-  { name: 'Canon AT-1 Camera', value: 'canon_at-1_retro_camera.glb' },
-  { name: 'Check Model', value: 'check.glb' },
-  { name: 'Couch', value: 'Couch.glb' },
-  { name: 'Headphones', value: 'headphones_free_model_by_oscar_creative.glb' },
-  { name: 'AKM-SU (Low Poly)', value: 'low-poly_akmsu.glb' },
   { name: 'Office Chair', value: 'officeChair.glb' },
-  { name: 'Old Fridge', value: 'old_fridge.glb' },
-  { name: 'Old Table Fan', value: 'old_table_fan.glb' }
+  { name: 'Couch', value: 'Couch.glb' },
+  { name: 'AKM-SU (Low Poly)', value: 'low-poly_akmsu.glb' },
+  { name: 'Check Model', value: 'check.glb' }
 ])
 
 // Debug Stats
@@ -1270,51 +1264,107 @@ const animate = () => {
   renderer.render(scene, camera)
 }
 
+// Check if embedded in Shopify iframe
+const isEmbeddedInShopify = () => {
+  return window.parent && window.parent !== window
+}
+
+// Get URL parameters for Shopify context
+const getShopifyContext = () => {
+  const urlParams = new URLSearchParams(window.location.search)
+  return {
+    productId: urlParams.get('product'),
+    variantId: urlParams.get('variant'),
+    shop: urlParams.get('shop'),
+    handle: urlParams.get('handle'),
+    currency: urlParams.get('currency') || 'USD',
+    embedded: urlParams.get('embedded') === 'true'
+  }
+}
+
 // Add to cart function
 const addToCart = async () => {
   console.log('🛒 Adding configured sofa to cart...')
-  
+
   try {
     isAddingToCart.value = true
-    
+
     const fullConfiguration = {
       cushionColor: configuration.value.cushionColor,
       frameMaterial: configuration.value.frameMaterial,
       pillowStyle: configuration.value.pillowStyle,
       legStyle: configuration.value.legStyle,
-      size: configuration.value.size
+      size: configuration.value.size,
+      model: selectedModel.value
     }
-    
+
+    const shopifyContext = getShopifyContext()
+
     const cartData = {
-      productId: 'customizable-sofa',
-      configuration: fullConfiguration,
-      price: Number(calculatedPrice.value),
-      quantity: 1,
-      timestamp: new Date().toISOString()
-    }
-    
-    console.log('📦 Cart data:', cartData)
-    
-    // Simulate cart addition
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    // Show success notification
-    const notification = document.createElement('div')
-    notification.textContent = `✅ Custom sofa added to cart! (${calculatedPrice.value.toFixed(2)})`
-    notification.style.cssText = `
-      position: fixed; top: 20px; right: 20px; background: #28a745;
-      color: white; padding: 16px 24px; border-radius: 8px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 10000;
-      font-weight: 600;
-    `
-    
-    document.body.appendChild(notification)
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification)
+      type: 'IANI_ADD_TO_CART',
+      payload: {
+        productId: shopifyContext.productId || 'customizable-sofa',
+        variantId: shopifyContext.variantId,
+        configuration: fullConfiguration,
+        price: Number(calculatedPrice.value),
+        quantity: 1,
+        timestamp: new Date().toISOString(),
+        configurationId: `config_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       }
-    }, 4000)
-    
+    }
+
+    console.log('📦 Cart data:', cartData)
+
+    // If embedded in Shopify, send message to parent
+    if (isEmbeddedInShopify()) {
+      console.log('📤 Sending ADD_TO_CART message to Shopify parent...')
+      window.parent.postMessage(cartData, '*')
+
+      // Also send with alternative message type for compatibility
+      window.parent.postMessage({
+        type: 'ADD_TO_CART',
+        variantId: shopifyContext.variantId,
+        configuration: fullConfiguration,
+        quantity: 1
+      }, '*')
+
+      // Show success notification
+      const notification = document.createElement('div')
+      notification.textContent = `✅ Adding to cart...`
+      notification.style.cssText = `
+        position: fixed; top: 20px; right: 20px; background: #28a745;
+        color: white; padding: 16px 24px; border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 10000;
+        font-weight: 600;
+      `
+      document.body.appendChild(notification)
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification)
+        }
+      }, 3000)
+    } else {
+      // Not embedded - simulate cart addition for standalone testing
+      console.log('🔧 Standalone mode - simulating cart addition')
+      await new Promise(resolve => setTimeout(resolve, 1500))
+
+      // Show success notification
+      const notification = document.createElement('div')
+      notification.textContent = `✅ Custom sofa added to cart! ($${calculatedPrice.value.toFixed(2)})`
+      notification.style.cssText = `
+        position: fixed; top: 20px; right: 20px; background: #28a745;
+        color: white; padding: 16px 24px; border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 10000;
+        font-weight: 600;
+      `
+      document.body.appendChild(notification)
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification)
+        }
+      }, 4000)
+    }
+
   } catch (error) {
     console.error('❌ Failed to add to cart:', error)
   } finally {
@@ -1322,10 +1372,59 @@ const addToCart = async () => {
   }
 }
 
+// Handle messages from Shopify parent
+const handleShopifyMessage = (event) => {
+  const data = event.data
+  if (!data || typeof data !== 'object') return
+
+  console.log('📥 Received message from parent:', data.type)
+
+  if (data.type === 'IANI_INIT') {
+    console.log('✅ Shopify context received:', data.payload)
+  }
+
+  if (data.type === 'IANI_CART_SUCCESS') {
+    console.log('✅ Cart addition successful:', data.payload)
+    const notification = document.createElement('div')
+    notification.textContent = `✅ Added to cart!`
+    notification.style.cssText = `
+      position: fixed; top: 20px; right: 20px; background: #28a745;
+      color: white; padding: 16px 24px; border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 10000;
+      font-weight: 600;
+    `
+    document.body.appendChild(notification)
+    setTimeout(() => notification.remove(), 3000)
+  }
+
+  if (data.type === 'IANI_CART_ERROR') {
+    console.error('❌ Cart error:', data.payload)
+    const notification = document.createElement('div')
+    notification.textContent = `❌ Failed to add to cart: ${data.payload?.message || 'Unknown error'}`
+    notification.style.cssText = `
+      position: fixed; top: 20px; right: 20px; background: #dc3545;
+      color: white; padding: 16px 24px; border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 10000;
+      font-weight: 600;
+    `
+    document.body.appendChild(notification)
+    setTimeout(() => notification.remove(), 5000)
+  }
+}
+
 // Lifecycle
 onMounted(async () => {
   console.log('🚀 Clickable mesh configurator mounted')
-  
+
+  // Setup message listener for Shopify communication
+  window.addEventListener('message', handleShopifyMessage)
+
+  // Signal to parent that configurator is ready
+  if (isEmbeddedInShopify()) {
+    console.log('📤 Sending IANI_READY to parent')
+    window.parent.postMessage({ type: 'IANI_READY' }, '*')
+  }
+
   setTimeout(() => {
     initThreeJS()
   }, 100)
@@ -1333,11 +1432,14 @@ onMounted(async () => {
 
 onUnmounted(() => {
   console.log('🧹 Cleaning up configurator...')
-  
+
+  // Remove Shopify message listener
+  window.removeEventListener('message', handleShopifyMessage)
+
   if (canvasContainer.value) {
     canvasContainer.value.removeEventListener('click', onMouseClick)
   }
-  
+
   if (renderer) {
     renderer.dispose()
   }

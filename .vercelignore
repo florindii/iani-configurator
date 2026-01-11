@@ -1,0 +1,17 @@
+# Exclude large 3D models from Vercel deployment
+# Host these on a CDN or cloud storage instead
+public/models/armalite_ar-10t_battle_rifle.glb
+public/models/old_fridge.glb
+public/models/old_table_fan.glb
+public/models/akm__free_lowpoly.glb
+public/models/canon_at-1_retro_camera.glb
+public/models/headphones_free_model_by_oscar_creative.glb
+
+# Exclude Shopify Remix app (separate deployment)
+iani-configurator/
+temp_models/
+server/
+
+# Exclude development files
+.git/
+*.log
