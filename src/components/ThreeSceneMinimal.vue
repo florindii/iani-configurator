@@ -63,7 +63,7 @@
       <div class="config-content">
         <!-- Header -->
         <div class="config-header">
-          <h2>🛋️ Customize Your Sofa</h2>
+          <h2>🛋️ {{ productName }}</h2>
           <p class="product-description">
             {{ selectedPart ? `Customizing: ${selectedPart.name}` : 'Click on parts to customize' }}
           </p>
@@ -259,7 +259,7 @@ const configuration = ref({
 
 
 
-// Configuration Options
+// Configuration Options - will be loaded dynamically from API
 const colorOptions = ref([
   { label: 'Ocean Blue', value: 'blue', hex: '#4A90E2', price: 299.99 },
   { label: 'Crimson Red', value: 'red', hex: '#E74C3C', price: 319.99 },
@@ -275,6 +275,85 @@ const frameOptions = ref([
   { label: 'Metal Frame', value: 'metal', description: 'Brushed steel', extraCost: 75 },
   { label: 'White Oak', value: 'white-oak', description: 'Light bleached oak', extraCost: 25 }
 ])
+
+// Track if config was loaded from API
+const configLoaded = ref(false)
+const productName = ref('Customize Your Product')
+
+// Load configuration from merchant's settings
+const loadProductConfig = async () => {
+  const context = getShopifyContext()
+  if (!context.productId || !context.shop) {
+    console.log('📋 No product/shop context, using default options')
+    return
+  }
+
+  try {
+    // Try to load from Shopify app API first, then fall back to Vercel API
+    const apiUrls = [
+      `https://iani-configurator-1.onrender.com/api/product-config/${context.productId}?shop=${context.shop}`,
+      `https://iani-configurator.vercel.app/api/product-config?productId=${context.productId}&shop=${context.shop}`
+    ]
+
+    for (const apiUrl of apiUrls) {
+      try {
+        console.log('📡 Fetching product config from:', apiUrl)
+        const response = await fetch(apiUrl)
+        if (!response.ok) continue
+
+        const data = await response.json()
+        console.log('📦 Received product config:', data)
+
+        if (data.config) {
+          // Update product name
+          if (data.config.name) {
+            productName.value = data.config.name
+          }
+
+          // Update color options
+          if (data.config.colorOptions && data.config.colorOptions.length > 0) {
+            colorOptions.value = data.config.colorOptions.map(c => ({
+              label: c.name,
+              value: c.name.toLowerCase().replace(/\s+/g, '-'),
+              hex: c.hexCode,
+              price: c.price
+            }))
+            // Set default color
+            const defaultColor = data.config.colorOptions.find(c => c.isDefault) || data.config.colorOptions[0]
+            if (defaultColor) {
+              configuration.value.cushionColor = defaultColor.name.toLowerCase().replace(/\s+/g, '-')
+            }
+          }
+
+          // Update material/frame options
+          if (data.config.materialOptions && data.config.materialOptions.length > 0) {
+            frameOptions.value = data.config.materialOptions.map(m => ({
+              label: m.name,
+              value: m.name.toLowerCase().replace(/\s+/g, '-'),
+              description: m.description || '',
+              extraCost: m.extraCost
+            }))
+            // Set default material
+            const defaultMaterial = data.config.materialOptions.find(m => m.isDefault) || data.config.materialOptions[0]
+            if (defaultMaterial) {
+              configuration.value.frameMaterial = defaultMaterial.name.toLowerCase().replace(/\s+/g, '-')
+            }
+          }
+
+          configLoaded.value = true
+          console.log('✅ Product config loaded successfully')
+          return
+        }
+      } catch (err) {
+        console.warn('⚠️ Failed to fetch from:', apiUrl, err)
+      }
+    }
+
+    console.log('📋 No custom config found, using defaults')
+  } catch (error) {
+    console.error('❌ Error loading product config:', error)
+  }
+}
 
 const pillowOptions = ref([
   { label: 'Classic', value: 'classic', color: '#E8E8E8', extraCost: 0 },
@@ -1104,8 +1183,20 @@ const initThreeJS = async () => {
 
 // Load 3D model with analysis for clicking
 const loadModel = async () => {
-  const modelPath = `/models/${selectedModel.value}`
-  console.log(`📦 Loading ${selectedModel.value} with clickable mesh analysis...`)
+  // Check for dynamic model URL from Shopify context
+  const shopifyContext = getShopifyContext()
+  let modelPath = `/models/${selectedModel.value}`
+
+  // Priority: 1. Full URL from modelUrl param, 2. modelFile param, 3. selected model
+  if (shopifyContext.modelUrl) {
+    modelPath = shopifyContext.modelUrl
+    console.log(`📦 Loading model from Shopify media URL: ${modelPath}`)
+  } else if (shopifyContext.modelFile) {
+    modelPath = `/models/${shopifyContext.modelFile}`
+    console.log(`📦 Loading model from file: ${modelPath}`)
+  } else {
+    console.log(`📦 Loading ${selectedModel.value} with clickable mesh analysis...`)
+  }
   
   try {
     const loader = new GLTFLoader()
@@ -1278,7 +1369,54 @@ const getShopifyContext = () => {
     shop: urlParams.get('shop'),
     handle: urlParams.get('handle'),
     currency: urlParams.get('currency') || 'USD',
-    embedded: urlParams.get('embedded') === 'true'
+    embedded: urlParams.get('embedded') === 'true',
+    // New: Support for dynamic model URLs from Shopify product media
+    modelUrl: urlParams.get('modelUrl'),
+    modelFile: urlParams.get('modelFile')
+  }
+}
+
+// Capture canvas screenshot as base64 image (thumbnail for cart)
+const capturePreviewImage = () => {
+  if (!renderer || !scene || !camera) {
+    console.warn('⚠️ Cannot capture preview - renderer not ready')
+    return null
+  }
+
+  try {
+    // Render the current frame
+    renderer.render(scene, camera)
+
+    // Get the canvas
+    const canvas = renderer.domElement
+
+    // Create a smaller thumbnail canvas (150x150) for cart display
+    const thumbnailSize = 150
+    const thumbnailCanvas = document.createElement('canvas')
+    thumbnailCanvas.width = thumbnailSize
+    thumbnailCanvas.height = thumbnailSize
+    const ctx = thumbnailCanvas.getContext('2d')
+
+    // Calculate center crop to maintain aspect ratio
+    const sourceSize = Math.min(canvas.width, canvas.height)
+    const sourceX = (canvas.width - sourceSize) / 2
+    const sourceY = (canvas.height - sourceSize) / 2
+
+    // Draw cropped and scaled image
+    ctx.drawImage(
+      canvas,
+      sourceX, sourceY, sourceSize, sourceSize, // Source rectangle (centered square)
+      0, 0, thumbnailSize, thumbnailSize // Destination rectangle
+    )
+
+    // Convert to base64 with lower quality for smaller size
+    const dataUrl = thumbnailCanvas.toDataURL('image/jpeg', 0.7)
+
+    console.log('📸 Preview thumbnail captured, size:', Math.round(dataUrl.length / 1024), 'KB')
+    return dataUrl
+  } catch (error) {
+    console.error('❌ Failed to capture preview:', error)
+    return null
   }
 }
 
@@ -1288,6 +1426,9 @@ const addToCart = async () => {
 
   try {
     isAddingToCart.value = true
+
+    // Capture preview image before adding to cart
+    const previewImage = capturePreviewImage()
 
     const fullConfiguration = {
       cushionColor: configuration.value.cushionColor,
@@ -1309,7 +1450,8 @@ const addToCart = async () => {
         price: Number(calculatedPrice.value),
         quantity: 1,
         timestamp: new Date().toISOString(),
-        configurationId: `config_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        configurationId: `config_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        previewImage: previewImage // Include preview image
       }
     }
 
@@ -1325,7 +1467,8 @@ const addToCart = async () => {
         type: 'ADD_TO_CART',
         variantId: shopifyContext.variantId,
         configuration: fullConfiguration,
-        quantity: 1
+        quantity: 1,
+        previewImage: previewImage // Include preview image
       }, '*')
 
       // Show success notification
@@ -1424,6 +1567,9 @@ onMounted(async () => {
     console.log('📤 Sending IANI_READY to parent')
     window.parent.postMessage({ type: 'IANI_READY' }, '*')
   }
+
+  // Load product configuration from merchant's settings
+  await loadProductConfig()
 
   setTimeout(() => {
     initThreeJS()

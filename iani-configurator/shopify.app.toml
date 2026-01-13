@@ -3,7 +3,7 @@
 client_id = "0c77e35b44769e334e279853c0764719"
 name = "iani-configurator"
 handle = "iani-configurator"
-application_url = "https://americas-continental-liquid-b.trycloudflare.com"
+application_url = "https://iani-configurator-1.onrender.com"
 embedded = true
 
 [build]
@@ -12,7 +12,7 @@ automatically_update_urls_on_dev = true
 
 [access_scopes]
 # Required scopes for 3D configurator functionality
-scopes = "read_products,write_products,read_orders,write_orders"
+scopes = "read_products,write_products"
 
 [webhooks]
 api_version = "2025-04"
@@ -39,7 +39,7 @@ api_version = "2025-04"
   uri = "/api/gdpr"
 
 [auth]
-redirect_urls = ["https://americas-continental-liquid-b.trycloudflare.com/auth/callback", "https://americas-continental-liquid-b.trycloudflare.com/auth/shopify/callback", "https://americas-continental-liquid-b.trycloudflare.com/api/auth/callback"]
+redirect_urls = ["https://iani-configurator-1.onrender.com/auth/callback", "https://iani-configurator-1.onrender.com/auth/shopify/callback", "https://iani-configurator-1.onrender.com/api/auth/callback"]
 
 [pos]
 embedded = false
