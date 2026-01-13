@@ -17,6 +17,20 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 
+// Helper to extract numeric product ID from various formats
+function extractProductId(productId: string): string {
+  // Handle full URL format: https://admin.shopify.com/store/xxx/products/123
+  const urlMatch = productId.match(/\/products\/(\d+)/);
+  if (urlMatch) return urlMatch[1];
+
+  // Handle GID format: gid://shopify/Product/123
+  const gidMatch = productId.match(/gid:\/\/shopify\/Product\/(\d+)/);
+  if (gidMatch) return gidMatch[1];
+
+  // Already a numeric ID
+  return productId;
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const shop = session.shop;
@@ -31,53 +45,61 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     orderBy: { updatedAt: "desc" },
   });
 
-  // Fetch Shopify products to get titles and images
-  const productIds = products3D.map((p) => p.shopifyProductId);
+  // Extract clean product IDs (handle various stored formats)
+  const productIds = products3D.map((p) => extractProductId(p.shopifyProductId));
 
   let shopifyProducts: Record<string, { title: string; image: string | null }> = {};
 
   if (productIds.length > 0) {
-    const response = await admin.graphql(
-      `#graphql
-        query getProducts($ids: [ID!]!) {
-          nodes(ids: $ids) {
-            ... on Product {
-              id
-              title
-              featuredImage {
-                url
+    try {
+      const response = await admin.graphql(
+        `#graphql
+          query getProducts($ids: [ID!]!) {
+            nodes(ids: $ids) {
+              ... on Product {
+                id
+                title
+                featuredImage {
+                  url
+                }
               }
             }
           }
+        `,
+        {
+          variables: {
+            ids: productIds.map((id) => `gid://shopify/Product/${id}`),
+          },
         }
-      `,
-      {
-        variables: {
-          ids: productIds.map((id) => `gid://shopify/Product/${id}`),
-        },
-      }
-    );
+      );
 
-    const data = await response.json();
-    if (data.data?.nodes) {
-      for (const node of data.data.nodes) {
-        if (node) {
-          const numericId = node.id.replace("gid://shopify/Product/", "");
-          shopifyProducts[numericId] = {
-            title: node.title,
-            image: node.featuredImage?.url || null,
-          };
+      const data = await response.json();
+      if (data.data?.nodes) {
+        for (const node of data.data.nodes) {
+          if (node) {
+            const numericId = node.id.replace("gid://shopify/Product/", "");
+            shopifyProducts[numericId] = {
+              title: node.title,
+              image: node.featuredImage?.url || null,
+            };
+          }
         }
       }
+    } catch (error) {
+      console.error("Error fetching Shopify products:", error);
+      // Continue without Shopify data - show products with fallback titles
     }
   }
 
   return json({
-    products3D: products3D.map((p) => ({
-      ...p,
-      shopifyTitle: shopifyProducts[p.shopifyProductId]?.title || "Unknown Product",
-      shopifyImage: shopifyProducts[p.shopifyProductId]?.image || null,
-    })),
+    products3D: products3D.map((p) => {
+      const cleanId = extractProductId(p.shopifyProductId);
+      return {
+        ...p,
+        shopifyTitle: shopifyProducts[cleanId]?.title || p.name || "Unknown Product",
+        shopifyImage: shopifyProducts[cleanId]?.image || null,
+      };
+    }),
   });
 };
 
