@@ -338,7 +338,7 @@ export default function ConfiguratorPage() {
           <Modal.Section>
             <div style={{ height: '90vh', width: '100%' }}>
               <iframe
-                src={`http://localhost:5173?shop=${shop}&productId=${selectedConfiguratorProduct.id}&shopifyProductId=${selectedConfiguratorProduct.shopifyProductId}`}
+                src={`https://iani-configurator.vercel.app?shop=${shop}&productId=${selectedConfiguratorProduct.id}&shopifyProductId=${selectedConfiguratorProduct.shopifyProductId}`}
                 style={{
                   width: '100%',
                   height: '100%',
