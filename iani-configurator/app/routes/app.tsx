@@ -24,9 +24,8 @@ export default function App() {
         <Link to="/app" rel="home">
           Home
         </Link>
-        <Link to="/app/configurator">3D Configurator</Link>
-        <Link to="/app/test">Test Page</Link>
-        <Link to="/app/additional">Additional page</Link>
+        <Link to="/app/products">3D Products</Link>
+        <Link to="/app/configurator">Preview</Link>
       </NavMenu>
       <Outlet />
     </AppProvider>

@@ -1,0 +1,139 @@
+{% comment %}
+  Iani 3D Configurator - Cart Preview Handler
+  Add this block to the cart template to display custom 3D preview images and configured prices
+{% endcomment %}
+
+<!-- Iani Cart Preview Handler - This block enables custom 3D preview images and prices -->
+<div id="iani-cart-preview-handler" style="display:none;" data-iani-version="1.22"></div>
+
+<script>
+(function(){
+  'use strict';
+  console.log('[Iani Cart] Cart preview script loaded v1.22');
+
+  function applyCartCustomizations(){
+    const storedPreviews=JSON.parse(localStorage.getItem('iani_cart_previews')||'{}');
+    const storedPrices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');
+    const previewKeys=Object.keys(storedPreviews);
+    const priceKeys=Object.keys(storedPrices);
+    console.log('[Iani Cart] Stored previews:',previewKeys.length,'prices:',priceKeys.length);
+
+    if(previewKeys.length===0&&priceKeys.length===0)return;
+
+    // Find all cart item containers
+    const images=document.querySelectorAll('.cart img, [class*="cart"] img, main img, table img');
+    console.log('[Iani Cart] Found images:',images.length);
+
+    images.forEach(function(img){
+      if(img.dataset.ianiApplied)return;
+
+      // Find the parent container that has the properties
+      let container=img.closest('tr')||img.closest('[class*="cart-item"]')||img.closest('.cart__row')||img.closest('.line-item');
+      if(!container){
+        // Try going up a few levels
+        let parent=img.parentElement;
+        for(let i=0;i<5&&parent;i++){
+          if(parent.tagName==='TR'||parent.className&&(parent.className.includes('cart')||parent.className.includes('line'))){
+            container=parent;
+            break;
+          }
+          parent=parent.parentElement;
+        }
+      }
+      if(!container)return;
+
+      const containerText=container.textContent||'';
+      const containerHTML=container.innerHTML||'';
+
+      // Check if this container has Iani configuration properties
+      const hasIaniProps=containerText.includes('cushionColor')||containerText.includes('frameMaterial')||containerText.includes('model:')||containerText.includes('Configured Price');
+
+      if(!hasIaniProps)return;
+
+      console.log('[Iani Cart] Found cart item with Iani properties');
+
+      // Apply preview image
+      const latestPreviewKey=previewKeys[previewKeys.length-1];
+      if(latestPreviewKey&&storedPreviews[latestPreviewKey]&&!img.dataset.ianiPreviewApplied){
+        console.log('[Iani Cart] Applying preview image');
+        img.src=storedPreviews[latestPreviewKey];
+        img.style.objectFit='cover';
+        img.style.backgroundColor='#f8f9fa';
+        img.style.border='2px solid #4CAF50';
+        img.style.borderRadius='4px';
+        img.dataset.ianiPreviewApplied='true';
+      }
+
+      // Apply configured price - find and update price elements
+      const latestPriceKey=priceKeys[priceKeys.length-1];
+      if(latestPriceKey&&storedPrices[latestPriceKey]&&!container.dataset.ianiPriceApplied){
+        const configuredPrice=storedPrices[latestPriceKey];
+        console.log('[Iani Cart] Configured price:',configuredPrice);
+
+        // Find price elements in this container - look for money/price class elements
+        const priceSelectors=[
+          '.cart-item__price','.price','.money','[class*="price"]','[class*="Price"]',
+          '.cart__price','td:last-child','.line-item__price','[data-cart-item-price]'
+        ];
+
+        priceSelectors.forEach(function(selector){
+          const priceElements=container.querySelectorAll(selector);
+          priceElements.forEach(function(el){
+            // Skip if already processed or if it's a quantity/remove element
+            if(el.dataset.ianiPriceReplaced)return;
+            if(el.querySelector('input')||el.querySelector('button'))return;
+
+            const text=el.textContent.trim();
+            // Check if this looks like a price (contains currency symbol or number pattern)
+            if(/[\$€£¥₹]|RSD|\d+[.,]\d{2}|\d+\s*(USD|EUR|RSD)/i.test(text)){
+              console.log('[Iani Cart] Updating price element:',text,'->','$'+configuredPrice.toFixed(2));
+
+              // Create styled price replacement
+              const originalPrice=el.innerHTML;
+              el.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.85em;">'+originalPrice+'</span> <span style="color:#4CAF50;font-weight:bold;">$'+configuredPrice.toFixed(2)+'</span>';
+              el.dataset.ianiPriceReplaced='true';
+            }
+          });
+        });
+
+        container.dataset.ianiPriceApplied='true';
+      }
+
+      img.dataset.ianiApplied='true';
+    });
+  }
+
+  // Run on page load and after delays for dynamic content
+  if(document.readyState==='complete'){
+    applyCartCustomizations();
+  }else{
+    window.addEventListener('load',applyCartCustomizations);
+  }
+  setTimeout(applyCartCustomizations,500);
+  setTimeout(applyCartCustomizations,1500);
+  setTimeout(applyCartCustomizations,3000);
+
+  // Also watch for DOM changes (for AJAX carts)
+  const observer=new MutationObserver(function(mutations){
+    let shouldUpdate=false;
+    mutations.forEach(function(m){
+      if(m.addedNodes.length>0)shouldUpdate=true;
+    });
+    if(shouldUpdate){
+      setTimeout(applyCartCustomizations,100);
+    }
+  });
+  observer.observe(document.body,{childList:true,subtree:true});
+})();
+</script>
+
+{% schema %}
+{
+  "name": "Iani Cart Previews",
+  "target": "section",
+  "enabled_on": {
+    "templates": ["cart"]
+  },
+  "settings": []
+}
+{% endschema %}

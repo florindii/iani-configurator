@@ -37,18 +37,54 @@ model Product3D {
   shopifyProductId String  // Links to Shopify product
   shop            String   // Which shop this belongs to
   name            String
-  baseModelUrl    String   // URL to base 3D model
+  basePrice       Float    @default(0) // Base price before customizations
+  baseModelUrl    String?  // URL to base 3D model (optional - can use Shopify media)
+  useShopifyModel Boolean  @default(true) // Use model from Shopify product media
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  
+
   // Relations
   configurations  ProductConfiguration[]
-  customizationOptions CustomizationOption[]
-  
+  colorOptions    ColorOption[]
+  materialOptions MaterialOption[]
+
   @@unique([shopifyProductId, shop])
 }
 
+// Color options for a product
+model ColorOption {
+  id          String   @id @default(cuid())
+  product3DId String
+  name        String   // "Ocean Blue", "Crimson Red", etc.
+  hexCode     String   // "#1E90FF", "#DC143C", etc.
+  price       Float    @default(0) // Price for this color (not additional, absolute)
+  sortOrder   Int      @default(0) // Display order
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  product3D   Product3D @relation(fields: [product3DId], references: [id], onDelete: Cascade)
+
+  @@index([product3DId])
+}
+
+// Material/frame options for a product
+model MaterialOption {
+  id          String   @id @default(cuid())
+  product3DId String
+  name        String   // "Natural Oak", "Walnut", etc.
+  description String?  // "Warm honey tones"
+  extraCost   Float    @default(0) // Additional cost for this material
+  sortOrder   Int      @default(0)
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  product3D   Product3D @relation(fields: [product3DId], references: [id], onDelete: Cascade)
+
+  @@index([product3DId])
+}
+
+// Legacy model - keeping for backward compatibility
 model CustomizationOption {
   id          String   @id @default(cuid())
   product3DId String
@@ -56,9 +92,7 @@ model CustomizationOption {
   optionName  String   // "Fabric", "Wood Finish", etc.
   optionValue String   // "Leather", "Oak", etc.
   price       Float?   // Additional price for this option
-  
-  product3D   Product3D @relation(fields: [product3DId], references: [id], onDelete: Cascade)
-  
+
   @@index([product3DId])
 }
 

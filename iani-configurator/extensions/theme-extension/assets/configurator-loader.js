@@ -4,9 +4,73 @@ if(window.__ianiConfiguratorLoaded)return;
 window.__ianiConfiguratorLoaded=true;
 
 console.log('[Iani] Script loaded');
+
+// Check if we're on the cart page and need to display preview images
+if(window.location.pathname==='/cart'||window.location.pathname.includes('/cart')){
+  console.log('[Iani] Cart page detected, checking for preview images');
+
+  function applyCartPreviews(){
+    const storedPreviews=JSON.parse(localStorage.getItem('iani_cart_previews')||'{}');
+    console.log('[Iani] Stored previews:',Object.keys(storedPreviews));
+
+    // Find all cart items - try multiple selectors for different themes
+    const cartItems=document.querySelectorAll('.cart-item, [data-cart-item], .cart__item, tr[data-line-item], .cart-item__details, [class*="cart-item"], [class*="CartItem"], .line-item');
+    console.log('[Iani] Found cart items:',cartItems.length);
+
+    cartItems.forEach(function(item){
+      // Look for configuration ID in the item's text or data attributes
+      const itemText=item.textContent||'';
+      const itemHTML=item.innerHTML||'';
+
+      // Find configuration ID from properties displayed
+      let configId=null;
+      const configMatch=itemText.match(/config_\d+_[a-z0-9]+/i)||itemHTML.match(/config_\d+_[a-z0-9]+/i);
+      if(configMatch){
+        configId=configMatch[0];
+        console.log('[Iani] Found config ID in item:',configId);
+      }
+
+      // If we found a config ID and have a preview for it
+      if(configId&&storedPreviews[configId]){
+        // Find the image in this cart item (go up to parent if needed)
+        let img=item.querySelector('img');
+        if(!img){
+          const parent=item.closest('tr, .cart-item, [class*="cart-item"]');
+          if(parent)img=parent.querySelector('img');
+        }
+
+        if(img){
+          console.log('[Iani] Replacing image for config:',configId);
+          img.src=storedPreviews[configId];
+          img.style.objectFit='cover';
+          img.style.backgroundColor='#f8f9fa';
+          // Add a subtle border to indicate it's a custom preview
+          img.style.border='2px solid #4CAF50';
+          img.style.borderRadius='4px';
+        }
+      }
+    });
+  }
+
+  // Run on page load and after a short delay (for dynamic content)
+  if(document.readyState==='complete'){
+    applyCartPreviews();
+  }else{
+    window.addEventListener('load',applyCartPreviews);
+  }
+  setTimeout(applyCartPreviews,1000);
+  setTimeout(applyCartPreviews,2500); // Retry for slow-loading themes
+}
+
 const containers=document.querySelectorAll('[id^="iani-3d-configurator-"]');
 console.log('[Iani] Found containers:',containers.length);
-if(!containers.length)return;
+
+// Exit only if not on cart page AND no containers found
+if(!containers.length){
+  // Still allow the cart preview functionality to work
+  console.log('[Iani] No configurator containers found, but cart preview may still work');
+  return;
+}
 
 containers.forEach(function(w){
   const c={
@@ -21,7 +85,8 @@ containers.forEach(function(w){
     moneyFormat:w.dataset.moneyFormat,
     configuratorUrl:w.dataset.configuratorUrl||'https://iani-configurator.vercel.app',
     displayMode:w.dataset.displayMode,
-    autoLoad:w.dataset.autoLoad==='true'
+    autoLoad:w.dataset.autoLoad==='true',
+    modelUrl:w.dataset.modelUrl||''
   };
   console.log('[Iani] Config:',c);
 
@@ -50,6 +115,7 @@ containers.forEach(function(w){
     u.searchParams.set('currency',c.currency);
     u.searchParams.set('embedded','true');
     if(c.productPrice)u.searchParams.set('price',c.productPrice);
+    if(c.modelUrl)u.searchParams.set('modelUrl',c.modelUrl);
     console.log('[Iani] Iframe URL:',u.toString());
     return u.toString();
   }
@@ -93,8 +159,31 @@ containers.forEach(function(w){
       if(d.type==='IANI_ADD_TO_CART'||d.type==='ADD_TO_CART'){
         const p=d.payload||d;
         const props=p.configuration||p.properties||{};
-        if(p.configurationId)props['_configuration_id']=p.configurationId;
-        if(p.previewImage)props['_preview_image']=p.previewImage;
+        const configId=p.configurationId||('config_'+Date.now());
+        if(configId)props['_configuration_id']=configId;
+
+        // Add configured price as visible property (Shopify doesn't allow changing actual price via AJAX)
+        if(p.price){
+          props['Configured Price']='$'+Number(p.price).toFixed(2);
+          // Store in localStorage for cart display
+          try{
+            const prices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');
+            prices[configId]=Number(p.price);
+            localStorage.setItem('iani_cart_prices',JSON.stringify(prices));
+            console.log('[Iani] Configured price stored:',p.price);
+          }catch(e){console.warn('[Iani] Could not store price:',e);}
+        }
+
+        // Store preview image in localStorage (Shopify properties have size limits)
+        if(p.previewImage){
+          try{
+            const previews=JSON.parse(localStorage.getItem('iani_cart_previews')||'{}');
+            previews[configId]=p.previewImage;
+            localStorage.setItem('iani_cart_previews',JSON.stringify(previews));
+            console.log('[Iani] Preview image stored in localStorage for config:',configId);
+          }catch(e){console.warn('[Iani] Could not store preview:',e);}
+        }
+
         fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.variantId||c.variantId,quantity:p.quantity||1,properties:props})}).then(r=>r.json()).then(item=>{
           if(iframe&&iframe.contentWindow)iframe.contentWindow.postMessage({type:'IANI_CART_SUCCESS',payload:item},c.configuratorUrl);
           fetch('/cart.js').then(r=>r.json()).then(cart=>{
@@ -116,6 +205,11 @@ containers.forEach(function(w){
       console.error('[Iani] No modal overlay found!');
       return;
     }
+    // Move modal to body to escape any container constraints
+    if(modalOverlay.parentElement!==document.body){
+      document.body.appendChild(modalOverlay);
+    }
+    modalOverlay.style.display='flex';
     modalOverlay.classList.add('active');
     document.body.style.overflow='hidden';
     const mc=modalOverlay.querySelector('.iani-configurator-container');
@@ -128,6 +222,7 @@ containers.forEach(function(w){
   function closeModal(){
     console.log('[Iani] closeModal called');
     if(!modalOverlay)return;
+    modalOverlay.style.display='none';
     modalOverlay.classList.remove('active');
     document.body.style.overflow='';
   }
