@@ -1,5 +1,5 @@
 import { json, redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useSubmit, useNavigation } from "@remix-run/react";
+import { useLoaderData, useSubmit, useNavigation, useRouteError, isRouteErrorResponse } from "@remix-run/react";
 import { useState, useCallback } from "react";
 import {
   Page,
@@ -20,17 +20,58 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 
+// Error boundary to catch and display errors properly
+export function ErrorBoundary() {
+  const error = useRouteError();
+
+  if (isRouteErrorResponse(error)) {
+    return (
+      <Page title="Error">
+        <Card>
+          <BlockStack gap="400">
+            <Text as="h2" variant="headingMd">
+              {error.status} - {error.statusText}
+            </Text>
+            <Text as="p">{error.data}</Text>
+          </BlockStack>
+        </Card>
+      </Page>
+    );
+  }
+
+  return (
+    <Page title="Error">
+      <Card>
+        <BlockStack gap="400">
+          <Text as="h2" variant="headingMd">Something went wrong</Text>
+          <Text as="p">{error instanceof Error ? error.message : "Unknown error"}</Text>
+        </BlockStack>
+      </Card>
+    </Page>
+  );
+}
+
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const { id } = params;
 
-  const product3D = await db.product3D.findUnique({
-    where: { id },
-    include: {
-      colorOptions: { orderBy: { sortOrder: "asc" } },
-      materialOptions: { orderBy: { sortOrder: "asc" } },
-    },
-  });
+  if (!id) {
+    throw new Response("Product ID is required", { status: 400 });
+  }
+
+  let product3D;
+  try {
+    product3D = await db.product3D.findUnique({
+      where: { id },
+      include: {
+        colorOptions: { orderBy: { sortOrder: "asc" } },
+        materialOptions: { orderBy: { sortOrder: "asc" } },
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching product from database:", error);
+    throw new Response(`Database error: ${error instanceof Error ? error.message : "Unknown"}`, { status: 500 });
+  }
 
   if (!product3D || product3D.shop !== session.shop) {
     throw new Response("Product not found", { status: 404 });
