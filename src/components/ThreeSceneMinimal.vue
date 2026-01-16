@@ -1469,15 +1469,6 @@ const addToCart = async () => {
       console.log('📤 Sending ADD_TO_CART message to Shopify parent...')
       window.parent.postMessage(cartData, '*')
 
-      // Also send with alternative message type for compatibility
-      window.parent.postMessage({
-        type: 'ADD_TO_CART',
-        variantId: shopifyContext.variantId,
-        configuration: fullConfiguration,
-        quantity: 1,
-        previewImage: previewImage // Include preview image
-      }, '*')
-
       // Show success notification
       const notification = document.createElement('div')
       notification.textContent = `✅ Adding to cart...`
