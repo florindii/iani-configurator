@@ -1001,6 +1001,13 @@ const updateDebugStats = () => {
 
 // Helper functions for colors and materials
 const getColorHex = (colorValue) => {
+  // First, try to find in dynamic colorOptions (loaded from API)
+  const colorOption = colorOptions.value.find(c => c.value === colorValue)
+  if (colorOption && colorOption.hex) {
+    return parseInt(colorOption.hex.replace('#', '0x'))
+  }
+
+  // Fallback to hardcoded map for backward compatibility
   const colorMap = {
     blue: 0x4A90E2,
     red: 0xE74C3C,
