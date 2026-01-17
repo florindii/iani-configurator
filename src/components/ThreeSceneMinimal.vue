@@ -1450,24 +1450,54 @@ const getShopifyContext = () => {
 
 // Capture canvas screenshot as base64 image (thumbnail for cart)
 const capturePreviewImage = () => {
-  if (!renderer || !scene || !camera) {
+  if (!renderer || !scene || !camera || !controls) {
     console.warn('⚠️ Cannot capture preview - renderer not ready')
     return null
   }
 
   try {
-    // Render the current frame
+    // Store current camera position and selection state
+    const originalPosition = camera.position.clone()
+    const originalTarget = controls.target.clone()
+    const hadSelection = selectedPart.value !== null
+
+    // Clear selection to remove highlight outline
+    if (hadSelection) {
+      console.log('📸 Clearing selection for clean preview')
+      // Temporarily clear selection visuals without triggering UI updates
+      if (clickedMesh.value && clickedMesh.value.userData) {
+        // Remove any selection highlight effects
+      }
+    }
+    selectedPart.value = null
+    clickedMesh.value = null
+
+    // Zoom in for better preview - move camera closer to model
+    const zoomFactor = 0.65 // Closer zoom for cart thumbnail
+    camera.position.set(
+      originalPosition.x * zoomFactor,
+      originalPosition.y * zoomFactor,
+      originalPosition.z * zoomFactor
+    )
+    camera.lookAt(controls.target)
+    camera.updateProjectionMatrix()
+
+    // Render the zoomed, selection-free frame
     renderer.render(scene, camera)
 
     // Get the canvas
     const canvas = renderer.domElement
 
-    // Create a smaller thumbnail canvas (150x150) for cart display
-    const thumbnailSize = 150
+    // Create a thumbnail canvas (200x200 for better quality in cart)
+    const thumbnailSize = 200
     const thumbnailCanvas = document.createElement('canvas')
     thumbnailCanvas.width = thumbnailSize
     thumbnailCanvas.height = thumbnailSize
     const ctx = thumbnailCanvas.getContext('2d')
+
+    // Fill with white background
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, thumbnailSize, thumbnailSize)
 
     // Calculate center crop to maintain aspect ratio
     const sourceSize = Math.min(canvas.width, canvas.height)
@@ -1481,10 +1511,19 @@ const capturePreviewImage = () => {
       0, 0, thumbnailSize, thumbnailSize // Destination rectangle
     )
 
-    // Convert to base64 with lower quality for smaller size
-    const dataUrl = thumbnailCanvas.toDataURL('image/jpeg', 0.7)
+    // Convert to base64 with good quality
+    const dataUrl = thumbnailCanvas.toDataURL('image/jpeg', 0.85)
 
-    console.log('📸 Preview thumbnail captured, size:', Math.round(dataUrl.length / 1024), 'KB')
+    // Restore camera position
+    camera.position.copy(originalPosition)
+    controls.target.copy(originalTarget)
+    camera.lookAt(controls.target)
+    camera.updateProjectionMatrix()
+
+    // Re-render with original view
+    renderer.render(scene, camera)
+
+    console.log('📸 Preview thumbnail captured (zoomed, no selection), size:', Math.round(dataUrl.length / 1024), 'KB')
     return dataUrl
   } catch (error) {
     console.error('❌ Failed to capture preview:', error)
