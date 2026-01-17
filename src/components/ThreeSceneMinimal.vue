@@ -72,8 +72,8 @@
         <!-- Price Display -->
         <div class="price-section">
           <div class="current-price">
-            <span class="currency">$</span>
-            <span class="amount">{{ calculatedPrice.toFixed(2) }}</span>
+            <span class="currency">{{ currencySymbol }}</span>
+            <span class="amount">{{ formatPrice(calculatedPrice) }}</span>
           </div>
         </div>
 
@@ -192,7 +192,7 @@
             :disabled="!model || isAddingToCart"
             class="add-to-cart-btn">
             <span v-if="isAddingToCart">Adding to Cart...</span>
-            <span v-else">Add to Cart - ${{ calculatedPrice.toFixed(2) }}</span>
+            <span v-else>Add to Cart - {{ currencySymbol }}{{ formatPrice(calculatedPrice) }}</span>
           </button>
         </div>
       </div>
@@ -280,9 +280,24 @@ const frameOptions = ref([
 const configLoaded = ref(false)
 const productName = ref('Customize Your Product')
 
+// Shopify price context (from URL params)
+const shopifyBasePrice = ref(null)
+const shopifyCurrency = ref('USD')
+
 // Load configuration from merchant's settings
 const loadProductConfig = async () => {
   const context = getShopifyContext()
+
+  // Capture Shopify price and currency from context
+  if (context.price) {
+    shopifyBasePrice.value = context.price
+    console.log('💰 Using Shopify product price:', context.price)
+  }
+  if (context.currency) {
+    shopifyCurrency.value = context.currency
+    console.log('💱 Using currency:', context.currency)
+  }
+
   if (!context.productId || !context.shop) {
     console.log('📋 No product/shop context, using default options')
     return
@@ -371,24 +386,72 @@ const legOptions = ref([
 
 
 
-// Computed price
+// Computed price - uses Shopify product price as base when available
 const calculatedPrice = computed(() => {
-  let basePrice = 299.99
-  
+  // Start with Shopify product price if available, otherwise use color price or default
+  let basePrice = shopifyBasePrice.value || 299.99
+
+  // If we have color options with prices, use the selected color's price as the base
+  // This allows merchants to set different prices per color
   const selectedColor = colorOptions.value.find(c => c.value === configuration.value.cushionColor)
-  if (selectedColor) basePrice = selectedColor.price
-  
+  if (selectedColor && selectedColor.price && !shopifyBasePrice.value) {
+    basePrice = selectedColor.price
+  }
+
+  // Add extra costs from selected options
   const selectedFrame = frameOptions.value.find(f => f.value === configuration.value.frameMaterial)
   if (selectedFrame) basePrice += selectedFrame.extraCost
-  
+
   const selectedPillow = pillowOptions.value.find(p => p.value === configuration.value.pillowStyle)
   if (selectedPillow) basePrice += selectedPillow.extraCost
-  
+
   const selectedLeg = legOptions.value.find(l => l.value === configuration.value.legStyle)
   if (selectedLeg) basePrice += selectedLeg.extraCost
-  
+
   return basePrice
 })
+
+// Currency symbol based on Shopify currency
+const currencySymbol = computed(() => {
+  const symbols = {
+    'USD': '$',
+    'EUR': '€',
+    'GBP': '£',
+    'RSD': 'RSD ',
+    'CAD': 'C$',
+    'AUD': 'A$',
+    'JPY': '¥',
+    'CNY': '¥',
+    'INR': '₹',
+    'BRL': 'R$',
+    'MXN': 'MX$',
+    'CHF': 'CHF ',
+    'SEK': 'kr ',
+    'NOK': 'kr ',
+    'DKK': 'kr ',
+    'PLN': 'zł ',
+    'CZK': 'Kč ',
+    'HUF': 'Ft ',
+    'RUB': '₽',
+    'TRY': '₺',
+    'ZAR': 'R ',
+    'KRW': '₩',
+    'SGD': 'S$',
+    'HKD': 'HK$',
+    'NZD': 'NZ$'
+  }
+  return symbols[shopifyCurrency.value] || shopifyCurrency.value + ' '
+})
+
+// Format price based on currency
+const formatPrice = (price) => {
+  // For currencies without decimal (like JPY, KRW)
+  const noDecimalCurrencies = ['JPY', 'KRW', 'HUF', 'VND']
+  if (noDecimalCurrencies.includes(shopifyCurrency.value)) {
+    return Math.round(price).toLocaleString()
+  }
+  return price.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
 
 // Helper functions for labels
 const getSelectedColorLabel = () => {
@@ -1377,6 +1440,8 @@ const getShopifyContext = () => {
     handle: urlParams.get('handle'),
     currency: urlParams.get('currency') || 'USD',
     embedded: urlParams.get('embedded') === 'true',
+    // Price from Shopify product (passed via URL param)
+    price: urlParams.get('price') ? parseFloat(urlParams.get('price').replace(/[^0-9.]/g, '')) : null,
     // New: Support for dynamic model URLs from Shopify product media
     modelUrl: urlParams.get('modelUrl'),
     modelFile: urlParams.get('modelFile')
