@@ -158,7 +158,7 @@ const selectedColorLocal = ref(props.selectedColor)
 // Three.js instances
 let renderer: THREE.WebGLRenderer | null = null
 let scene: THREE.Scene | null = null
-let camera: THREE.OrthographicCamera | null = null
+let camera: THREE.PerspectiveCamera | null = null
 let model: THREE.Object3D | null = null
 let animationFrameId: number | null = null
 
@@ -240,6 +240,10 @@ async function requestCameraAccess() {
   }
 }
 
+// Store canvas dimensions for positioning calculations
+let canvasWidth = 640
+let canvasHeight = 480
+
 /**
  * Initialize Three.js scene
  */
@@ -250,8 +254,12 @@ async function initThreeJS() {
   const video = videoElement.value
 
   // Match canvas size to video
-  canvas.width = video.videoWidth || 640
-  canvas.height = video.videoHeight || 480
+  canvasWidth = video.videoWidth || 640
+  canvasHeight = video.videoHeight || 480
+  canvas.width = canvasWidth
+  canvas.height = canvasHeight
+
+  console.log('📐 Canvas size:', canvasWidth, 'x', canvasHeight)
 
   // Create renderer with transparent background
   renderer = new THREE.WebGLRenderer({
@@ -259,28 +267,29 @@ async function initThreeJS() {
     alpha: true,
     antialias: true
   })
-  renderer.setSize(canvas.width, canvas.height)
+  renderer.setSize(canvasWidth, canvasHeight)
   renderer.setClearColor(0x000000, 0) // Fully transparent
 
   // Create scene
   scene = new THREE.Scene()
 
-  // Create orthographic camera (matches video coordinates)
-  const aspect = canvas.width / canvas.height
-  camera = new THREE.OrthographicCamera(
-    -1 * aspect, 1 * aspect,
-    1, -1,
-    0.1, 1000
-  )
-  camera.position.z = 5
+  // Create perspective camera for better 3D effect
+  const fov = 50
+  const aspect = canvasWidth / canvasHeight
+  camera = new THREE.PerspectiveCamera(fov, aspect, 0.1, 1000)
+  camera.position.z = 2
 
   // Add lights
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.7)
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8)
   scene.add(ambientLight)
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
-  directionalLight.position.set(0, 1, 1)
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6)
+  directionalLight.position.set(0, 1, 2)
   scene.add(directionalLight)
+
+  const backLight = new THREE.DirectionalLight(0xffffff, 0.3)
+  backLight.position.set(0, 0, -1)
+  scene.add(backLight)
 
   // Load 3D model
   await loadModel()
@@ -339,24 +348,46 @@ async function loadModel() {
 
     console.log('📐 Model children:', model.children.length)
 
-    // Adjust model scale and position based on product type
+    // Calculate model bounding box to auto-scale
+    const box = new THREE.Box3().setFromObject(model)
+    const size = box.getSize(new THREE.Vector3())
+    const center = box.getCenter(new THREE.Vector3())
+
+    console.log('📏 Original model size:', size)
+    console.log('📍 Original model center:', center)
+
+    // Calculate scale to fit glasses to reasonable size (about 0.3 units wide for perspective camera)
+    const maxDim = Math.max(size.x, size.y, size.z)
+    const targetSize = 0.4 // Target size in world units
+    const autoScale = targetSize / maxDim
+
+    console.log('🔧 Auto-scale factor:', autoScale)
+
+    // Save base scale for face tracking adjustments
+    baseModelScale = autoScale
+
+    // Apply scale and center the model
+    model.scale.setScalar(autoScale)
+
+    // Center the model at origin
+    model.position.x = -center.x * autoScale
+    model.position.y = -center.y * autoScale
+    model.position.z = -center.z * autoScale
+
+    // Rotate to face camera
     if (props.productType === 'glasses') {
-      // Start with a reasonable default scale
-      model.scale.setScalar(0.3)
-      model.rotation.y = Math.PI // Face towards camera
+      model.rotation.y = Math.PI
     }
 
-    // Make model visible immediately for debugging
-    // Face tracking will reposition it
+    // Make model visible
     model.visible = true
-    model.position.set(0, 0, 0)
 
     scene.add(model)
     modelLoaded.value = true
 
     console.log('✅ Try-on model added to scene:', props.modelUrl)
-    console.log('📊 Model position:', model.position)
-    console.log('📊 Model scale:', model.scale)
+    console.log('📊 Final model position:', model.position)
+    console.log('📊 Final model scale:', model.scale)
 
   } catch (error: any) {
     console.error('❌ Failed to load try-on model:', error)
@@ -492,6 +523,9 @@ async function startFaceTracking() {
   }
 }
 
+// Store base scale from model loading
+let baseModelScale = 1
+
 /**
  * Update 3D model position based on face landmarks
  */
@@ -501,27 +535,39 @@ function updateModelPosition(landmarks: FaceLandmarks) {
   model.visible = true
 
   if (props.productType === 'glasses') {
-    // Position glasses at nose bridge
-    // Convert normalized coordinates (0-1) to Three.js coordinates
-    const aspect = (tryOnCanvas.value?.width || 640) / (tryOnCanvas.value?.height || 480)
+    // For perspective camera, we need to convert normalized coords to screen space
+    // Landmarks are 0-1 where (0,0) is top-left
 
-    // Center of glasses should be at nose bridge
-    // Normalize: 0,0 is top-left in video, center should be 0,0 in Three.js
-    const x = (landmarks.noseBridge.x - 0.5) * 2 * aspect
-    const y = -(landmarks.noseBridge.y - 0.5) * 2
+    // Convert to centered coordinates (-0.5 to 0.5)
+    const normalizedX = landmarks.noseBridge.x - 0.5  // -0.5 to 0.5
+    const normalizedY = -(landmarks.noseBridge.y - 0.5) // flip Y, -0.5 to 0.5
+
+    // Scale to camera frustum (approximately -1 to 1 at z=0 for our setup)
+    const frustumScale = 1.5 // Adjust based on camera FOV
+    const x = normalizedX * frustumScale * (canvasWidth / canvasHeight)
+    const y = normalizedY * frustumScale
 
     model.position.x = x
     model.position.y = y
     model.position.z = 0
 
-    // Scale based on eye distance
-    const scale = landmarks.eyeDistance * 3 // Adjust multiplier as needed
-    model.scale.setScalar(scale)
+    // Scale based on eye distance (typical eye distance is ~0.15-0.25 normalized)
+    // Use this to scale the glasses relative to face size
+    const eyeDistanceScale = landmarks.eyeDistance / 0.2 // Normalize around typical distance
+    const finalScale = baseModelScale * eyeDistanceScale * 1.5
+
+    model.scale.setScalar(finalScale)
 
     // Apply face rotation
-    model.rotation.x = landmarks.rotation.pitch * 0.5
-    model.rotation.y = Math.PI + landmarks.rotation.yaw
-    model.rotation.z = -landmarks.rotation.roll
+    model.rotation.x = landmarks.rotation.pitch * 0.3
+    model.rotation.y = Math.PI + landmarks.rotation.yaw * 0.8
+    model.rotation.z = -landmarks.rotation.roll * 0.8
+
+    // Log occasionally for debugging
+    if (Math.random() < 0.02) { // ~2% of frames
+      console.log('👓 Glasses position:', { x: x.toFixed(3), y: y.toFixed(3) })
+      console.log('👓 Eye distance:', landmarks.eyeDistance.toFixed(3), 'Scale:', finalScale.toFixed(3))
+    }
   }
 }
 
