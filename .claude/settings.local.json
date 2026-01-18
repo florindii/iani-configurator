@@ -13,7 +13,15 @@
       "Bash(dir /s /b \"public\\models\\*.glb\")",
       "Bash(findstr:*)",
       "Bash(du:*)",
-      "Bash(npx prisma migrate:*)"
+      "Bash(npx prisma migrate:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "WebFetch(domain:iani-configurator-1.onrender.com)",
+      "mcp__Neon__list_projects",
+      "mcp__Neon__get_database_tables",
+      "mcp__Neon__run_sql",
+      "mcp__Neon__describe_table_schema"
     ]
   }
 }

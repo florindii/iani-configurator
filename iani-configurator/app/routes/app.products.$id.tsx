@@ -15,6 +15,8 @@ import {
   Badge,
   Modal,
   TextContainer,
+  Checkbox,
+  Select,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -153,6 +155,20 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     return json({ success: true });
   }
 
+  if (intent === "update-try-on") {
+    const tryOnEnabled = formData.get("tryOnEnabled") === "true";
+    const tryOnType = formData.get("tryOnType") as string | null;
+
+    await db.product3D.update({
+      where: { id },
+      data: {
+        tryOnEnabled,
+        tryOnType: tryOnEnabled ? tryOnType : null,
+      },
+    });
+    return json({ success: true });
+  }
+
   // Update product
   const name = formData.get("name") as string;
   const basePrice = parseFloat(formData.get("basePrice") as string) || 0;
@@ -218,6 +234,15 @@ export default function EditProduct() {
     }))
   );
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [tryOnEnabled, setTryOnEnabled] = useState(product3D.tryOnEnabled || false);
+  const [tryOnType, setTryOnType] = useState(product3D.tryOnType || "glasses");
+
+  const tryOnTypeOptions = [
+    { label: "Glasses / Sunglasses", value: "glasses" },
+    { label: "Hat / Cap", value: "hat" },
+    { label: "Earrings", value: "earrings" },
+    { label: "Necklace", value: "necklace" },
+  ];
 
   const handleColorChange = (index: number, field: string, value: string) => {
     const newColors = [...colors];
@@ -273,6 +298,14 @@ export default function EditProduct() {
   const handleDelete = () => {
     const formData = new FormData();
     formData.set("intent", "delete");
+    submit(formData, { method: "post" });
+  };
+
+  const handleTryOnSave = () => {
+    const formData = new FormData();
+    formData.set("intent", "update-try-on");
+    formData.set("tryOnEnabled", tryOnEnabled.toString());
+    formData.set("tryOnType", tryOnType);
     submit(formData, { method: "post" });
   };
 
@@ -451,6 +484,52 @@ export default function EditProduct() {
                     </Button>
                   </InlineStack>
                 ))}
+              </BlockStack>
+            </Card>
+
+            <Card>
+              <BlockStack gap="400">
+                <InlineStack align="space-between">
+                  <Text as="h2" variant="headingMd">
+                    Virtual Try-On Settings
+                  </Text>
+                  {tryOnEnabled && (
+                    <Badge tone="info">Try-On Enabled</Badge>
+                  )}
+                </InlineStack>
+                <Text as="p" variant="bodyMd" tone="subdued">
+                  Enable virtual try-on for face-worn products like glasses, hats, or jewelry.
+                  Customers can use their camera to see how the product looks on them.
+                </Text>
+                <Divider />
+                <Checkbox
+                  label="Enable Virtual Try-On"
+                  checked={tryOnEnabled}
+                  onChange={setTryOnEnabled}
+                  helpText="When enabled, customers will see a 'Try On' button on the product page"
+                />
+                {tryOnEnabled && (
+                  <Select
+                    label="Product Type"
+                    options={tryOnTypeOptions}
+                    value={tryOnType}
+                    onChange={setTryOnType}
+                    helpText="Select the type of product for proper face positioning"
+                  />
+                )}
+                {tryOnEnabled && !shopifyProduct?.has3DModel && (
+                  <Banner tone="warning">
+                    <p>
+                      Please upload a 3D model (GLB/GLTF) in the Shopify product media for virtual try-on to work.
+                      The model should be a face-worn item like glasses or sunglasses.
+                    </p>
+                  </Banner>
+                )}
+                <InlineStack align="end">
+                  <Button onClick={handleTryOnSave} loading={isSubmitting}>
+                    Save Try-On Settings
+                  </Button>
+                </InlineStack>
               </BlockStack>
             </Card>
 

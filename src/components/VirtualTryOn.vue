@@ -1,0 +1,858 @@
+<template>
+  <div class="try-on-overlay" @click.self="handleClose">
+    <div class="try-on-container">
+      <!-- Header -->
+      <div class="try-on-header">
+        <h2>Virtual Try-On</h2>
+        <button class="close-button" @click="handleClose">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Main Content -->
+      <div class="try-on-content">
+        <!-- Camera Permission Request -->
+        <div v-if="!cameraReady && !cameraError" class="camera-request">
+          <div class="camera-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+              <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+          </div>
+          <h3>Enable Camera Access</h3>
+          <p>To use virtual try-on, we need access to your camera</p>
+          <button class="enable-camera-btn" @click="requestCameraAccess">
+            Enable Camera
+          </button>
+        </div>
+
+        <!-- Camera Error -->
+        <div v-if="cameraError" class="camera-error">
+          <div class="error-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+          <h3>Camera Access Denied</h3>
+          <p>{{ cameraError }}</p>
+          <button class="retry-btn" @click="requestCameraAccess">
+            Try Again
+          </button>
+        </div>
+
+        <!-- Try-On View -->
+        <div v-if="cameraReady" class="try-on-view">
+          <!-- Video Feed (mirrored for selfie view) -->
+          <video
+            ref="videoElement"
+            class="camera-feed"
+            autoplay
+            playsinline
+            muted
+          ></video>
+
+          <!-- Three.js Canvas Overlay (transparent) -->
+          <canvas ref="tryOnCanvas" class="model-overlay"></canvas>
+
+          <!-- Face Detection Guide -->
+          <div v-if="!faceDetected" class="face-guide">
+            <div class="face-outline"></div>
+            <p>Position your face in the frame</p>
+          </div>
+
+          <!-- Loading Model -->
+          <div v-if="isLoadingModel" class="loading-model">
+            <div class="spinner"></div>
+            <p>Loading 3D model...</p>
+          </div>
+
+          <!-- Capture Success Message -->
+          <div v-if="showCaptureSuccess" class="capture-success">
+            Photo saved!
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div v-if="cameraReady" class="try-on-controls">
+        <!-- Color Options -->
+        <div class="color-options" v-if="colorOptions.length > 0">
+          <span class="control-label">Color:</span>
+          <div class="color-swatches">
+            <button
+              v-for="color in colorOptions"
+              :key="color.value"
+              class="color-swatch"
+              :class="{ active: selectedColor === color.value }"
+              :style="{ backgroundColor: color.hex }"
+              :title="color.name"
+              @click="selectColor(color.value)"
+            ></button>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+          <!-- Capture for Cart -->
+          <button class="capture-btn" @click="captureAndSave" title="Use as cart preview">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <span>Save Preview</span>
+          </button>
+
+          <!-- Download Photo -->
+          <button class="download-btn" @click="downloadPhoto" title="Download photo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7,10 12,15 17,10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Download</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import * as THREE from 'three'
+import { GLTFLoader } from 'three-stdlib'
+import { getFaceTrackingService, type FaceLandmarks } from '../services/faceTrackingService'
+
+// Props
+const props = defineProps<{
+  modelUrl: string
+  productType: string // 'glasses', 'hat', 'earrings', 'necklace'
+  colorOptions: Array<{ value: string; name: string; hex: string }>
+  selectedColor: string
+}>()
+
+// Emits
+const emit = defineEmits<{
+  (e: 'close'): void
+  (e: 'capturePreview', dataUrl: string): void
+  (e: 'colorChange', color: string): void
+}>()
+
+// Refs
+const videoElement = ref<HTMLVideoElement | null>(null)
+const tryOnCanvas = ref<HTMLCanvasElement | null>(null)
+
+// State
+const cameraReady = ref(false)
+const cameraError = ref<string | null>(null)
+const faceDetected = ref(false)
+const isLoadingModel = ref(true)
+const showCaptureSuccess = ref(false)
+const selectedColorLocal = ref(props.selectedColor)
+
+// Three.js instances
+let renderer: THREE.WebGLRenderer | null = null
+let scene: THREE.Scene | null = null
+let camera: THREE.OrthographicCamera | null = null
+let model: THREE.Object3D | null = null
+let animationFrameId: number | null = null
+
+// Face tracking service
+const faceTracker = getFaceTrackingService()
+
+/**
+ * Request camera access
+ */
+async function requestCameraAccess() {
+  cameraError.value = null
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'user', // Front camera
+        width: { ideal: 640 },
+        height: { ideal: 480 }
+      }
+    })
+
+    await nextTick()
+
+    if (videoElement.value) {
+      videoElement.value.srcObject = stream
+      await videoElement.value.play()
+      cameraReady.value = true
+
+      // Initialize Three.js after camera is ready
+      await initThreeJS()
+
+      // Start face tracking
+      await startFaceTracking()
+    }
+  } catch (error: any) {
+    console.error('Camera access error:', error)
+
+    if (error.name === 'NotAllowedError') {
+      cameraError.value = 'Camera access was denied. Please allow camera access in your browser settings.'
+    } else if (error.name === 'NotFoundError') {
+      cameraError.value = 'No camera found. Please connect a camera and try again.'
+    } else {
+      cameraError.value = `Failed to access camera: ${error.message}`
+    }
+  }
+}
+
+/**
+ * Initialize Three.js scene
+ */
+async function initThreeJS() {
+  if (!tryOnCanvas.value || !videoElement.value) return
+
+  const canvas = tryOnCanvas.value
+  const video = videoElement.value
+
+  // Match canvas size to video
+  canvas.width = video.videoWidth || 640
+  canvas.height = video.videoHeight || 480
+
+  // Create renderer with transparent background
+  renderer = new THREE.WebGLRenderer({
+    canvas,
+    alpha: true,
+    antialias: true
+  })
+  renderer.setSize(canvas.width, canvas.height)
+  renderer.setClearColor(0x000000, 0) // Fully transparent
+
+  // Create scene
+  scene = new THREE.Scene()
+
+  // Create orthographic camera (matches video coordinates)
+  const aspect = canvas.width / canvas.height
+  camera = new THREE.OrthographicCamera(
+    -1 * aspect, 1 * aspect,
+    1, -1,
+    0.1, 1000
+  )
+  camera.position.z = 5
+
+  // Add lights
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.7)
+  scene.add(ambientLight)
+
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
+  directionalLight.position.set(0, 1, 1)
+  scene.add(directionalLight)
+
+  // Load 3D model
+  await loadModel()
+
+  // Start render loop
+  startRenderLoop()
+}
+
+/**
+ * Load 3D model
+ */
+async function loadModel() {
+  if (!scene) return
+
+  isLoadingModel.value = true
+
+  try {
+    const loader = new GLTFLoader()
+
+    const gltf = await new Promise<any>((resolve, reject) => {
+      loader.load(
+        props.modelUrl,
+        resolve,
+        undefined,
+        reject
+      )
+    })
+
+    model = gltf.scene
+
+    // Adjust model scale and position based on product type
+    if (model && props.productType === 'glasses') {
+      model.scale.setScalar(0.15) // Will be adjusted by face tracking
+      model.rotation.y = Math.PI // Face towards camera
+    }
+
+    // Initially hide model until face is detected
+    if (model) {
+      model.visible = false
+      if (scene) {
+        scene.add(model)
+      }
+    }
+
+    console.log('Try-on model loaded:', props.modelUrl)
+
+  } catch (error) {
+    console.error('Failed to load try-on model:', error)
+  } finally {
+    isLoadingModel.value = false
+  }
+}
+
+/**
+ * Start face tracking
+ */
+async function startFaceTracking() {
+  if (!videoElement.value) return
+
+  try {
+    await faceTracker.initialize()
+
+    faceTracker.onFaceDetected((landmarks: FaceLandmarks) => {
+      faceDetected.value = true
+      updateModelPosition(landmarks)
+    })
+
+    faceTracker.onFaceLost(() => {
+      faceDetected.value = false
+      if (model) {
+        model.visible = false
+      }
+    })
+
+    await faceTracker.startTracking(videoElement.value)
+
+  } catch (error) {
+    console.error('Failed to start face tracking:', error)
+  }
+}
+
+/**
+ * Update 3D model position based on face landmarks
+ */
+function updateModelPosition(landmarks: FaceLandmarks) {
+  if (!model || !camera) return
+
+  model.visible = true
+
+  if (props.productType === 'glasses') {
+    // Position glasses at nose bridge
+    // Convert normalized coordinates (0-1) to Three.js coordinates
+    const aspect = (tryOnCanvas.value?.width || 640) / (tryOnCanvas.value?.height || 480)
+
+    // Center of glasses should be at nose bridge
+    // Normalize: 0,0 is top-left in video, center should be 0,0 in Three.js
+    const x = (landmarks.noseBridge.x - 0.5) * 2 * aspect
+    const y = -(landmarks.noseBridge.y - 0.5) * 2
+
+    model.position.x = x
+    model.position.y = y
+    model.position.z = 0
+
+    // Scale based on eye distance
+    const scale = landmarks.eyeDistance * 3 // Adjust multiplier as needed
+    model.scale.setScalar(scale)
+
+    // Apply face rotation
+    model.rotation.x = landmarks.rotation.pitch * 0.5
+    model.rotation.y = Math.PI + landmarks.rotation.yaw
+    model.rotation.z = -landmarks.rotation.roll
+  }
+}
+
+/**
+ * Start render loop
+ */
+function startRenderLoop() {
+  const render = () => {
+    if (renderer && scene && camera) {
+      renderer.render(scene, camera)
+    }
+    animationFrameId = requestAnimationFrame(render)
+  }
+  render()
+}
+
+/**
+ * Select color
+ */
+function selectColor(color: string) {
+  selectedColorLocal.value = color
+  emit('colorChange', color)
+
+  // Apply color to model
+  if (model) {
+    const colorHex = props.colorOptions.find(c => c.value === color)?.hex || '#000000'
+    applyColorToModel(colorHex)
+  }
+}
+
+/**
+ * Apply color to 3D model
+ */
+function applyColorToModel(hexColor: string) {
+  if (!model) return
+
+  const color = new THREE.Color(hexColor)
+
+  model.traverse((child: THREE.Object3D) => {
+    if ((child as THREE.Mesh).isMesh) {
+      const mesh = child as THREE.Mesh
+      if (mesh.material) {
+        if (Array.isArray(mesh.material)) {
+          mesh.material.forEach((mat) => {
+            if ((mat as THREE.MeshStandardMaterial).color) {
+              (mat as THREE.MeshStandardMaterial).color.copy(color)
+            }
+          })
+        } else {
+          const mat = mesh.material as THREE.MeshStandardMaterial
+          if (mat.color) mat.color.copy(color)
+        }
+      }
+    }
+  })
+}
+
+/**
+ * Combine video and 3D overlay into single canvas
+ */
+function combineVideoAndModel(): HTMLCanvasElement {
+  const canvas = document.createElement('canvas')
+  const video = videoElement.value!
+  const overlay = tryOnCanvas.value!
+
+  canvas.width = video.videoWidth || 640
+  canvas.height = video.videoHeight || 480
+
+  const ctx = canvas.getContext('2d')!
+
+  // Draw mirrored video (selfie style)
+  ctx.save()
+  ctx.scale(-1, 1)
+  ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height)
+  ctx.restore()
+
+  // Draw 3D overlay (also mirrored)
+  ctx.save()
+  ctx.scale(-1, 1)
+  ctx.drawImage(overlay, -canvas.width, 0, canvas.width, canvas.height)
+  ctx.restore()
+
+  return canvas
+}
+
+/**
+ * Capture and save as cart preview
+ */
+function captureAndSave() {
+  const canvas = combineVideoAndModel()
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+
+  emit('capturePreview', dataUrl)
+
+  // Show success message
+  showCaptureSuccess.value = true
+  setTimeout(() => {
+    showCaptureSuccess.value = false
+  }, 2000)
+}
+
+/**
+ * Download photo
+ */
+function downloadPhoto() {
+  const canvas = combineVideoAndModel()
+  const link = document.createElement('a')
+  link.download = `try-on-${Date.now()}.jpg`
+  link.href = canvas.toDataURL('image/jpeg', 0.9)
+  link.click()
+}
+
+/**
+ * Handle close
+ */
+function handleClose() {
+  emit('close')
+}
+
+/**
+ * Cleanup
+ */
+function cleanup() {
+  // Stop face tracking
+  faceTracker.stopTracking()
+
+  // Stop render loop
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
+
+  // Stop camera stream
+  if (videoElement.value?.srcObject) {
+    const stream = videoElement.value.srcObject as MediaStream
+    stream.getTracks().forEach(track => track.stop())
+  }
+
+  // Dispose Three.js resources
+  if (renderer) {
+    renderer.dispose()
+    renderer = null
+  }
+  if (scene) {
+    scene.clear()
+    scene = null
+  }
+  camera = null
+  model = null
+}
+
+// Watch for color changes from parent
+watch(() => props.selectedColor, (newColor) => {
+  selectedColorLocal.value = newColor
+  if (model) {
+    const colorHex = props.colorOptions.find(c => c.value === newColor)?.hex || '#000000'
+    applyColorToModel(colorHex)
+  }
+})
+
+// Lifecycle
+onMounted(() => {
+  // Auto-request camera on mount
+  // requestCameraAccess() // Uncomment to auto-start
+})
+
+onUnmounted(() => {
+  cleanup()
+})
+</script>
+
+<style scoped>
+.try-on-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.try-on-container {
+  background: #1a1a1a;
+  border-radius: 16px;
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.try-on-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #333;
+}
+
+.try-on-header h2 {
+  color: white;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.close-button:hover {
+  background: #333;
+  color: white;
+}
+
+.try-on-content {
+  flex: 1;
+  position: relative;
+  min-height: 400px;
+}
+
+.camera-request,
+.camera-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+}
+
+.camera-icon,
+.error-icon {
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.error-icon {
+  color: #ff4444;
+}
+
+.camera-request h3,
+.camera-error h3 {
+  color: white;
+  margin: 0 0 12px 0;
+  font-size: 20px;
+}
+
+.camera-request p,
+.camera-error p {
+  color: #888;
+  margin: 0 0 24px 0;
+  max-width: 300px;
+}
+
+.enable-camera-btn,
+.retry-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 14px 32px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.enable-camera-btn:hover,
+.retry-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+}
+
+.try-on-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+}
+
+.camera-feed {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* Mirror for selfie view */
+}
+
+.model-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  transform: scaleX(-1); /* Mirror to match video */
+}
+
+.face-guide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.face-outline {
+  width: 200px;
+  height: 280px;
+  border: 3px dashed rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+}
+
+.face-guide p {
+  color: white;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.loading-model {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 24px 32px;
+  border-radius: 12px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #333;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-model p {
+  color: white;
+  margin: 0;
+  font-size: 14px;
+}
+
+.capture-success {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #22c55e;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  animation: fadeInOut 2s ease-in-out;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  20% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  80% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+}
+
+.try-on-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-top: 1px solid #333;
+  background: #222;
+}
+
+.color-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.control-label {
+  color: #888;
+  font-size: 14px;
+}
+
+.color-swatches {
+  display: flex;
+  gap: 8px;
+}
+
+.color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch.active {
+  border-color: white;
+  box-shadow: 0 0 0 2px #667eea;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.capture-btn,
+.download-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #333;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.capture-btn:hover {
+  background: #667eea;
+}
+
+.download-btn:hover {
+  background: #22c55e;
+}
+
+/* Mobile Responsive */
+@media (max-width: 640px) {
+  .try-on-overlay {
+    padding: 0;
+  }
+
+  .try-on-container {
+    max-width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .try-on-controls {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .action-buttons {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .capture-btn,
+  .download-btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+</style>

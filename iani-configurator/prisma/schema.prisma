@@ -44,6 +44,10 @@ model Product3D {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  // Virtual Try-On Settings
+  tryOnEnabled    Boolean  @default(false) // Enable try-on feature for this product
+  tryOnType       String?  // "glasses", "hat", "earrings", "necklace" - type of try-on product
+
   // Relations
   configurations  ProductConfiguration[]
   colorOptions    ColorOption[]

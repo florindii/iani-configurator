@@ -187,8 +187,21 @@
 
         <!-- Add to Cart Button -->
         <div class="cart-section">
-          <button 
-            @click="addToCart" 
+          <!-- Try-On Button (only shown when enabled) -->
+          <button
+            v-if="tryOnEnabled"
+            @click="openTryOn"
+            class="try-on-btn"
+            title="Try on using your camera">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+              <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+            <span>Try On</span>
+          </button>
+
+          <button
+            @click="addToCart"
             :disabled="!model || isAddingToCart"
             class="add-to-cart-btn">
             <span v-if="isAddingToCart">Adding to Cart...</span>
@@ -197,6 +210,18 @@
         </div>
       </div>
     </div>
+
+    <!-- Virtual Try-On Modal -->
+    <VirtualTryOn
+      v-if="showTryOnModal"
+      :model-url="currentModelUrl"
+      :product-type="tryOnType"
+      :color-options="colorOptionsForTryOn"
+      :selected-color="configuration.cushionColor"
+      @close="closeTryOn"
+      @capturePreview="handleTryOnCapture"
+      @colorChange="handleTryOnColorChange"
+    />
   </div>
 </template>
 
@@ -205,6 +230,7 @@ import { onMounted, onUnmounted, ref, computed } from 'vue'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import VirtualTryOn from './VirtualTryOn.vue'
 
 // Refs
 const canvasContainer = ref(null)
@@ -284,6 +310,13 @@ const productName = ref('Customize Your Product')
 const shopifyBasePrice = ref(null)
 const shopifyCurrency = ref('USD')
 
+// Virtual Try-On state
+const tryOnEnabled = ref(false)
+const tryOnType = ref('glasses')
+const showTryOnModal = ref(false)
+const tryOnModelUrl = ref('')
+const tryOnPreviewImage = ref(null) // Captured try-on image for cart
+
 // Load configuration from merchant's settings
 const loadProductConfig = async () => {
   const context = getShopifyContext()
@@ -353,6 +386,13 @@ const loadProductConfig = async () => {
             if (defaultMaterial) {
               configuration.value.frameMaterial = defaultMaterial.name.toLowerCase().replace(/\s+/g, '-')
             }
+          }
+
+          // Load Virtual Try-On settings
+          if (data.config.tryOnEnabled) {
+            tryOnEnabled.value = true
+            tryOnType.value = data.config.tryOnType || 'glasses'
+            console.log('👓 Try-On enabled:', tryOnType.value)
           }
 
           configLoaded.value = true
@@ -647,7 +687,7 @@ const clearSelection = () => {
   selectedPart.value = null
   clickedMesh.value = null
   console.log('🗑️ Cleared mesh selection')
-  
+
   // Remove highlights from all meshes
   sofaParts.all.forEach(part => {
     if (part.userData.isHighlighted) {
@@ -657,6 +697,51 @@ const clearSelection = () => {
       part.userData.isHighlighted = false
     }
   })
+}
+
+// ====== VIRTUAL TRY-ON FUNCTIONS ======
+
+// Get current model URL for try-on
+const currentModelUrl = computed(() => {
+  // Use the currently loaded model path
+  return `/models/${selectedModel.value}`
+})
+
+// Transform color options for try-on component format
+const colorOptionsForTryOn = computed(() => {
+  return colorOptions.value.map(c => ({
+    value: c.value,
+    name: c.label,
+    hex: c.hex
+  }))
+})
+
+// Open try-on modal
+const openTryOn = () => {
+  console.log('👓 Opening Virtual Try-On...')
+  showTryOnModal.value = true
+}
+
+// Close try-on modal
+const closeTryOn = () => {
+  console.log('👓 Closing Virtual Try-On')
+  showTryOnModal.value = false
+}
+
+// Handle captured try-on preview image
+const handleTryOnCapture = (dataUrl) => {
+  console.log('📸 Try-on preview captured')
+  tryOnPreviewImage.value = dataUrl
+  // This image can be used as the cart preview instead of 3D model screenshot
+}
+
+// Handle color change from try-on modal
+const handleTryOnColorChange = (colorValue) => {
+  console.log('🎨 Try-on color changed:', colorValue)
+  const colorOption = colorOptions.value.find(c => c.value === colorValue)
+  if (colorOption) {
+    setPresetColor(colorValue, colorOption.hex)
+  }
 }
 
 
@@ -2274,6 +2359,36 @@ onUnmounted(() => {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+/* Virtual Try-On Button */
+.try-on-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  padding: 14px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+  margin-bottom: 12px;
+}
+
+.try-on-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  background: linear-gradient(135deg, #5a6fd6, #6b429a);
+}
+
+.try-on-btn svg {
+  flex-shrink: 0;
 }
 
 /* Mobile Responsive */

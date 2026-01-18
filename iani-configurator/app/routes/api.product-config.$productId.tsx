@@ -50,6 +50,9 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
           config: {
             name: "Product",
             basePrice: 299.99,
+            // Virtual Try-On disabled by default
+            tryOnEnabled: false,
+            tryOnType: null,
             colorOptions: [
               { name: "Ocean Blue", hexCode: "#1E90FF", price: 299.99, isDefault: true },
               { name: "Crimson Red", hexCode: "#DC143C", price: 319.99, isDefault: false },
@@ -82,6 +85,9 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
           basePrice: product3D.basePrice,
           useShopifyModel: product3D.useShopifyModel,
           baseModelUrl: product3D.baseModelUrl,
+          // Virtual Try-On settings
+          tryOnEnabled: product3D.tryOnEnabled,
+          tryOnType: product3D.tryOnType,
           colorOptions: product3D.colorOptions.map((c) => ({
             id: c.id,
             name: c.name,
