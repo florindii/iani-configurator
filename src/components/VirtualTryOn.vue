@@ -374,10 +374,8 @@ async function loadModel() {
     model.position.y = -center.y * autoScale
     model.position.z = -center.z * autoScale
 
-    // Rotate to face camera
-    if (props.productType === 'glasses') {
-      model.rotation.y = Math.PI
-    }
+    // NOTE: Do NOT add initial rotation here - the model should face the camera naturally
+    // The updateModelPosition function handles all rotation based on face tracking
 
     // Make model visible
     model.visible = true
@@ -528,7 +526,7 @@ let baseModelScale = 1
 
 /**
  * Update 3D model position based on face landmarks
- * Uses nose bridge for accurate glasses placement (glasses sit ON the nose)
+ * Uses EYE CENTER for glasses placement (lenses align with eyes)
  */
 function updateModelPosition(landmarks: FaceLandmarks) {
   if (!model || !camera) return
@@ -536,23 +534,18 @@ function updateModelPosition(landmarks: FaceLandmarks) {
   model.visible = true
 
   if (props.productType === 'glasses') {
-    // Use nose bridge for glasses position (more accurate than eye center)
-    // Nose bridge is where glasses actually rest
-    const noseBridgeX = landmarks.noseBridge.x
-    const noseBridgeY = landmarks.noseBridge.y
-
-    // IMPORTANT: MediaPipe gives coordinates from NON-mirrored video
-    // But both video and canvas are mirrored with CSS scaleX(-1)
-    // So we need to FLIP X to match the mirrored view
-    const mirroredX = 1 - noseBridgeX
+    // Use EYE CENTER for glasses position (lenses should align with eyes)
+    const eyeCenterX = (landmarks.leftEye.x + landmarks.rightEye.x) / 2
+    const eyeCenterY = (landmarks.leftEye.y + landmarks.rightEye.y) / 2
 
     // Convert normalized coordinates (0-1) to Three.js coordinates
     // Video coordinates: (0,0) = top-left, (1,1) = bottom-right
     // Three.js: (0,0) = center, positive X = right, positive Y = up
 
-    // Map to -1 to 1 range (centered)
-    const mappedX = (mirroredX - 0.5) * 2
-    const mappedY = -(noseBridgeY - 0.5) * 2  // Flip Y axis
+    // IMPORTANT: Do NOT flip X here - the canvas CSS mirror (scaleX(-1)) handles it
+    // If we flip here too, we get double-flip which is wrong
+    const mappedX = (eyeCenterX - 0.5) * 2
+    const mappedY = -(eyeCenterY - 0.5) * 2  // Flip Y (video Y goes down, Three.js Y goes up)
 
     // Apply camera frustum scaling
     // At z=0 with camera at z=2 and FOV=50
@@ -562,39 +555,45 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     const frustumHalfWidth = frustumHalfHeight * (canvasWidth / canvasHeight)
 
     const x = mappedX * frustumHalfWidth
-    const y = mappedY * frustumHalfHeight
+    // Add small offset down for nose bridge (glasses sit slightly below eye center)
+    const y = mappedY * frustumHalfHeight - 0.05
 
-    // Position the glasses at nose bridge
+    // Position the glasses
     model.position.x = x
     model.position.y = y
     model.position.z = 0
 
-    // Scale based on the distance between eyes
-    // Typical eye distance is 0.12-0.25 in normalized coords
+    // Scale based on eye distance
     const eyeDistanceNormalized = landmarks.eyeDistance
 
-    // Scale factor: eye distance ~0.15 should give scale ~1.0
-    // Adjust base multiplier for your specific model
-    const targetEyeDistance = 0.15 // Reference eye distance
-    const scaleMultiplier = 6.0 // Tuned for glasses size
+    // Scale calculation: typical eye distance ~0.15-0.20 should give reasonable glasses size
+    const targetEyeDistance = 0.18
+    const scaleMultiplier = 5.0
     const distanceScale = eyeDistanceNormalized / targetEyeDistance
     const finalScale = baseModelScale * distanceScale * scaleMultiplier
 
     model.scale.setScalar(finalScale)
 
-    // Apply face rotation for natural movement
-    // Note: yaw needs to be flipped because of the mirror
-    model.rotation.x = landmarks.rotation.pitch * 0.5
-    model.rotation.y = Math.PI - landmarks.rotation.yaw * 0.8  // Flip yaw for mirror
-    model.rotation.z = landmarks.rotation.roll * 0.8  // Match roll direction
+    // Apply face rotation
+    // The model should face the camera (toward user) with no base Y rotation
+    // Pitch: looking up/down
+    // Yaw: looking left/right (matches mirror since canvas is mirrored)
+    // Roll: head tilt
+    model.rotation.x = -landmarks.rotation.pitch * 0.6  // Negative to match head tilt direction
+    model.rotation.y = -landmarks.rotation.yaw * 0.8    // Yaw matches naturally with mirror
+    model.rotation.z = -landmarks.rotation.roll * 0.8   // Roll for head tilt
 
-    // Debug logging (occasional)
+    // Debug logging
     if (Math.random() < 0.02) {
-      console.log('👓 Nose bridge:', { x: noseBridgeX.toFixed(3), y: noseBridgeY.toFixed(3) })
-      console.log('👓 Mirrored X:', mirroredX.toFixed(3))
+      console.log('👓 Eye center:', { x: eyeCenterX.toFixed(3), y: eyeCenterY.toFixed(3) })
       console.log('👓 Three.js pos:', { x: x.toFixed(3), y: y.toFixed(3) })
       console.log('👓 Eye distance:', eyeDistanceNormalized.toFixed(3))
       console.log('👓 Scale:', finalScale.toFixed(4))
+      console.log('👓 Rotation:', {
+        pitch: landmarks.rotation.pitch.toFixed(3),
+        yaw: landmarks.rotation.yaw.toFixed(3),
+        roll: landmarks.rotation.roll.toFixed(3)
+      })
     }
   }
 }
