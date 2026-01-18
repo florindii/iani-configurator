@@ -528,6 +528,7 @@ let baseModelScale = 1
 
 /**
  * Update 3D model position based on face landmarks
+ * Uses eye positions for accurate glasses placement
  */
 function updateModelPosition(landmarks: FaceLandmarks) {
   if (!model || !camera) return
@@ -535,38 +536,55 @@ function updateModelPosition(landmarks: FaceLandmarks) {
   model.visible = true
 
   if (props.productType === 'glasses') {
-    // For perspective camera, we need to convert normalized coords to screen space
-    // Landmarks are 0-1 where (0,0) is top-left
+    // Calculate center point between the eyes (this is where glasses should sit)
+    const eyeCenterX = (landmarks.leftEye.x + landmarks.rightEye.x) / 2
+    const eyeCenterY = (landmarks.leftEye.y + landmarks.rightEye.y) / 2
 
-    // Convert to centered coordinates (-0.5 to 0.5)
-    const normalizedX = landmarks.noseBridge.x - 0.5  // -0.5 to 0.5
-    const normalizedY = -(landmarks.noseBridge.y - 0.5) // flip Y, -0.5 to 0.5
+    // Convert normalized coordinates (0-1) to Three.js coordinates
+    // Video coordinates: (0,0) = top-left, (1,1) = bottom-right
+    // Three.js: (0,0) = center, positive X = right, positive Y = up
 
-    // Scale to camera frustum (approximately -1 to 1 at z=0 for our setup)
-    const frustumScale = 1.5 // Adjust based on camera FOV
-    const x = normalizedX * frustumScale * (canvasWidth / canvasHeight)
-    const y = normalizedY * frustumScale
+    // Map to -1 to 1 range (centered)
+    const mappedX = (eyeCenterX - 0.5) * 2
+    const mappedY = -(eyeCenterY - 0.5) * 2  // Flip Y axis
 
+    // Apply camera frustum scaling
+    // At z=0 with camera at z=2 and FOV=50, visible range is approximately ±0.93
+    const frustumHalfHeight = Math.tan((50 * Math.PI / 180) / 2) * 2 // camera.position.z = 2
+    const frustumHalfWidth = frustumHalfHeight * (canvasWidth / canvasHeight)
+
+    const x = mappedX * frustumHalfWidth
+    const y = mappedY * frustumHalfHeight
+
+    // Position the glasses
     model.position.x = x
     model.position.y = y
     model.position.z = 0
 
-    // Scale based on eye distance (typical eye distance is ~0.15-0.25 normalized)
-    // Use this to scale the glasses relative to face size
-    const eyeDistanceScale = landmarks.eyeDistance / 0.2 // Normalize around typical distance
-    const finalScale = baseModelScale * eyeDistanceScale * 1.5
+    // Scale based on the distance between eyes
+    // The eye distance in normalized coords tells us face size
+    // Typical eye distance is 0.15-0.25, larger = closer to camera = bigger glasses needed
+    const eyeDistanceNormalized = landmarks.eyeDistance
+
+    // Calculate scale: larger eye distance = bigger glasses
+    // Base multiplier tuned for proper glasses size
+    const scaleMultiplier = 8.0 // Increase this for larger glasses
+    const finalScale = baseModelScale * eyeDistanceNormalized * scaleMultiplier
 
     model.scale.setScalar(finalScale)
 
-    // Apply face rotation
-    model.rotation.x = landmarks.rotation.pitch * 0.3
-    model.rotation.y = Math.PI + landmarks.rotation.yaw * 0.8
-    model.rotation.z = -landmarks.rotation.roll * 0.8
+    // Apply face rotation for natural movement
+    // Reduce rotation sensitivity for smoother movement
+    model.rotation.x = landmarks.rotation.pitch * 0.4
+    model.rotation.y = Math.PI + landmarks.rotation.yaw * 0.6
+    model.rotation.z = -landmarks.rotation.roll * 0.7
 
-    // Log occasionally for debugging
-    if (Math.random() < 0.02) { // ~2% of frames
-      console.log('👓 Glasses position:', { x: x.toFixed(3), y: y.toFixed(3) })
-      console.log('👓 Eye distance:', landmarks.eyeDistance.toFixed(3), 'Scale:', finalScale.toFixed(3))
+    // Debug logging (occasional)
+    if (Math.random() < 0.01) {
+      console.log('👓 Eye center:', { x: eyeCenterX.toFixed(3), y: eyeCenterY.toFixed(3) })
+      console.log('👓 Position:', { x: x.toFixed(3), y: y.toFixed(3) })
+      console.log('👓 Eye distance:', eyeDistanceNormalized.toFixed(3))
+      console.log('👓 Scale:', finalScale.toFixed(4))
     }
   }
 }
