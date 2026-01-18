@@ -130,7 +130,7 @@ containers.forEach(function(w){
     iframe.className='iani-configurator-iframe';
     iframe.src=buildUrl();
     iframe.style.cssText='width:100%;height:100%;border:none;display:block;min-height:500px;';
-    iframe.allow='accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;fullscreen';
+    iframe.allow='accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;fullscreen;camera;microphone';
     iframe.setAttribute('loading','eager');
     iframe.setAttribute('title','3D Configurator');
     iframe.onload=function(){
