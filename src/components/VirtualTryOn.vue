@@ -168,6 +168,9 @@ const faceTracker = getFaceTrackingService()
 /**
  * Request camera access
  */
+// Store camera stream for later use
+let cameraStream: MediaStream | null = null
+
 async function requestCameraAccess() {
   cameraError.value = null
 
@@ -180,21 +183,52 @@ async function requestCameraAccess() {
       }
     })
 
+    // Store the stream
+    cameraStream = stream
+
+    // Set cameraReady FIRST so the video element appears in the DOM
+    cameraReady.value = true
+
+    // Wait for Vue to render the video element
     await nextTick()
 
+    // Now the video element should exist
     if (videoElement.value) {
       videoElement.value.srcObject = stream
-      await videoElement.value.play()
-      cameraReady.value = true
 
-      // Initialize Three.js after camera is ready
+      // Wait for video to be ready
+      await new Promise<void>((resolve, reject) => {
+        if (!videoElement.value) {
+          reject(new Error('Video element not found'))
+          return
+        }
+
+        videoElement.value.onloadedmetadata = () => {
+          videoElement.value!.play()
+            .then(() => resolve())
+            .catch(reject)
+        }
+
+        videoElement.value.onerror = () => {
+          reject(new Error('Video error'))
+        }
+      })
+
+      console.log('Camera ready, video playing')
+
+      // Initialize Three.js after video is ready
       await initThreeJS()
 
       // Start face tracking
       await startFaceTracking()
+    } else {
+      console.error('Video element not found after nextTick')
+      cameraError.value = 'Failed to initialize video element'
+      cameraReady.value = false
     }
   } catch (error: any) {
     console.error('Camera access error:', error)
+    cameraReady.value = false
 
     if (error.name === 'NotAllowedError') {
       cameraError.value = 'Camera access was denied. Please allow camera access in your browser settings.'
@@ -491,9 +525,9 @@ function cleanup() {
   }
 
   // Stop camera stream
-  if (videoElement.value?.srcObject) {
-    const stream = videoElement.value.srcObject as MediaStream
-    stream.getTracks().forEach(track => track.stop())
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(track => track.stop())
+    cameraStream = null
   }
 
   // Dispose Three.js resources
