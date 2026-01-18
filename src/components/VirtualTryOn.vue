@@ -528,7 +528,7 @@ let baseModelScale = 1
 
 /**
  * Update 3D model position based on face landmarks
- * Uses eye positions for accurate glasses placement
+ * Uses nose bridge for accurate glasses placement (glasses sit ON the nose)
  */
 function updateModelPosition(landmarks: FaceLandmarks) {
   if (!model || !camera) return
@@ -536,53 +536,63 @@ function updateModelPosition(landmarks: FaceLandmarks) {
   model.visible = true
 
   if (props.productType === 'glasses') {
-    // Calculate center point between the eyes (this is where glasses should sit)
-    const eyeCenterX = (landmarks.leftEye.x + landmarks.rightEye.x) / 2
-    const eyeCenterY = (landmarks.leftEye.y + landmarks.rightEye.y) / 2
+    // Use nose bridge for glasses position (more accurate than eye center)
+    // Nose bridge is where glasses actually rest
+    const noseBridgeX = landmarks.noseBridge.x
+    const noseBridgeY = landmarks.noseBridge.y
+
+    // IMPORTANT: MediaPipe gives coordinates from NON-mirrored video
+    // But both video and canvas are mirrored with CSS scaleX(-1)
+    // So we need to FLIP X to match the mirrored view
+    const mirroredX = 1 - noseBridgeX
 
     // Convert normalized coordinates (0-1) to Three.js coordinates
     // Video coordinates: (0,0) = top-left, (1,1) = bottom-right
     // Three.js: (0,0) = center, positive X = right, positive Y = up
 
     // Map to -1 to 1 range (centered)
-    const mappedX = (eyeCenterX - 0.5) * 2
-    const mappedY = -(eyeCenterY - 0.5) * 2  // Flip Y axis
+    const mappedX = (mirroredX - 0.5) * 2
+    const mappedY = -(noseBridgeY - 0.5) * 2  // Flip Y axis
 
     // Apply camera frustum scaling
-    // At z=0 with camera at z=2 and FOV=50, visible range is approximately ±0.93
-    const frustumHalfHeight = Math.tan((50 * Math.PI / 180) / 2) * 2 // camera.position.z = 2
+    // At z=0 with camera at z=2 and FOV=50
+    const fov = 50
+    const cameraZ = 2
+    const frustumHalfHeight = Math.tan((fov * Math.PI / 180) / 2) * cameraZ
     const frustumHalfWidth = frustumHalfHeight * (canvasWidth / canvasHeight)
 
     const x = mappedX * frustumHalfWidth
     const y = mappedY * frustumHalfHeight
 
-    // Position the glasses
+    // Position the glasses at nose bridge
     model.position.x = x
     model.position.y = y
     model.position.z = 0
 
     // Scale based on the distance between eyes
-    // The eye distance in normalized coords tells us face size
-    // Typical eye distance is 0.15-0.25, larger = closer to camera = bigger glasses needed
+    // Typical eye distance is 0.12-0.25 in normalized coords
     const eyeDistanceNormalized = landmarks.eyeDistance
 
-    // Calculate scale: larger eye distance = bigger glasses
-    // Base multiplier tuned for proper glasses size
-    const scaleMultiplier = 8.0 // Increase this for larger glasses
-    const finalScale = baseModelScale * eyeDistanceNormalized * scaleMultiplier
+    // Scale factor: eye distance ~0.15 should give scale ~1.0
+    // Adjust base multiplier for your specific model
+    const targetEyeDistance = 0.15 // Reference eye distance
+    const scaleMultiplier = 6.0 // Tuned for glasses size
+    const distanceScale = eyeDistanceNormalized / targetEyeDistance
+    const finalScale = baseModelScale * distanceScale * scaleMultiplier
 
     model.scale.setScalar(finalScale)
 
     // Apply face rotation for natural movement
-    // Reduce rotation sensitivity for smoother movement
-    model.rotation.x = landmarks.rotation.pitch * 0.4
-    model.rotation.y = Math.PI + landmarks.rotation.yaw * 0.6
-    model.rotation.z = -landmarks.rotation.roll * 0.7
+    // Note: yaw needs to be flipped because of the mirror
+    model.rotation.x = landmarks.rotation.pitch * 0.5
+    model.rotation.y = Math.PI - landmarks.rotation.yaw * 0.8  // Flip yaw for mirror
+    model.rotation.z = landmarks.rotation.roll * 0.8  // Match roll direction
 
     // Debug logging (occasional)
-    if (Math.random() < 0.01) {
-      console.log('👓 Eye center:', { x: eyeCenterX.toFixed(3), y: eyeCenterY.toFixed(3) })
-      console.log('👓 Position:', { x: x.toFixed(3), y: y.toFixed(3) })
+    if (Math.random() < 0.02) {
+      console.log('👓 Nose bridge:', { x: noseBridgeX.toFixed(3), y: noseBridgeY.toFixed(3) })
+      console.log('👓 Mirrored X:', mirroredX.toFixed(3))
+      console.log('👓 Three.js pos:', { x: x.toFixed(3), y: y.toFixed(3) })
       console.log('👓 Eye distance:', eyeDistanceNormalized.toFixed(3))
       console.log('👓 Scale:', finalScale.toFixed(4))
     }
