@@ -289,13 +289,24 @@ async function initThreeJS() {
   startRenderLoop()
 }
 
+// Track if model loaded successfully
+const modelLoaded = ref(false)
+const modelLoadError = ref<string | null>(null)
+
 /**
  * Load 3D model
  */
 async function loadModel() {
-  if (!scene) return
+  if (!scene) {
+    console.error('Scene not initialized')
+    return
+  }
 
   isLoadingModel.value = true
+  modelLoaded.value = false
+  modelLoadError.value = null
+
+  console.log('🔄 Loading try-on model from:', props.modelUrl)
 
   try {
     const loader = new GLTFLoader()
@@ -303,35 +314,154 @@ async function loadModel() {
     const gltf = await new Promise<any>((resolve, reject) => {
       loader.load(
         props.modelUrl,
-        resolve,
-        undefined,
-        reject
+        (gltf) => {
+          console.log('✅ Model loaded successfully')
+          resolve(gltf)
+        },
+        (progress) => {
+          if (progress.total > 0) {
+            const percent = Math.round((progress.loaded / progress.total) * 100)
+            console.log(`📦 Loading model: ${percent}%`)
+          }
+        },
+        (error) => {
+          console.error('❌ Model load error:', error)
+          reject(error)
+        }
       )
     })
 
     model = gltf.scene
 
+    if (!model) {
+      throw new Error('Model scene is empty')
+    }
+
+    console.log('📐 Model children:', model.children.length)
+
     // Adjust model scale and position based on product type
-    if (model && props.productType === 'glasses') {
-      model.scale.setScalar(0.15) // Will be adjusted by face tracking
+    if (props.productType === 'glasses') {
+      // Start with a reasonable default scale
+      model.scale.setScalar(0.3)
       model.rotation.y = Math.PI // Face towards camera
     }
 
-    // Initially hide model until face is detected
-    if (model) {
-      model.visible = false
-      if (scene) {
-        scene.add(model)
-      }
-    }
+    // Make model visible immediately for debugging
+    // Face tracking will reposition it
+    model.visible = true
+    model.position.set(0, 0, 0)
 
-    console.log('Try-on model loaded:', props.modelUrl)
+    scene.add(model)
+    modelLoaded.value = true
 
-  } catch (error) {
-    console.error('Failed to load try-on model:', error)
+    console.log('✅ Try-on model added to scene:', props.modelUrl)
+    console.log('📊 Model position:', model.position)
+    console.log('📊 Model scale:', model.scale)
+
+  } catch (error: any) {
+    console.error('❌ Failed to load try-on model:', error)
+    modelLoadError.value = error.message || 'Failed to load model'
+
+    // If Shopify CDN fails, try creating a simple fallback glasses shape
+    console.log('🔧 Creating fallback glasses geometry...')
+    createFallbackGlasses()
   } finally {
     isLoadingModel.value = false
   }
+}
+
+/**
+ * Create fallback glasses if model fails to load
+ */
+function createFallbackGlasses() {
+  if (!scene) return
+
+  // Create simple glasses shape using Three.js primitives
+  const glassesGroup = new THREE.Group()
+
+  // Frame material
+  const frameMaterial = new THREE.MeshStandardMaterial({
+    color: 0x222222,
+    metalness: 0.8,
+    roughness: 0.2
+  })
+
+  // Lens material (semi-transparent)
+  const lensMaterial = new THREE.MeshStandardMaterial({
+    color: 0x333333,
+    transparent: true,
+    opacity: 0.3,
+    metalness: 0.1,
+    roughness: 0.1
+  })
+
+  // Left lens frame
+  const leftFrame = new THREE.Mesh(
+    new THREE.TorusGeometry(0.15, 0.015, 8, 32),
+    frameMaterial
+  )
+  leftFrame.position.x = -0.18
+  leftFrame.rotation.y = Math.PI / 2
+  glassesGroup.add(leftFrame)
+
+  // Left lens
+  const leftLens = new THREE.Mesh(
+    new THREE.CircleGeometry(0.13, 32),
+    lensMaterial
+  )
+  leftLens.position.x = -0.18
+  glassesGroup.add(leftLens)
+
+  // Right lens frame
+  const rightFrame = new THREE.Mesh(
+    new THREE.TorusGeometry(0.15, 0.015, 8, 32),
+    frameMaterial
+  )
+  rightFrame.position.x = 0.18
+  rightFrame.rotation.y = Math.PI / 2
+  glassesGroup.add(rightFrame)
+
+  // Right lens
+  const rightLens = new THREE.Mesh(
+    new THREE.CircleGeometry(0.13, 32),
+    lensMaterial
+  )
+  rightLens.position.x = 0.18
+  glassesGroup.add(rightLens)
+
+  // Bridge
+  const bridge = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.01, 0.01, 0.08, 8),
+    frameMaterial
+  )
+  bridge.rotation.z = Math.PI / 2
+  bridge.position.y = 0.05
+  glassesGroup.add(bridge)
+
+  // Temples (arms)
+  const leftTemple = new THREE.Mesh(
+    new THREE.BoxGeometry(0.25, 0.01, 0.015),
+    frameMaterial
+  )
+  leftTemple.position.set(-0.35, 0.05, -0.05)
+  leftTemple.rotation.y = -0.15
+  glassesGroup.add(leftTemple)
+
+  const rightTemple = new THREE.Mesh(
+    new THREE.BoxGeometry(0.25, 0.01, 0.015),
+    frameMaterial
+  )
+  rightTemple.position.set(0.35, 0.05, -0.05)
+  rightTemple.rotation.y = 0.15
+  glassesGroup.add(rightTemple)
+
+  model = glassesGroup
+  model.visible = true
+  model.scale.setScalar(1.5)
+  scene.add(model)
+
+  modelLoaded.value = true
+  console.log('✅ Fallback glasses created')
 }
 
 /**
