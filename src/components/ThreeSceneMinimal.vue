@@ -701,9 +701,16 @@ const clearSelection = () => {
 
 // ====== VIRTUAL TRY-ON FUNCTIONS ======
 
-// Get current model URL for try-on
+// Get current model URL for try-on (same logic as loadModel)
 const currentModelUrl = computed(() => {
-  // Use the currently loaded model path
+  const shopifyContext = getShopifyContext()
+
+  // Priority: 1. Full URL from modelUrl param, 2. modelFile param, 3. selected model
+  if (shopifyContext.modelUrl) {
+    return shopifyContext.modelUrl
+  } else if (shopifyContext.modelFile) {
+    return `/models/${shopifyContext.modelFile}`
+  }
   return `/models/${selectedModel.value}`
 })
 
