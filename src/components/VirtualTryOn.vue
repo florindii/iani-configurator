@@ -162,6 +162,11 @@ let camera: THREE.PerspectiveCamera | null = null
 let model: THREE.Object3D | null = null
 let animationFrameId: number | null = null
 
+// Debug eye markers
+let leftEyeMarker: THREE.Mesh | null = null
+let rightEyeMarker: THREE.Mesh | null = null
+const DEBUG_SHOW_EYE_MARKERS = true // Set to false to hide markers
+
 // Face tracking service
 const faceTracker = getFaceTrackingService()
 
@@ -290,6 +295,23 @@ async function initThreeJS() {
   const backLight = new THREE.DirectionalLight(0xffffff, 0.3)
   backLight.position.set(0, 0, -1)
   scene.add(backLight)
+
+  // Create debug eye markers (small white spheres)
+  if (DEBUG_SHOW_EYE_MARKERS) {
+    const markerGeometry = new THREE.SphereGeometry(0.03, 16, 16)
+    const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff })
+
+    leftEyeMarker = new THREE.Mesh(markerGeometry, markerMaterial)
+    rightEyeMarker = new THREE.Mesh(markerGeometry, markerMaterial)
+
+    leftEyeMarker.visible = false
+    rightEyeMarker.visible = false
+
+    scene.add(leftEyeMarker)
+    scene.add(rightEyeMarker)
+
+    console.log('👁️ Debug eye markers created')
+  }
 
   // Load 3D model
   await loadModel()
@@ -525,76 +547,89 @@ async function startFaceTracking() {
 let baseModelScale = 1
 
 /**
+ * Convert normalized face coordinates (0-1) to Three.js world coordinates
+ * This is the KEY function for accurate positioning
+ */
+function faceToThreeJS(faceX: number, faceY: number): { x: number, y: number } {
+  // Face coordinates: (0,0) = top-left, (1,1) = bottom-right
+  // Three.js with perspective camera: need to map to visible frustum
+
+  // The canvas is mirrored with CSS scaleX(-1), so we DON'T flip X in code
+  // Map face coords to -1 to 1 range
+  const normalizedX = (faceX - 0.5) * 2  // -1 (left) to 1 (right)
+  const normalizedY = -(faceY - 0.5) * 2 // -1 (bottom) to 1 (top) - flip Y
+
+  // Calculate visible area at z=0 with our camera setup
+  const fov = 50
+  const cameraZ = 2
+  const frustumHalfHeight = Math.tan((fov * Math.PI / 180) / 2) * cameraZ
+  const frustumHalfWidth = frustumHalfHeight * (canvasWidth / canvasHeight)
+
+  return {
+    x: normalizedX * frustumHalfWidth,
+    y: normalizedY * frustumHalfHeight
+  }
+}
+
+/**
  * Update 3D model position based on face landmarks
- * Uses EYE CENTER for glasses placement (lenses align with eyes)
+ * STEP 1: Position eye markers exactly on the eyes
+ * STEP 2: Position glasses centered between the eye markers
  */
 function updateModelPosition(landmarks: FaceLandmarks) {
-  if (!model || !camera) return
+  if (!camera) return
 
-  model.visible = true
+  // Get individual eye positions
+  const leftEyePos = faceToThreeJS(landmarks.leftEye.x, landmarks.leftEye.y)
+  const rightEyePos = faceToThreeJS(landmarks.rightEye.x, landmarks.rightEye.y)
 
-  if (props.productType === 'glasses') {
-    // Use EYE CENTER for glasses position (lenses should align with eyes)
-    const eyeCenterX = (landmarks.leftEye.x + landmarks.rightEye.x) / 2
-    const eyeCenterY = (landmarks.leftEye.y + landmarks.rightEye.y) / 2
+  // Update debug eye markers to visualize exact eye positions
+  if (DEBUG_SHOW_EYE_MARKERS && leftEyeMarker && rightEyeMarker) {
+    leftEyeMarker.visible = true
+    rightEyeMarker.visible = true
 
-    // Convert normalized coordinates (0-1) to Three.js coordinates
-    // Video coordinates: (0,0) = top-left, (1,1) = bottom-right
-    // Three.js: (0,0) = center, positive X = right, positive Y = up
+    leftEyeMarker.position.set(leftEyePos.x, leftEyePos.y, 0.1)
+    rightEyeMarker.position.set(rightEyePos.x, rightEyePos.y, 0.1)
+  }
 
-    // IMPORTANT: Do NOT flip X here - the canvas CSS mirror (scaleX(-1)) handles it
-    // If we flip here too, we get double-flip which is wrong
-    const mappedX = (eyeCenterX - 0.5) * 2
-    const mappedY = -(eyeCenterY - 0.5) * 2  // Flip Y (video Y goes down, Three.js Y goes up)
+  // Position glasses if model is loaded
+  if (model && props.productType === 'glasses') {
+    model.visible = true
 
-    // Apply camera frustum scaling
-    // At z=0 with camera at z=2 and FOV=50
-    const fov = 50
-    const cameraZ = 2
-    const frustumHalfHeight = Math.tan((fov * Math.PI / 180) / 2) * cameraZ
-    const frustumHalfWidth = frustumHalfHeight * (canvasWidth / canvasHeight)
+    // Calculate center point between the two eyes
+    const centerX = (leftEyePos.x + rightEyePos.x) / 2
+    const centerY = (leftEyePos.y + rightEyePos.y) / 2
 
-    const x = mappedX * frustumHalfWidth
-    // Larger offset down - glasses need to be at eye level, not forehead
-    // The offset of -0.25 moves glasses down significantly
-    const y = mappedY * frustumHalfHeight - 0.25
-
-    // Position the glasses
-    model.position.x = x
-    model.position.y = y
+    // Position glasses at the center of the eyes
+    model.position.x = centerX
+    model.position.y = centerY
     model.position.z = 0
 
-    // Scale based on eye distance
-    const eyeDistanceNormalized = landmarks.eyeDistance
+    // Calculate the actual eye distance in Three.js units (for scaling)
+    const eyeDistanceWorld = Math.sqrt(
+      Math.pow(rightEyePos.x - leftEyePos.x, 2) +
+      Math.pow(rightEyePos.y - leftEyePos.y, 2)
+    )
 
-    // Scale calculation: reduce size for better fit
-    const targetEyeDistance = 0.18
-    const scaleMultiplier = 3.5
-    const distanceScale = eyeDistanceNormalized / targetEyeDistance
-    const finalScale = baseModelScale * distanceScale * scaleMultiplier
+    // Scale glasses to match eye distance
+    // The glasses should span roughly the eye distance (adjust multiplier as needed)
+    const targetGlassesWidth = eyeDistanceWorld * 2.5 // Glasses are wider than eye distance
+    const finalScale = (targetGlassesWidth / baseModelScale) * 0.5
 
-    model.scale.setScalar(finalScale)
+    model.scale.setScalar(Math.max(finalScale, 0.1)) // Minimum scale to prevent disappearing
 
     // Apply face rotation
-    // The model should face the camera (toward user) with no base Y rotation
-    // Pitch: looking up/down
-    // Yaw: looking left/right (matches mirror since canvas is mirrored)
-    // Roll: head tilt
-    model.rotation.x = -landmarks.rotation.pitch * 0.6  // Negative to match head tilt direction
-    model.rotation.y = -landmarks.rotation.yaw * 0.8    // Yaw matches naturally with mirror
-    model.rotation.z = -landmarks.rotation.roll * 0.8   // Roll for head tilt
+    model.rotation.x = -landmarks.rotation.pitch * 0.5
+    model.rotation.y = -landmarks.rotation.yaw * 0.7
+    model.rotation.z = -landmarks.rotation.roll * 0.8
 
     // Debug logging
     if (Math.random() < 0.02) {
-      console.log('👓 Eye center:', { x: eyeCenterX.toFixed(3), y: eyeCenterY.toFixed(3) })
-      console.log('👓 Three.js pos:', { x: x.toFixed(3), y: y.toFixed(3) })
-      console.log('👓 Eye distance:', eyeDistanceNormalized.toFixed(3))
+      console.log('👁️ Left eye:', leftEyePos)
+      console.log('👁️ Right eye:', rightEyePos)
+      console.log('👓 Glasses center:', { x: centerX.toFixed(3), y: centerY.toFixed(3) })
+      console.log('👓 Eye distance (world):', eyeDistanceWorld.toFixed(3))
       console.log('👓 Scale:', finalScale.toFixed(4))
-      console.log('👓 Rotation:', {
-        pitch: landmarks.rotation.pitch.toFixed(3),
-        yaw: landmarks.rotation.yaw.toFixed(3),
-        roll: landmarks.rotation.roll.toFixed(3)
-      })
     }
   }
 }
