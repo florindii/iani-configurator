@@ -555,8 +555,9 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     const frustumHalfWidth = frustumHalfHeight * (canvasWidth / canvasHeight)
 
     const x = mappedX * frustumHalfWidth
-    // Add small offset down for nose bridge (glasses sit slightly below eye center)
-    const y = mappedY * frustumHalfHeight - 0.05
+    // Larger offset down - glasses need to be at eye level, not forehead
+    // The offset of -0.25 moves glasses down significantly
+    const y = mappedY * frustumHalfHeight - 0.25
 
     // Position the glasses
     model.position.x = x
@@ -566,9 +567,9 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     // Scale based on eye distance
     const eyeDistanceNormalized = landmarks.eyeDistance
 
-    // Scale calculation: typical eye distance ~0.15-0.20 should give reasonable glasses size
+    // Scale calculation: reduce size for better fit
     const targetEyeDistance = 0.18
-    const scaleMultiplier = 5.0
+    const scaleMultiplier = 3.5
     const distanceScale = eyeDistanceNormalized / targetEyeDistance
     const finalScale = baseModelScale * distanceScale * scaleMultiplier
 
