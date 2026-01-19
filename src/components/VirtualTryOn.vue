@@ -158,7 +158,7 @@ const selectedColorLocal = ref(props.selectedColor)
 // Three.js instances
 let renderer: THREE.WebGLRenderer | null = null
 let scene: THREE.Scene | null = null
-let camera: THREE.PerspectiveCamera | null = null
+let camera: THREE.OrthographicCamera | null = null
 let model: THREE.Object3D | null = null
 let animationFrameId: number | null = null
 
@@ -278,11 +278,19 @@ async function initThreeJS() {
   // Create scene
   scene = new THREE.Scene()
 
-  // Create perspective camera for better 3D effect
-  const fov = 50
-  const aspect = canvasWidth / canvasHeight
-  camera = new THREE.PerspectiveCamera(fov, aspect, 0.1, 1000)
-  camera.position.z = 2
+  // Create OrthographicCamera for exact pixel mapping
+  // This gives us direct 1:1 correspondence between face coordinates and screen position
+  const halfWidth = canvasWidth / 2
+  const halfHeight = canvasHeight / 2
+  camera = new THREE.OrthographicCamera(
+    -halfWidth,   // left
+    halfWidth,    // right
+    halfHeight,   // top
+    -halfHeight,  // bottom
+    0.1,          // near
+    1000          // far
+  )
+  camera.position.z = 500
 
   // Add lights
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.8)
@@ -296,10 +304,10 @@ async function initThreeJS() {
   backLight.position.set(0, 0, -1)
   scene.add(backLight)
 
-  // Create debug eye markers (small white spheres)
+  // Create debug eye markers (small white spheres - size in pixels now)
   if (DEBUG_SHOW_EYE_MARKERS) {
-    const markerGeometry = new THREE.SphereGeometry(0.03, 16, 16)
-    const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff })
+    const markerGeometry = new THREE.SphereGeometry(8, 16, 16) // 8 pixels radius
+    const markerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 }) // Green for visibility
 
     leftEyeMarker = new THREE.Mesh(markerGeometry, markerMaterial)
     rightEyeMarker = new THREE.Mesh(markerGeometry, markerMaterial)
@@ -310,7 +318,7 @@ async function initThreeJS() {
     scene.add(leftEyeMarker)
     scene.add(rightEyeMarker)
 
-    console.log('👁️ Debug eye markers created')
+    console.log('👁️ Debug eye markers created (green, 8px radius)')
   }
 
   // Load 3D model
@@ -378,26 +386,26 @@ async function loadModel() {
     console.log('📏 Original model size:', size)
     console.log('📍 Original model center:', center)
 
-    // Calculate scale to fit glasses to reasonable size (about 0.3 units wide for perspective camera)
+    // For OrthographicCamera, we scale to pixel units
+    // Target: glasses should be about 150 pixels wide as default
     const maxDim = Math.max(size.x, size.y, size.z)
-    const targetSize = 0.4 // Target size in world units
-    const autoScale = targetSize / maxDim
+    const targetSizePixels = 150 // Target width in pixels
+    const autoScale = targetSizePixels / maxDim
 
-    console.log('🔧 Auto-scale factor:', autoScale)
+    console.log('🔧 Auto-scale factor (for pixels):', autoScale)
 
     // Save base scale for face tracking adjustments
     baseModelScale = autoScale
 
-    // Apply scale and center the model
+    // Apply scale
     model.scale.setScalar(autoScale)
 
-    // Center the model at origin
+    // Center the model geometry at origin
     model.position.x = -center.x * autoScale
     model.position.y = -center.y * autoScale
-    model.position.z = -center.z * autoScale
+    model.position.z = 0 // Keep at z=0 for orthographic
 
-    // NOTE: Do NOT add initial rotation here - the model should face the camera naturally
-    // The updateModelPosition function handles all rotation based on face tracking
+    // NOTE: Initial position will be overwritten by face tracking
 
     // Make model visible
     model.visible = true
@@ -548,27 +556,25 @@ let baseModelScale = 1
 
 /**
  * Convert normalized face coordinates (0-1) to Three.js world coordinates
- * This is the KEY function for accurate positioning
+ * Using OrthographicCamera approach for direct 1:1 pixel mapping
  */
 function faceToThreeJS(faceX: number, faceY: number): { x: number, y: number } {
+  // With OrthographicCamera set to match canvas dimensions:
+  // - X range: -canvasWidth/2 to +canvasWidth/2
+  // - Y range: -canvasHeight/2 to +canvasHeight/2
+
   // Face coordinates: (0,0) = top-left, (1,1) = bottom-right
-  // Three.js with perspective camera: need to map to visible frustum
+  // Convert to pixel coordinates first
+  const pixelX = faceX * canvasWidth
+  const pixelY = faceY * canvasHeight
 
-  // The canvas is mirrored with CSS scaleX(-1), so we DON'T flip X in code
-  // Map face coords to -1 to 1 range
-  const normalizedX = (faceX - 0.5) * 2  // -1 (left) to 1 (right)
-  const normalizedY = -(faceY - 0.5) * 2 // -1 (bottom) to 1 (top) - flip Y
+  // Convert to orthographic camera coordinates (center = 0,0)
+  // X: 0 -> -width/2, width -> +width/2
+  // Y: 0 -> +height/2 (top), height -> -height/2 (bottom) - flip Y
+  const orthoX = pixelX - canvasWidth / 2
+  const orthoY = -(pixelY - canvasHeight / 2) // Flip Y
 
-  // Calculate visible area at z=0 with our camera setup
-  const fov = 50
-  const cameraZ = 2
-  const frustumHalfHeight = Math.tan((fov * Math.PI / 180) / 2) * cameraZ
-  const frustumHalfWidth = frustumHalfHeight * (canvasWidth / canvasHeight)
-
-  return {
-    x: normalizedX * frustumHalfWidth,
-    y: normalizedY * frustumHalfHeight
-  }
+  return { x: orthoX, y: orthoY }
 }
 
 /**
@@ -579,7 +585,7 @@ function faceToThreeJS(faceX: number, faceY: number): { x: number, y: number } {
 function updateModelPosition(landmarks: FaceLandmarks) {
   if (!camera) return
 
-  // Get individual eye positions
+  // Get individual eye positions (now in pixel coordinates)
   const leftEyePos = faceToThreeJS(landmarks.leftEye.x, landmarks.leftEye.y)
   const rightEyePos = faceToThreeJS(landmarks.rightEye.x, landmarks.rightEye.y)
 
@@ -588,15 +594,15 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     leftEyeMarker.visible = true
     rightEyeMarker.visible = true
 
-    leftEyeMarker.position.set(leftEyePos.x, leftEyePos.y, 0.1)
-    rightEyeMarker.position.set(rightEyePos.x, rightEyePos.y, 0.1)
+    leftEyeMarker.position.set(leftEyePos.x, leftEyePos.y, 10)
+    rightEyeMarker.position.set(rightEyePos.x, rightEyePos.y, 10)
   }
 
   // Position glasses if model is loaded
   if (model && props.productType === 'glasses') {
     model.visible = true
 
-    // Calculate center point between the two eyes
+    // Calculate center point between the two eyes (in pixels)
     const centerX = (leftEyePos.x + rightEyePos.x) / 2
     const centerY = (leftEyePos.y + rightEyePos.y) / 2
 
@@ -605,18 +611,19 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     model.position.y = centerY
     model.position.z = 0
 
-    // Calculate the actual eye distance in Three.js units (for scaling)
-    const eyeDistanceWorld = Math.sqrt(
+    // Calculate the actual eye distance in pixels
+    const eyeDistancePixels = Math.sqrt(
       Math.pow(rightEyePos.x - leftEyePos.x, 2) +
       Math.pow(rightEyePos.y - leftEyePos.y, 2)
     )
 
-    // Scale glasses to match eye distance
-    // The glasses should span roughly the eye distance (adjust multiplier as needed)
-    const targetGlassesWidth = eyeDistanceWorld * 2.5 // Glasses are wider than eye distance
-    const finalScale = (targetGlassesWidth / baseModelScale) * 0.5
+    // Scale glasses based on eye distance
+    // Glasses width should be about 2.2x the eye distance
+    const targetGlassesWidth = eyeDistancePixels * 2.2
+    // baseModelScale was set to make model ~150px wide, so scale proportionally
+    const finalScale = targetGlassesWidth / 150 * baseModelScale
 
-    model.scale.setScalar(Math.max(finalScale, 0.1)) // Minimum scale to prevent disappearing
+    model.scale.setScalar(Math.max(finalScale, 10)) // Minimum 10 pixels
 
     // Apply face rotation
     model.rotation.x = -landmarks.rotation.pitch * 0.5
@@ -625,11 +632,11 @@ function updateModelPosition(landmarks: FaceLandmarks) {
 
     // Debug logging
     if (Math.random() < 0.02) {
-      console.log('👁️ Left eye:', leftEyePos)
-      console.log('👁️ Right eye:', rightEyePos)
-      console.log('👓 Glasses center:', { x: centerX.toFixed(3), y: centerY.toFixed(3) })
-      console.log('👓 Eye distance (world):', eyeDistanceWorld.toFixed(3))
-      console.log('👓 Scale:', finalScale.toFixed(4))
+      console.log('👁️ Left eye (px):', leftEyePos)
+      console.log('👁️ Right eye (px):', rightEyePos)
+      console.log('👓 Glasses center (px):', { x: centerX.toFixed(1), y: centerY.toFixed(1) })
+      console.log('👓 Eye distance (px):', eyeDistancePixels.toFixed(1))
+      console.log('👓 Scale:', finalScale.toFixed(1))
     }
   }
 }
