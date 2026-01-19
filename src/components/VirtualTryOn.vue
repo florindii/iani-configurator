@@ -248,6 +248,9 @@ async function requestCameraAccess() {
 // Store canvas dimensions for positioning calculations
 let canvasWidth = 640
 let canvasHeight = 480
+// Store native video dimensions (what MediaPipe sees)
+let nativeVideoWidth = 640
+let nativeVideoHeight = 480
 
 /**
  * Initialize Three.js scene
@@ -258,13 +261,27 @@ async function initThreeJS() {
   const canvas = tryOnCanvas.value
   const video = videoElement.value
 
-  // Match canvas size to video
-  canvasWidth = video.videoWidth || 640
-  canvasHeight = video.videoHeight || 480
+  // IMPORTANT: Use the DISPLAYED size of the video, not the native video resolution
+  // This accounts for CSS scaling in the modal
+  const videoRect = video.getBoundingClientRect()
+  canvasWidth = videoRect.width
+  canvasHeight = videoRect.height
+
+  // Set canvas to match displayed video size
   canvas.width = canvasWidth
   canvas.height = canvasHeight
 
-  console.log('📐 Canvas size:', canvasWidth, 'x', canvasHeight)
+  // Also set CSS size to match
+  canvas.style.width = canvasWidth + 'px'
+  canvas.style.height = canvasHeight + 'px'
+
+  // Store native video dimensions for coordinate conversion
+  nativeVideoWidth = video.videoWidth || 640
+  nativeVideoHeight = video.videoHeight || 480
+
+  console.log('📐 Video native size:', nativeVideoWidth, 'x', nativeVideoHeight)
+  console.log('📐 Video displayed size:', canvasWidth, 'x', canvasHeight)
+  console.log('📐 Scale factor:', (canvasWidth / nativeVideoWidth).toFixed(2), 'x', (canvasHeight / nativeVideoHeight).toFixed(2))
 
   // Create renderer with transparent background
   renderer = new THREE.WebGLRenderer({
@@ -557,14 +574,17 @@ let baseModelScale = 1
 /**
  * Convert normalized face coordinates (0-1) to Three.js world coordinates
  * Using OrthographicCamera approach for direct 1:1 pixel mapping
+ *
+ * MediaPipe gives normalized coords (0-1) based on native video resolution
+ * We need to map to the DISPLAYED canvas size (which may be different due to CSS scaling)
  */
 function faceToThreeJS(faceX: number, faceY: number): { x: number, y: number } {
-  // With OrthographicCamera set to match canvas dimensions:
+  // With OrthographicCamera set to match DISPLAYED canvas dimensions:
   // - X range: -canvasWidth/2 to +canvasWidth/2
   // - Y range: -canvasHeight/2 to +canvasHeight/2
 
-  // Face coordinates: (0,0) = top-left, (1,1) = bottom-right
-  // Convert to pixel coordinates first
+  // Face coordinates: (0,0) = top-left, (1,1) = bottom-right (normalized)
+  // Convert normalized coords to DISPLAYED pixel coordinates
   const pixelX = faceX * canvasWidth
   const pixelY = faceY * canvasHeight
 
