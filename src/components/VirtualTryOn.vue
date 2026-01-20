@@ -653,7 +653,7 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     // Apply face rotation
     // IMPORTANT: Add Math.PI to flip glasses 180° so they face the user (not backwards)
     model.rotation.x = -landmarks.rotation.pitch * 0.5
-    model.rotation.y = Math.PI + (-landmarks.rotation.yaw * 0.7)  // Flip 180° + follow yaw
+    model.rotation.y = Math.PI + (-landmarks.rotation.yaw * 1.2)  // Flip 180° + stronger yaw for realistic ear wrap
     model.rotation.z = landmarks.rotation.roll * 0.8  // FIXED: removed negative sign for correct roll direction
 
     // Debug logging
