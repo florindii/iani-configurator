@@ -158,7 +158,7 @@ const selectedColorLocal = ref(props.selectedColor)
 // Three.js instances
 let renderer: THREE.WebGLRenderer | null = null
 let scene: THREE.Scene | null = null
-let camera: THREE.OrthographicCamera | null = null
+let camera: THREE.PerspectiveCamera | null = null
 let model: THREE.Object3D | null = null
 let animationFrameId: number | null = null
 
@@ -295,19 +295,18 @@ async function initThreeJS() {
   // Create scene
   scene = new THREE.Scene()
 
-  // Create OrthographicCamera for exact pixel mapping
-  // This gives us direct 1:1 correspondence between face coordinates and screen position
-  const halfWidth = canvasWidth / 2
-  const halfHeight = canvasHeight / 2
-  camera = new THREE.OrthographicCamera(
-    -halfWidth,   // left
-    halfWidth,    // right
-    halfHeight,   // top
-    -halfHeight,  // bottom
-    0.1,          // near
-    1000          // far
-  )
-  camera.position.z = 500
+  // Create PerspectiveCamera for realistic 3D depth (temples wrapping around ears)
+  // FOV and distance calibrated so objects at z=0 appear at correct pixel size
+  const fov = 50 // Field of view in degrees
+  const aspect = canvasWidth / canvasHeight
+  camera = new THREE.PerspectiveCamera(fov, aspect, 0.1, 2000)
+
+  // Calculate camera distance so that objects at z=0 map roughly to pixel coordinates
+  // At this distance, the visible height at z=0 equals canvasHeight
+  const cameraDistance = (canvasHeight / 2) / Math.tan((fov * Math.PI / 180) / 2)
+  camera.position.z = cameraDistance
+
+  console.log('📷 PerspectiveCamera distance:', cameraDistance.toFixed(1))
 
   // Add lights
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.8)
@@ -579,22 +578,21 @@ let baseModelScale = 1
  * We need to map to the DISPLAYED canvas size (which may be different due to CSS scaling)
  */
 function faceToThreeJS(faceX: number, faceY: number): { x: number, y: number } {
-  // With OrthographicCamera set to match DISPLAYED canvas dimensions:
-  // - X range: -canvasWidth/2 to +canvasWidth/2
-  // - Y range: -canvasHeight/2 to +canvasHeight/2
+  // With PerspectiveCamera, convert face coordinates to world coordinates at z=0
+  // The camera distance is calculated so the visible area at z=0 matches canvas dimensions
 
   // Face coordinates: (0,0) = top-left, (1,1) = bottom-right (normalized)
-  // Convert normalized coords to DISPLAYED pixel coordinates
+  // Convert normalized coords to pixel coordinates
   const pixelX = faceX * canvasWidth
   const pixelY = faceY * canvasHeight
 
-  // Convert to orthographic camera coordinates (center = 0,0)
+  // Convert to world coordinates (center = 0,0)
   // X: 0 -> -width/2, width -> +width/2
   // Y: 0 -> +height/2 (top), height -> -height/2 (bottom) - flip Y
-  const orthoX = pixelX - canvasWidth / 2
-  const orthoY = -(pixelY - canvasHeight / 2) // Flip Y
+  const worldX = pixelX - canvasWidth / 2
+  const worldY = -(pixelY - canvasHeight / 2) // Flip Y
 
-  return { x: orthoX, y: orthoY }
+  return { x: worldX, y: worldY }
 }
 
 /**
@@ -622,13 +620,13 @@ function updateModelPosition(landmarks: FaceLandmarks) {
   if (model && props.productType === 'glasses') {
     model.visible = true
 
-    // Calculate center point between the two eyes (in pixels)
+    // Calculate center point between the two eyes (in world coords)
     // This is the MIDPOINT between the green dots - where glasses bridge should be
     const centerX = (leftEyePos.x + rightEyePos.x) / 2
     const centerY = (leftEyePos.y + rightEyePos.y) / 2
 
-    // Calculate the actual eye distance in pixels
-    const eyeDistancePixels = Math.sqrt(
+    // Calculate the actual eye distance in world units
+    const eyeDistanceWorld = Math.sqrt(
       Math.pow(rightEyePos.x - leftEyePos.x, 2) +
       Math.pow(rightEyePos.y - leftEyePos.y, 2)
     )
@@ -636,32 +634,36 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     // Position glasses so the LENS CENTERS align with the eyes
     // The model's origin is at the bridge, but lenses are below that
     // So we need to move the glasses DOWN so the lens centers match the eye positions
-    const lensOffsetY = eyeDistancePixels * 0.3 // Offset to align lens centers with eyes
+    const lensOffsetY = eyeDistanceWorld * 0.3 // Offset to align lens centers with eyes
     model.position.x = centerX
     model.position.y = centerY - lensOffsetY  // Move glasses DOWN so lenses align with eyes
-    model.position.z = 0
+
+    // Z position: Push glasses slightly forward for proper 3D depth
+    // With PerspectiveCamera, this creates the realistic "temples wrap around ears" effect
+    model.position.z = 50  // Bring glasses forward in 3D space
 
     // Scale glasses based on eye distance
     // Glasses lens-to-lens distance should match eye distance
     // Total glasses width is about 2.5x eye distance (lenses + temples)
-    const targetGlassesWidth = eyeDistancePixels * 2.5
-    // baseModelScale was set to make model ~150px wide, so scale proportionally
+    const targetGlassesWidth = eyeDistanceWorld * 2.5
+    // baseModelScale was set to make model ~150 units wide, so scale proportionally
     const finalScale = targetGlassesWidth / 150 * baseModelScale
 
-    model.scale.setScalar(Math.max(finalScale, 10)) // Minimum 10 pixels
+    model.scale.setScalar(Math.max(finalScale, 10)) // Minimum scale
 
     // Apply face rotation
     // IMPORTANT: Add Math.PI to flip glasses 180° so they face the user (not backwards)
+    // With PerspectiveCamera, full rotation tracking creates realistic 3D depth
     model.rotation.x = -landmarks.rotation.pitch * 0.5
-    model.rotation.y = Math.PI + (-landmarks.rotation.yaw * 0.7)  // Flip 180° + follow yaw
-    model.rotation.z = landmarks.rotation.roll * 0.8  // FIXED: removed negative sign for correct roll direction
+    model.rotation.y = Math.PI + (-landmarks.rotation.yaw * 1.0)  // Full yaw tracking for realistic perspective
+    model.rotation.z = landmarks.rotation.roll * 0.8  // Roll follows head tilt
 
     // Debug logging
     if (Math.random() < 0.02) {
-      console.log('👁️ Left eye (px):', leftEyePos)
-      console.log('👁️ Right eye (px):', rightEyePos)
-      console.log('👓 Glasses center (px):', { x: centerX.toFixed(1), y: centerY.toFixed(1) })
-      console.log('👓 Eye distance (px):', eyeDistancePixels.toFixed(1))
+      console.log('👁️ Left eye:', leftEyePos)
+      console.log('👁️ Right eye:', rightEyePos)
+      console.log('👓 Glasses center:', { x: centerX.toFixed(1), y: centerY.toFixed(1) })
+      console.log('👓 Eye distance:', eyeDistanceWorld.toFixed(1))
       console.log('👓 Scale:', finalScale.toFixed(1))
     }
   }
