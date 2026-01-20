@@ -633,10 +633,13 @@ function updateModelPosition(landmarks: FaceLandmarks) {
       Math.pow(rightEyePos.y - leftEyePos.y, 2)
     )
 
-    // Position glasses at the center point between the eyes
-    // The glasses model center (bridge) should align with the midpoint of the eyes
+    // Position glasses so the LENS CENTERS align with the eyes
+    // The model's origin is at the bridge, but lenses are slightly below that
+    // So we need to move the glasses UP so the lens centers match the eye positions
+    // (Moving model UP means lens centers move DOWN to meet the eyes)
+    const lensOffsetY = eyeDistancePixels * 0.35 // Offset to align lens centers with eyes
     model.position.x = centerX
-    model.position.y = centerY
+    model.position.y = centerY + lensOffsetY  // Move glasses UP so lenses align with eyes
     model.position.z = 0
 
     // Scale glasses based on eye distance
