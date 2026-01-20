@@ -623,13 +623,9 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     model.visible = true
 
     // Calculate center point between the two eyes (in pixels)
+    // This is the MIDPOINT between the green dots - where glasses bridge should be
     const centerX = (leftEyePos.x + rightEyePos.x) / 2
     const centerY = (leftEyePos.y + rightEyePos.y) / 2
-
-    // Position glasses at the center of the eyes
-    model.position.x = centerX
-    model.position.y = centerY
-    model.position.z = 0
 
     // Calculate the actual eye distance in pixels
     const eyeDistancePixels = Math.sqrt(
@@ -637,17 +633,25 @@ function updateModelPosition(landmarks: FaceLandmarks) {
       Math.pow(rightEyePos.y - leftEyePos.y, 2)
     )
 
+    // Position glasses at the center point between the eyes
+    // The glasses model center (bridge) should align with the midpoint of the eyes
+    model.position.x = centerX
+    model.position.y = centerY
+    model.position.z = 0
+
     // Scale glasses based on eye distance
-    // Glasses width should be about 2.2x the eye distance
-    const targetGlassesWidth = eyeDistancePixels * 2.2
+    // Glasses lens-to-lens distance should match eye distance
+    // Total glasses width is about 2.5x eye distance (lenses + temples)
+    const targetGlassesWidth = eyeDistancePixels * 2.5
     // baseModelScale was set to make model ~150px wide, so scale proportionally
     const finalScale = targetGlassesWidth / 150 * baseModelScale
 
     model.scale.setScalar(Math.max(finalScale, 10)) // Minimum 10 pixels
 
     // Apply face rotation
+    // IMPORTANT: Add Math.PI to flip glasses 180° so they face the user (not backwards)
     model.rotation.x = -landmarks.rotation.pitch * 0.5
-    model.rotation.y = -landmarks.rotation.yaw * 0.7
+    model.rotation.y = Math.PI + (-landmarks.rotation.yaw * 0.7)  // Flip 180° + follow yaw
     model.rotation.z = -landmarks.rotation.roll * 0.8
 
     // Debug logging
