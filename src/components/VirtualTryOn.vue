@@ -162,6 +162,10 @@ let camera: THREE.PerspectiveCamera | null = null
 let model: THREE.Object3D | null = null
 let animationFrameId: number | null = null
 
+// Clipping plane to hide temple ends behind the face
+// The plane clips everything with z < 0 (behind the face plane)
+let clippingPlane: THREE.Plane | null = null
+
 // Debug eye markers
 let leftEyeMarker: THREE.Mesh | null = null
 let rightEyeMarker: THREE.Mesh | null = null
@@ -292,8 +296,15 @@ async function initThreeJS() {
   renderer.setSize(canvasWidth, canvasHeight)
   renderer.setClearColor(0x000000, 0) // Fully transparent
 
+  // Enable clipping to hide temple ends behind the face
+  renderer.localClippingEnabled = true
+
   // Create scene
   scene = new THREE.Scene()
+
+  // Create clipping plane that hides anything behind z < -50 (the temple ends)
+  // Normal points towards camera (+z), clips anything on negative side
+  clippingPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 50)
 
   // Create PerspectiveCamera for realistic 3D depth (temples wrapping around ears)
   // FOV and distance calibrated so objects at z=0 appear at correct pixel size
@@ -423,6 +434,24 @@ async function loadModel() {
 
     // NOTE: Initial position will be overwritten by face tracking
 
+    // Apply clipping plane to all materials to hide temple ends
+    if (clippingPlane) {
+      model.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const mesh = child as THREE.Mesh
+          if (mesh.material) {
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+            materials.forEach((mat) => {
+              if (mat && 'clippingPlanes' in mat) {
+                (mat as THREE.Material & { clippingPlanes: THREE.Plane[] }).clippingPlanes = [clippingPlane!]
+              }
+            })
+          }
+        }
+      })
+      console.log('✂️ Clipping plane applied to hide temple ends')
+    }
+
     // Make model visible
     model.visible = true
 
@@ -454,20 +483,22 @@ function createFallbackGlasses() {
   // Create simple glasses shape using Three.js primitives
   const glassesGroup = new THREE.Group()
 
-  // Frame material
+  // Frame material with clipping
   const frameMaterial = new THREE.MeshStandardMaterial({
     color: 0x222222,
     metalness: 0.8,
-    roughness: 0.2
+    roughness: 0.2,
+    clippingPlanes: clippingPlane ? [clippingPlane] : []
   })
 
-  // Lens material (semi-transparent)
+  // Lens material (semi-transparent) with clipping
   const lensMaterial = new THREE.MeshStandardMaterial({
     color: 0x333333,
     transparent: true,
     opacity: 0.3,
     metalness: 0.1,
-    roughness: 0.1
+    roughness: 0.1,
+    clippingPlanes: clippingPlane ? [clippingPlane] : []
   })
 
   // Left lens frame
@@ -844,31 +875,38 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.9);
+  background: #000;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
-  padding: 20px;
+  padding: 0; /* Fullscreen - no padding */
 }
 
 .try-on-container {
-  background: #1a1a1a;
-  border-radius: 16px;
-  max-width: 800px;
+  background: #000;
+  border-radius: 0; /* Fullscreen - no border radius */
   width: 100%;
-  max-height: 90vh;
+  height: 100%; /* Fullscreen */
+  max-width: none; /* Fullscreen */
+  max-height: none; /* Fullscreen */
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
 .try-on-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #333;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 100%);
+  z-index: 10;
+  border-bottom: none;
 }
 
 .try-on-header h2 {
@@ -876,27 +914,30 @@ onUnmounted(() => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
 }
 
 .close-button {
-  background: none;
+  background: rgba(255,255,255,0.2);
+  backdrop-filter: blur(10px);
   border: none;
-  color: #888;
+  color: white;
   cursor: pointer;
-  padding: 8px;
-  border-radius: 8px;
+  padding: 10px;
+  border-radius: 50%;
   transition: all 0.2s;
 }
 
 .close-button:hover {
-  background: #333;
+  background: rgba(255,255,255,0.3);
   color: white;
 }
 
 .try-on-content {
   flex: 1;
   position: relative;
-  min-height: 400px;
+  width: 100%;
+  height: 100%;
 }
 
 .camera-request,
@@ -954,10 +995,11 @@ onUnmounted(() => {
 }
 
 .try-on-view {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  min-height: 400px;
 }
 
 .camera-feed {
