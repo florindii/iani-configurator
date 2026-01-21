@@ -684,9 +684,8 @@ function updateModelPosition(landmarks: FaceLandmarks) {
 
     // Apply face rotation
     // IMPORTANT: Add Math.PI to flip glasses 180° so they face the user (not backwards)
-    // Yaw is SUBTRACTED because we want temples to go backward when head turns
     model.rotation.x = -landmarks.rotation.pitch * 0.3
-    model.rotation.y = Math.PI - landmarks.rotation.yaw * 0.3  // Reduced multiplier for less open temples
+    model.rotation.y = Math.PI  // Keep glasses facing forward, minimal yaw
     model.rotation.z = landmarks.rotation.roll * 0.5  // Roll follows head tilt
 
     // Debug logging
