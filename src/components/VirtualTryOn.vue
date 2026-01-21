@@ -158,7 +158,7 @@ const selectedColorLocal = ref(props.selectedColor)
 // Three.js instances
 let renderer: THREE.WebGLRenderer | null = null
 let scene: THREE.Scene | null = null
-let camera: THREE.PerspectiveCamera | null = null
+let camera: THREE.OrthographicCamera | null = null
 let model: THREE.Object3D | null = null
 let animationFrameId: number | null = null
 
@@ -306,18 +306,19 @@ async function initThreeJS() {
   // Normal points towards camera (+z), clips anything on negative side
   clippingPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 50)
 
-  // Create PerspectiveCamera for realistic 3D depth (temples wrapping around ears)
-  // FOV and distance calibrated so objects at z=0 appear at correct pixel size
-  const fov = 50 // Field of view in degrees
-  const aspect = canvasWidth / canvasHeight
-  camera = new THREE.PerspectiveCamera(fov, aspect, 0.1, 2000)
+  // Create OrthographicCamera for flat 2D appearance (no perspective distortion)
+  // This makes temples appear straight/parallel like in a mirror
+  camera = new THREE.OrthographicCamera(
+    -canvasWidth / 2,   // left
+    canvasWidth / 2,    // right
+    canvasHeight / 2,   // top
+    -canvasHeight / 2,  // bottom
+    0.1,                // near
+    2000                // far
+  )
+  camera.position.z = 500
 
-  // Calculate camera distance so that objects at z=0 map roughly to pixel coordinates
-  // At this distance, the visible height at z=0 equals canvasHeight
-  const cameraDistance = (canvasHeight / 2) / Math.tan((fov * Math.PI / 180) / 2)
-  camera.position.z = cameraDistance
-
-  console.log('📷 PerspectiveCamera distance:', cameraDistance.toFixed(1))
+  console.log('📷 OrthographicCamera created, canvas:', canvasWidth, 'x', canvasHeight)
 
   // Add lights
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.8)
@@ -669,9 +670,8 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     model.position.x = centerX
     model.position.y = centerY - lensOffsetY  // Move glasses DOWN so lenses align with eyes
 
-    // Z position: Push glasses slightly forward for proper 3D depth
-    // With PerspectiveCamera, this creates the realistic "temples wrap around ears" effect
-    model.position.z = 50  // Bring glasses forward in 3D space
+    // Z position: With OrthographicCamera, Z doesn't affect size, just render order
+    model.position.z = 0
 
     // Scale glasses based on eye distance
     // Glasses lens-to-lens distance should match eye distance
