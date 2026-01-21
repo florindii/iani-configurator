@@ -162,9 +162,6 @@ let camera: THREE.OrthographicCamera | null = null
 let model: THREE.Object3D | null = null
 let animationFrameId: number | null = null
 
-// Clipping plane to hide temple ends behind the face
-// The plane clips everything with z < 0 (behind the face plane)
-let clippingPlane: THREE.Plane | null = null
 
 // Debug eye markers
 let leftEyeMarker: THREE.Mesh | null = null
@@ -296,15 +293,10 @@ async function initThreeJS() {
   renderer.setSize(canvasWidth, canvasHeight)
   renderer.setClearColor(0x000000, 0) // Fully transparent
 
-  // Enable clipping to hide temple ends behind the face
-  renderer.localClippingEnabled = true
-
   // Create scene
   scene = new THREE.Scene()
 
-  // Create clipping plane that hides anything behind z < -50 (the temple ends)
-  // Normal points towards camera (+z), clips anything on negative side
-  clippingPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 50)
+  // No clipping plane - show full glasses including temples
 
   // Create OrthographicCamera for flat 2D appearance (no perspective distortion)
   // This makes temples appear straight/parallel like in a mirror
@@ -435,23 +427,7 @@ async function loadModel() {
 
     // NOTE: Initial position will be overwritten by face tracking
 
-    // Apply clipping plane to all materials to hide temple ends
-    if (clippingPlane) {
-      model.traverse((child) => {
-        if ((child as THREE.Mesh).isMesh) {
-          const mesh = child as THREE.Mesh
-          if (mesh.material) {
-            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-            materials.forEach((mat) => {
-              if (mat && 'clippingPlanes' in mat) {
-                (mat as THREE.Material & { clippingPlanes: THREE.Plane[] }).clippingPlanes = [clippingPlane!]
-              }
-            })
-          }
-        }
-      })
-      console.log('✂️ Clipping plane applied to hide temple ends')
-    }
+    // No clipping - show full model including temples
 
     // Make model visible
     model.visible = true
@@ -484,22 +460,20 @@ function createFallbackGlasses() {
   // Create simple glasses shape using Three.js primitives
   const glassesGroup = new THREE.Group()
 
-  // Frame material with clipping
+  // Frame material
   const frameMaterial = new THREE.MeshStandardMaterial({
     color: 0x222222,
     metalness: 0.8,
-    roughness: 0.2,
-    clippingPlanes: clippingPlane ? [clippingPlane] : []
+    roughness: 0.2
   })
 
-  // Lens material (semi-transparent) with clipping
+  // Lens material (semi-transparent)
   const lensMaterial = new THREE.MeshStandardMaterial({
     color: 0x333333,
     transparent: true,
     opacity: 0.3,
     metalness: 0.1,
-    roughness: 0.1,
-    clippingPlanes: clippingPlane ? [clippingPlane] : []
+    roughness: 0.1
   })
 
   // Left lens frame
