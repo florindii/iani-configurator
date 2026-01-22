@@ -831,13 +831,27 @@ watch(() => props.selectedColor, (newColor) => {
   }
 })
 
+// Notify parent (Shopify modal) to hide/show its close button
+function notifyParentTryOnState(isOpen: boolean) {
+  // Send message to parent window (Shopify iframe container)
+  if (window.parent !== window) {
+    window.parent.postMessage({
+      type: isOpen ? 'IANI_TRYON_OPENED' : 'IANI_TRYON_CLOSED'
+    }, '*')
+  }
+}
+
 // Lifecycle
 onMounted(() => {
+  // Notify parent that try-on modal is open
+  notifyParentTryOnState(true)
   // Auto-request camera on mount
   // requestCameraAccess() // Uncomment to auto-start
 })
 
 onUnmounted(() => {
+  // Notify parent that try-on modal is closed
+  notifyParentTryOnState(false)
   cleanup()
 })
 </script>
@@ -900,6 +914,7 @@ onUnmounted(() => {
   padding: 10px;
   border-radius: 50%;
   transition: all 0.2s;
+  z-index: 1000;
 }
 
 .close-button:hover {

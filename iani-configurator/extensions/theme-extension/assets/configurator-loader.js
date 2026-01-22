@@ -153,6 +153,16 @@ containers.forEach(function(w){
       const d=e.data;
       if(!d||typeof d!=='object')return;
       console.log('[Iani] Message received:',d.type);
+
+      // Handle Virtual Try-On state changes - hide/show modal close button
+      if(d.type==='IANI_TRYON_OPENED'){
+        console.log('[Iani] Try-On opened, hiding modal close button');
+        if(modalClose)modalClose.style.display='none';
+      }
+      if(d.type==='IANI_TRYON_CLOSED'){
+        console.log('[Iani] Try-On closed, showing modal close button');
+        if(modalClose)modalClose.style.display='flex';
+      }
       if(d.type==='IANI_READY'&&iframe&&iframe.contentWindow){
         iframe.contentWindow.postMessage({type:'IANI_INIT',payload:{productId:c.productId,variantId:c.variantId,productTitle:c.productTitle,productPrice:c.productPrice,shop:c.shop,currency:c.currency,moneyFormat:c.moneyFormat}},c.configuratorUrl);
       }
