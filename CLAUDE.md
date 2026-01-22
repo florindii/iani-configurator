@@ -1,735 +1,141 @@
-# Iani 3D Configurator - Shopify App Development Roadmap
+# Iani 3D Configurator - Complete Project Knowledge Base
+
+---
+
+# PART 1: DEVELOPMENT REFERENCE
 
 ## Project Overview
 
 **Project**: Iani 3D Configurator
-**Goal**: Transform into a publishable Shopify App Store application
-**Current State**: ~75% complete (core 3D configurator is production-ready)
-**Target**: Public Shopify App for merchants to sell customizable 3D products
+**Type**: Shopify App for 3D product customization (Glasses)
+**Current State**: 85% complete
+**Stack**: Vue.js 3 + Three.js + TypeScript + Vite
+**Deployment**: Vercel (Frontend) + Shopify (Theme Extension)
 
 ---
 
-## Current Architecture
+## Quick Start
+
+```bash
+npm install          # Install dependencies
+npm run dev          # Development server (localhost:5173)
+npm run build        # Production build
+npm run preview      # Preview production build
+```
+
+---
+
+## Architecture
 
 ```
 iani-configurator/
-├── src/                    # Vue.js 3D Configurator (Frontend)
+├── src/
 │   ├── components/
-│   │   └── ThreeSceneMinimal.vue  # Main 3D component (2000+ lines)
-│   └── services/
-│       └── shopifyService.ts      # Shopify cart integration
-│
-├── iani-configurator/      # Shopify Remix Admin App
-│   ├── app/routes/         # Admin pages & API endpoints
-│   ├── prisma/             # Database schema
-│   └── extensions/         # Theme extensions (TO BE CREATED)
-│
-├── server/                 # Express Bridge Server
-│   └── index.js            # API proxy, file uploads
-│
-├── api/                    # Vercel Serverless Functions
-├── public/models/          # 3D GLB/GLTF models
-├── shopify-integration/    # Liquid templates (deprecated method)
-└── dist/                   # Production build output
+│   │   ├── ThreeSceneMinimal.vue    # Main 3D configurator
+│   │   └── VirtualTryOn.vue         # AR try-on with face tracking
+│   ├── services/
+│   │   ├── shopifyService.ts        # Shopify cart integration
+│   │   └── faceTrackingService.ts   # MediaPipe face detection
+│   ├── App.vue
+│   └── main.ts
+├── iani-configurator/               # Shopify Remix Admin App
+│   ├── app/routes/
+│   ├── prisma/
+│   └── extensions/
+├── public/models/                   # 3D GLB models
+├── dist/                            # Production build
+└── vercel.json
 ```
 
 ---
 
-## What's Complete
+## Development Progress: 88%
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| 3D Model Rendering (Three.js) | ✅ | High-quality GLB support |
-| Color Customization | ✅ | 6 presets + custom picker |
-| Material Selection | ✅ | Frame materials with pricing |
-| Dynamic Pricing | ✅ | Real-time calculation |
-| Cart Integration | ✅ | PostMessage API to Shopify |
-| Shopify Admin App (Remix) | ✅ | Basic product management |
-| Database Schema (Prisma) | ✅ | Session, Product3D, Configurations |
-| Vercel Deployment | ✅ | Frontend + API functions |
-| Mobile Responsive | ✅ | Works on all devices |
+### Completed Features ✅
 
----
+| Feature | File Location | Notes |
+|---------|---------------|-------|
+| **3D Configurator** | | |
+| 3D Model Rendering | `ThreeSceneMinimal.vue` | Three.js GLB loader |
+| 360° Rotation | `ThreeSceneMinimal.vue` | OrbitControls (zoom, pan, rotate) |
+| Color Customization | `ThreeSceneMinimal.vue` | 6 presets + custom picker |
+| Material Selection | `ThreeSceneMinimal.vue` | Frame materials with pricing |
+| Dynamic Pricing | `ThreeSceneMinimal.vue` | Real-time calculation |
+| **AR - Virtual Try-On (Face)** | | |
+| Face Tracking | `faceTrackingService.ts` | MediaPipe Face Mesh |
+| Glasses Overlay | `VirtualTryOn.vue` | Real-time face positioning |
+| Head Rotation Following | `VirtualTryOn.vue` | Pitch, yaw, roll tracking |
+| Color Change in AR | `VirtualTryOn.vue` | Switch colors while trying on |
+| Photo Capture | `VirtualTryOn.vue` | Save preview for cart |
+| Photo Download | `VirtualTryOn.vue` | Download to device |
+| **AR - View in Room (Space)** | | |
+| Place in Environment | `ThreeSceneMinimal.vue` | WebXR / native AR |
+| Furniture Support | | Sofas, chairs, tables, etc. |
+| Real-world Scale | | Accurate product sizing |
+| **E-commerce** | | |
+| Cart Integration | `shopifyService.ts` | PostMessage to Shopify |
+| Mobile Responsive | All components | Full mobile support |
+| Vercel Deployment | `vercel.json` | Auto-deploy configured |
 
-## What's Missing for App Store
+### Remaining Features (12%)
 
-| Requirement | Priority | Status |
-|-------------|----------|--------|
-| Theme App Extension | CRITICAL | ❌ Not created |
-| Production Database (PostgreSQL) | HIGH | ❌ Using SQLite |
-| Permanent Hosting URL | HIGH | ❌ Using Cloudflare tunnel |
-| GDPR Compliance Endpoints | HIGH | ❌ Not implemented |
-| App Listing Assets | MEDIUM | ❌ Not prepared |
-| Additional OAuth Scopes | MEDIUM | ⚠️ May need more |
-| Rate Limiting | MEDIUM | ❌ Not implemented |
-| Unit/Integration Tests | LOW | ❌ Not written |
-
----
-
-## Implementation Roadmap
-
-### Phase 1: Test Current State (Day 1)
-
-**Goal**: Verify everything works on your dev store before making changes.
-
-#### Tasks:
-
-1. **Start the Shopify Remix app**
-   ```bash
-   cd iani-configurator
-   npm install
-   npm run dev
-   ```
-   This opens a Cloudflare tunnel and starts the admin app.
-
-2. **Build and serve the Vue configurator**
-   ```bash
-   # In project root (separate terminal)
-   npm install
-   npm run build
-   npm run preview
-   ```
-
-3. **Install on dev store**
-   - Go to your Shopify Partner dashboard
-   - Navigate to Apps > iani-configurator
-   - Install on `ianii.myshopify.com`
-
-4. **Test the admin interface**
-   - Open your dev store admin
-   - Go to Apps > iani-configurator
-   - Create a test 3D product
-   - Verify database entries are created
-
-5. **Test the storefront integration**
-   - Currently requires manual Liquid file injection
-   - Use files from `/shopify-integration/` folder
-   - Test: customize product → add to cart → checkout
-   - Verify configuration data appears in order
-
-#### Verification Checklist:
-- [ ] Admin app loads without errors
-- [ ] Can create/edit 3D products
-- [ ] 3D configurator renders correctly
-- [ ] Color changes work in real-time
-- [ ] Price updates dynamically
-- [ ] Add to cart succeeds
-- [ ] Configuration data saved to database
-- [ ] Order contains customization details
+| Feature | Priority | Effort | Status |
+|---------|----------|--------|--------|
+| Theme App Extension | CRITICAL | Medium | 🔄 In Progress |
+| PostgreSQL Database | HIGH | Low | ❌ Pending |
+| GDPR Compliance | HIGH | Low | ❌ Pending |
+| App Store Submission | HIGH | Medium | ❌ Pending |
+| Green dot removal (try-on) | LOW | Trivial | ❌ Debug markers |
 
 ---
 
-### Phase 2: Theme App Extension (Days 2-4)
+## Key Technical Details
 
-**Goal**: Create the required App Block for Shopify App Store compliance.
+### AR Features (Dual AR System)
 
-#### Why This Is Required:
-- Shopify deprecated direct Liquid file injection for public apps
-- All storefront integrations must use Theme App Extensions
-- This is a **blocker** for App Store submission
+**1. Virtual Try-On (Face AR)** - For wearables (glasses, jewelry)
+- **Camera**: OrthographicCamera (no perspective distortion)
+- **Face Detection**: MediaPipe Face Mesh via CDN
+- **Positioning**: Eye landmarks for glasses placement
+- **Rotation**: `model.rotation.y = Math.PI` (facing user)
+- Photo capture and download support
+- Real-time color changes while trying on
 
-#### Directory Structure to Create:
+**2. View in Room (Space AR)** - For furniture/home decor
+- **Technology**: WebXR / native device AR
+- **Use case**: Place sofas, chairs, tables in real environment
+- **Features**: Real-world scale, surface detection
+- Works on AR-capable mobile devices
 
-```
-iani-configurator/extensions/
-└── theme-extension/
-    ├── blocks/
-    │   └── 3d-configurator.liquid      # Main app block
-    ├── snippets/
-    │   └── configurator-styles.liquid  # Shared styles
-    ├── assets/
-    │   ├── configurator-loader.js      # JavaScript loader
-    │   └── configurator.css            # Styles
-    ├── locales/
-    │   └── en.default.json             # Translations
-    └── shopify.extension.toml          # Extension config
-```
+This **dual AR approach** is a key differentiator - competitors typically only offer one type of AR.
 
-#### Implementation Steps:
-
-1. **Generate extension scaffold**
-   ```bash
-   cd iani-configurator
-   shopify app generate extension --type theme_app_extension --name theme-extension
-   ```
-
-2. **Create the app block** (`blocks/3d-configurator.liquid`):
-   ```liquid
-   {% comment %}
-     Iani 3D Configurator App Block
-     Renders the 3D product configurator on product pages
-   {% endcomment %}
-
-   <div
-     id="iani-3d-configurator"
-     class="iani-configurator-container"
-     data-product-id="{{ product.id }}"
-     data-variant-id="{{ product.selected_or_first_available_variant.id }}"
-     data-shop="{{ shop.permanent_domain }}"
-     data-configurator-url="{{ block.settings.configurator_url }}"
-   >
-     <div class="iani-loading">Loading 3D Configurator...</div>
-   </div>
-
-   <script src="{{ 'configurator-loader.js' | asset_url }}" defer></script>
-   <link rel="stylesheet" href="{{ 'configurator.css' | asset_url }}">
-
-   {% schema %}
-   {
-     "name": "3D Product Configurator",
-     "target": "section",
-     "enabled_on": {
-       "templates": ["product"]
-     },
-     "settings": [
-       {
-         "type": "text",
-         "id": "configurator_url",
-         "label": "Configurator URL",
-         "default": "https://iani-configurator.vercel.app"
-       },
-       {
-         "type": "select",
-         "id": "display_mode",
-         "label": "Display Mode",
-         "options": [
-           { "value": "inline", "label": "Inline" },
-           { "value": "modal", "label": "Modal Popup" },
-           { "value": "fullscreen", "label": "Fullscreen" }
-         ],
-         "default": "inline"
-       },
-       {
-         "type": "range",
-         "id": "height",
-         "label": "Configurator Height",
-         "min": 400,
-         "max": 800,
-         "step": 50,
-         "default": 600,
-         "unit": "px"
-       }
-     ]
-   }
-   {% endschema %}
-   ```
-
-3. **Create JavaScript loader** (`assets/configurator-loader.js`):
-   ```javascript
-   (function() {
-     const container = document.getElementById('iani-3d-configurator');
-     if (!container) return;
-
-     const config = {
-       productId: container.dataset.productId,
-       variantId: container.dataset.variantId,
-       shop: container.dataset.shop,
-       configuratorUrl: container.dataset.configuratorUrl
-     };
-
-     // Create iframe for configurator
-     const iframe = document.createElement('iframe');
-     iframe.src = `${config.configuratorUrl}?product=${config.productId}&shop=${config.shop}`;
-     iframe.style.width = '100%';
-     iframe.style.height = '100%';
-     iframe.style.border = 'none';
-     iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope';
-
-     container.innerHTML = '';
-     container.appendChild(iframe);
-
-     // Listen for messages from configurator
-     window.addEventListener('message', function(event) {
-       if (event.origin !== config.configuratorUrl) return;
-
-       const data = event.data;
-       if (data.type === 'ADD_TO_CART') {
-         // Handle add to cart via Shopify AJAX API
-         fetch('/cart/add.js', {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({
-             id: data.variantId,
-             quantity: 1,
-             properties: data.configuration
-           })
-         })
-         .then(res => res.json())
-         .then(() => {
-           window.location.href = '/cart';
-         });
-       }
-     });
-   })();
-   ```
-
-4. **Update extension config** (`shopify.extension.toml`):
-   ```toml
-   api_version = "2025-04"
-
-   [[extensions]]
-   name = "Iani 3D Configurator"
-   handle = "iani-3d-configurator"
-   type = "theme_app_extension"
-
-   [extensions.capabilities]
-   network_access = true
-   ```
-
-5. **Deploy the extension**
-   ```bash
-   cd iani-configurator
-   shopify app deploy
-   ```
-
-6. **Test on dev store**
-   - Go to Online Store > Themes > Customize
-   - Add the "3D Product Configurator" block to product pages
-   - Test the full flow
-
-#### Verification Checklist:
-- [ ] Extension shows in theme editor
-- [ ] Block can be added to product pages
-- [ ] Settings (URL, height, mode) work correctly
-- [ ] Configurator loads in iframe
-- [ ] Add to cart works via PostMessage
-- [ ] Works on mobile themes
-
----
-
-### Phase 3: Production Infrastructure (Days 5-6)
-
-**Goal**: Set up production-ready hosting and database.
-
-#### 3.1 PostgreSQL Database Setup
-
-**Option A: Neon (Recommended - Free tier available)**
-```bash
-# 1. Create account at https://neon.tech
-# 2. Create new project
-# 3. Get connection string
-# 4. Update Prisma schema
-```
-
-Update `iani-configurator/prisma/schema.prisma`:
-```prisma
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-```
-
-Run migrations:
-```bash
-cd iani-configurator
-npx prisma migrate dev --name init
-```
-
-**Option B: Railway**
-```bash
-# 1. Create account at https://railway.app
-# 2. Create PostgreSQL service
-# 3. Copy connection string to .env
-```
-
-**Option C: Heroku Postgres**
-```bash
-heroku addons:create heroku-postgresql:essential-0
-heroku config:get DATABASE_URL
-```
-
-#### 3.2 App Hosting (Choose One)
-
-**Option A: Fly.io (Recommended for Shopify apps)**
-```bash
-# Install Fly CLI
-curl -L https://fly.io/install.sh | sh
-
-# Login and deploy
-fly auth login
-fly launch --name iani-configurator-app
-
-# Set secrets
-fly secrets set SHOPIFY_API_KEY=xxx SHOPIFY_API_SECRET=xxx DATABASE_URL=xxx
-```
-
-**Option B: Heroku**
-```bash
-heroku create iani-configurator-app
-heroku config:set SHOPIFY_API_KEY=xxx SHOPIFY_API_SECRET=xxx
-git push heroku main
-```
-
-**Option C: Render.com**
-- Connect GitHub repo
-- Add environment variables
-- Deploy
-
-#### 3.3 Update Shopify App Config
-
-Edit `iani-configurator/shopify.app.toml`:
-```toml
-client_id = "0c77e35b44769e334e279853c0764719"
-name = "Iani 3D Configurator"
-handle = "iani-3d-configurator"
-application_url = "https://your-production-url.fly.dev"  # UPDATE THIS
-embedded = true
-
-[auth]
-redirect_urls = [
-  "https://your-production-url.fly.dev/auth/callback",
-  "https://your-production-url.fly.dev/auth/shopify/callback"
-]
-
-[webhooks]
-api_version = "2025-04"
-```
-
-#### 3.4 Environment Variables for Production
-
-Create `.env.production`:
-```env
-SHOPIFY_API_KEY=0c77e35b44769e334e279853c0764719
-SHOPIFY_API_SECRET=your_secret_here
-DATABASE_URL=postgresql://user:pass@host:5432/dbname
-NODE_ENV=production
-CONFIGURATOR_URL=https://iani-configurator.vercel.app
-```
-
-#### Verification Checklist:
-- [ ] PostgreSQL database connected
-- [ ] Migrations applied successfully
-- [ ] App deployed to permanent URL
-- [ ] OAuth flow works with production URL
-- [ ] Webhooks receiving events
-- [ ] SSL/HTTPS working
-
----
-
-### Phase 4: GDPR Compliance (Day 7)
-
-**Goal**: Implement required data privacy endpoints.
-
-#### Required Endpoints
-
-Shopify requires these webhooks for App Store approval:
-
-1. **Customer Data Request** - When customer requests their data
-2. **Customer Redact** - When customer requests deletion
-3. **Shop Redact** - When shop uninstalls and requests data deletion
-
-#### Implementation
-
-Create `iani-configurator/app/routes/api.gdpr.tsx`:
+### Important Code Patterns
 
 ```typescript
-import { json, type ActionFunctionArgs } from "@remix-run/node";
-import { authenticate } from "../shopify.server";
-import db from "../db.server";
-
-export async function action({ request }: ActionFunctionArgs) {
-  const { topic, shop, payload } = await authenticate.webhook(request);
-
-  switch (topic) {
-    case "CUSTOMERS_DATA_REQUEST":
-      // Customer requested their data
-      // Return all configurations for this customer
-      const customerConfigs = await db.productConfiguration.findMany({
-        where: {
-          OR: [
-            { customerEmail: payload.customer.email },
-            { shopifyCustomerId: String(payload.customer.id) }
-          ]
-        }
-      });
-
-      console.log(`Data request for customer ${payload.customer.id}:`, customerConfigs);
-      // In production: email this data to the customer or merchant
-      break;
-
-    case "CUSTOMERS_REDACT":
-      // Customer requested deletion
-      await db.productConfiguration.deleteMany({
-        where: {
-          OR: [
-            { customerEmail: payload.customer.email },
-            { shopifyCustomerId: String(payload.customer.id) }
-          ]
-        }
-      });
-      console.log(`Deleted data for customer ${payload.customer.id}`);
-      break;
-
-    case "SHOP_REDACT":
-      // Shop uninstalled and requested data deletion
-      await db.product3D.deleteMany({
-        where: { shop }
-      });
-      await db.session.deleteMany({
-        where: { shop }
-      });
-      console.log(`Deleted all data for shop ${shop}`);
-      break;
-
-    default:
-      console.log(`Unknown GDPR topic: ${topic}`);
+// Color application to 3D model
+model.traverse((child) => {
+  if (child.isMesh && child.material) {
+    child.material.color.set(hexColor)
   }
+})
 
-  return json({ success: true });
+// Face coordinates to Three.js (VirtualTryOn.vue:611)
+function faceToThreeJS(faceX: number, faceY: number) {
+  const pixelX = faceX * canvasWidth
+  const pixelY = faceY * canvasHeight
+  const worldX = pixelX - canvasWidth / 2
+  const worldY = -(pixelY - canvasHeight / 2)
+  return { x: worldX, y: worldY }
 }
 ```
 
-#### Update Webhooks Config
-
-Edit `iani-configurator/shopify.app.toml`:
-```toml
-[[webhooks.subscriptions]]
-topics = ["customers/data_request"]
-uri = "/api/gdpr"
-
-[[webhooks.subscriptions]]
-topics = ["customers/redact"]
-uri = "/api/gdpr"
-
-[[webhooks.subscriptions]]
-topics = ["shop/redact"]
-uri = "/api/gdpr"
-```
-
-#### Create Privacy Policy Page
-
-Create `iani-configurator/app/routes/privacy.tsx`:
-```typescript
-export default function Privacy() {
-  return (
-    <div style={{ padding: "40px", maxWidth: "800px", margin: "0 auto" }}>
-      <h1>Privacy Policy</h1>
-      <p>Last updated: [DATE]</p>
-
-      <h2>Data We Collect</h2>
-      <p>When you use the Iani 3D Configurator, we collect:</p>
-      <ul>
-        <li>Product configuration choices (colors, materials, options)</li>
-        <li>Preview images of your customized products</li>
-        <li>Email address (if provided for saving configurations)</li>
-      </ul>
-
-      <h2>How We Use Your Data</h2>
-      <p>We use this data to:</p>
-      <ul>
-        <li>Save your product customizations</li>
-        <li>Process your orders with custom options</li>
-        <li>Improve our configurator experience</li>
-      </ul>
-
-      <h2>Data Retention</h2>
-      <p>Configuration data is retained for 90 days after creation,
-         or until you request deletion.</p>
-
-      <h2>Your Rights</h2>
-      <p>You can request your data or deletion by contacting
-         the store where you made your purchase.</p>
-
-      <h2>Contact</h2>
-      <p>For privacy concerns: [YOUR EMAIL]</p>
-    </div>
-  );
-}
-```
-
-#### Verification Checklist:
-- [ ] GDPR webhooks registered
-- [ ] Data request handler works
-- [ ] Customer redact deletes data
-- [ ] Shop redact cleans up completely
-- [ ] Privacy policy accessible
-- [ ] Terms of service page (optional but recommended)
-
----
-
-### Phase 5: App Store Submission (Days 8-10)
-
-**Goal**: Prepare and submit app for Shopify review.
-
-#### 5.1 App Listing Requirements
-
-**Required Assets:**
-- [ ] App icon (1200x1200 PNG)
-- [ ] App screenshots (1600x900, 5-10 images)
-- [ ] Demo video (optional but highly recommended)
-- [ ] App description (2000+ characters)
-- [ ] Feature list (bullet points)
-- [ ] Category selection
-
-**Example App Description:**
-```
-Transform your Shopify store with stunning 3D product customization.
-Iani 3D Configurator lets your customers personalize products in
-real-time with an interactive 3D viewer.
-
-KEY FEATURES:
-• Real-time 3D product visualization
-• Color and material customization
-• Dynamic pricing based on options
-• Mobile-responsive design
-• Easy theme integration with App Blocks
-• No coding required
-
-PERFECT FOR:
-• Furniture stores
-• Custom product manufacturers
-• Fashion and accessories
-• Home decor
-• Any customizable products
-
-HOW IT WORKS:
-1. Upload your 3D model (GLTF/GLB format)
-2. Configure customization options
-3. Add the configurator to your product pages
-4. Customers customize and add to cart
-
-SUPPORT:
-We provide full onboarding and support. Contact us at [email].
-```
-
-#### 5.2 Pricing Strategy
-
-**Options to Consider:**
-1. **Free + Premium** - Basic free, advanced features paid
-2. **Usage-based** - Free up to X configurations/month
-3. **Flat monthly** - $29-99/month based on plan
-4. **Per-product** - Free for 1 product, $X per additional
-
-**Recommended Starting Point:**
-- Free tier: 1 product, basic features
-- Pro: $29/month - Unlimited products, advanced features
-- Enterprise: Custom pricing - White-label, priority support
-
-#### 5.3 Submission Checklist
-
-```
-Pre-submission:
-- [ ] App works on fresh install (test on new dev store)
-- [ ] App works on Dawn theme (Shopify default)
-- [ ] Mobile experience is acceptable
-- [ ] All required scopes justified
-- [ ] GDPR endpoints implemented
-- [ ] Privacy policy published
-- [ ] No console errors in production
-- [ ] Rate limiting implemented
-
-Submission:
-- [ ] App listing complete in Partner Dashboard
-- [ ] All screenshots uploaded
-- [ ] Demo video uploaded (recommended)
-- [ ] Pricing plans configured
-- [ ] Test credentials provided to reviewers
-- [ ] Submit for review
-
-Post-submission:
-- [ ] Monitor review status
-- [ ] Respond to reviewer feedback within 48 hours
-- [ ] Make requested changes promptly
-- [ ] Re-submit after fixes
-```
-
-#### 5.4 Common Rejection Reasons
-
-Avoid these issues:
-1. **Broken OAuth** - Test install/uninstall multiple times
-2. **Console errors** - Check browser console in production
-3. **Missing GDPR** - All 3 webhooks must work
-4. **Poor mobile UX** - Test on actual mobile devices
-5. **Scope creep** - Only request scopes you actually use
-6. **No value** - Make sure app provides clear value
-
----
-
-## Feature Enhancement Ideas
-
-### Priority Features (Before Launch)
-
-| Feature | Effort | Impact |
-|---------|--------|--------|
-| **Model upload in admin** | Medium | HIGH - core value prop |
-| **Multiple views/angles** | Low | Medium |
-| **Zoom controls** | Low | Medium |
-| **Configuration sharing URL** | Low | HIGH |
-| **Save for later** | Low | Medium |
-
-### Future Features (Post Launch)
-
-| Feature | Effort | Impact |
-|---------|--------|--------|
-| **AR preview (View in Room)** | High | HIGH |
-| **Custom texture upload** | High | HIGH |
-| **Analytics dashboard** | Medium | Medium |
-| **Multi-model per product** | Medium | Medium |
-| **Bulk model import** | Medium | Low |
-| **Custom branding** | Low | Medium |
-| **White-label option** | Medium | Medium |
-| **API for developers** | High | Medium |
-
----
-
-## Commands Reference
-
-### Development
-
-```bash
-# Start Shopify Remix app (with tunnel)
-cd iani-configurator && npm run dev
-
-# Build Vue configurator
-npm run build
-
-# Preview production build
-npm run preview
-
-# Start Express bridge server
-cd server && npm run dev
-```
-
-### Deployment
-
-```bash
-# Deploy to Vercel (Vue configurator)
-vercel --prod
-
-# Deploy Shopify app
-cd iani-configurator && shopify app deploy
-
-# Deploy theme extension
-cd iani-configurator && shopify app deploy --reset
-```
-
-### Database
-
-```bash
-# Generate Prisma client
-cd iani-configurator && npx prisma generate
-
-# Run migrations
-npx prisma migrate dev
-
-# View database
-npx prisma studio
-
-# Reset database (dev only!)
-npx prisma migrate reset
-```
-
-### Debugging
-
-```bash
-# Check Shopify app status
-cd iani-configurator && shopify app info
-
-# View app logs
-shopify app logs
-
-# Validate extension
-shopify app extension validate
+### Shopify Cart Integration
+```javascript
+window.parent.postMessage({
+  type: 'ADD_TO_CART',
+  variantId: '...',
+  configuration: { color, material, ... }
+}, '*')
 ```
 
 ---
@@ -738,68 +144,296 @@ shopify app extension validate
 
 | Purpose | Location |
 |---------|----------|
-| Main 3D component | `src/components/ThreeSceneMinimal.vue` |
+| Main 3D configurator | `src/components/ThreeSceneMinimal.vue` |
+| Virtual try-on | `src/components/VirtualTryOn.vue` |
+| Face tracking | `src/services/faceTrackingService.ts` |
 | Shopify service | `src/services/shopifyService.ts` |
-| Admin routes | `iani-configurator/app/routes/` |
-| Database schema | `iani-configurator/prisma/schema.prisma` |
-| App config | `iani-configurator/shopify.app.toml` |
-| Express server | `server/index.js` |
-| Vercel config | `vercel.json` |
-| 3D models | `public/models/` |
-| Liquid templates | `shopify-integration/` |
+| 3D models | `public/models/IANI_Glasses.glb` |
+| Build output | `dist/` |
+
+---
+
+## Commands Reference
+
+```bash
+# Development
+npm run dev                    # Start dev server
+npm run build                  # Production build
+npx vercel --prod --yes        # Deploy to Vercel
+
+# Shopify App (from iani-configurator/)
+npm run dev                    # Start with tunnel
+shopify app deploy             # Deploy app
+npx prisma studio              # View database
+
+# Git
+git add . && git commit -m "message" && git push
+```
+
+---
+
+## Common Issues & Solutions
+
+| Issue | Solution |
+|-------|----------|
+| Temples spread/distorted | Use OrthographicCamera, not PerspectiveCamera |
+| Temples clipped/short | Remove clipping plane configuration |
+| Face tracking not working | Check HTTPS, camera permissions, MediaPipe CDN |
+| Model not loading | Check CORS, verify GLB file, check console |
+| Colors not applying | Ensure material has `.color` property |
+
+---
+
+## Recent Changes (January 2025)
+
+- Fixed glasses temple orientation in Virtual Try-On
+- Switched to OrthographicCamera for proper 2D rendering
+- Removed clipping plane to show full temple length
+- Implemented Virtual Try-On with MediaPipe face tracking
+- Added photo capture and download functionality
+
+---
+
+## Next Development Steps
+
+1. **Remove debug eye markers** - Set `DEBUG_SHOW_EYE_MARKERS = false`
+2. **Complete Theme App Extension** - Required for Shopify App Store
+3. **Set up PostgreSQL** - Replace SQLite (use Neon.tech)
+4. **Implement GDPR endpoints** - Customer data/redact webhooks
+5. **App Store submission** - Screenshots, description, review
+
+---
+---
+
+# PART 2: BUSINESS & PRODUCT KNOWLEDGE BASE
+
+## Product Vision
+
+**Iani 3D Configurator** is a Shopify app that enables merchants to offer an immersive, interactive shopping experience with 3D visualization and dual AR capabilities.
+
+### Core Capabilities
+- **3D Product Viewer** - Interactive 360° rotation, zoom, pan
+- **Real-time Customization** - Colors, materials, dynamic pricing
+- **Face AR (Virtual Try-On)** - Glasses/jewelry overlay on user's face via camera
+- **Space AR (View in Room)** - Place furniture/decor in real environment
+- **Photo Capture** - Save and share AR experiences
+
+### Unique Selling Point
+**Dual AR System** - Most competitors offer only Face AR OR Space AR. We offer BOTH, making the app suitable for:
+- Eyewear stores (Face AR)
+- Furniture stores (Space AR)
+- Jewelry stores (Face AR)
+- Home decor (Space AR)
+- Any customizable product (3D Configurator)
+
+---
+
+## Target Market
+
+### Primary Audience (Face AR - Virtual Try-On)
+- **Shopify eyewear stores** - prescription glasses, sunglasses, fashion eyewear
+- **Jewelry stores** - earrings, necklaces, watches
+- **Custom eyewear manufacturers** - personalized frames
+- **Boutique optical shops** - differentiation online
+
+### Primary Audience (Space AR - View in Room)
+- **Furniture stores** - sofas, chairs, tables, beds
+- **Home decor stores** - lamps, rugs, wall art
+- **Interior design shops** - complete room visualization
+- **Outdoor furniture** - patio sets, garden items
+
+### Market Size
+- Global eyewear market: $180+ billion
+- Global furniture e-commerce: $250+ billion
+- Online sales growing 8-12% annually
+- AR experiences increase conversion by 40-60%
+- 61% of shoppers prefer stores with AR capabilities
+
+---
+
+## Competitive Analysis
+
+| Competitor | Type | Strengths | Weaknesses | Our Advantage |
+|------------|------|-----------|------------|---------------|
+| Warby Parker | Face AR | Brand recognition | Proprietary, not for merchants | Open to all Shopify stores |
+| Fittingbox | Face AR | Accurate face mapping | High cost, API-only | No-code + affordable |
+| Threekit | Space AR | Enterprise 3D platform | Very expensive, complex | Simple Shopify integration |
+| Shopify AR | Space AR | Native integration | Basic features only | Advanced customization |
+| Zakeke | 3D Config | Good customization | No AR capabilities | Dual AR system |
+| **Iani** | **BOTH** | Face AR + Space AR + 3D | New to market | **Only dual-AR solution** |
+
+### Our Unique Value Proposition
+1. **Dual AR System** - Both Face AR (try-on) AND Space AR (view in room) - competitors have only one
+2. **Shopify-native** - One-click install, App Block integration
+3. **Affordable** - Fraction of enterprise pricing
+4. **No coding required** - Merchants add via theme editor
+5. **Real-time customization** - Colors, materials, pricing
+6. **Multi-industry** - Works for eyewear, furniture, jewelry, home decor
+
+---
+
+## Business Model
+
+### Pricing Strategy (Proposed)
+
+| Plan | Price | Features |
+|------|-------|----------|
+| **Free** | $0/mo | 1 product, basic 3D viewer, watermark |
+| **Pro** | $29/mo | Unlimited products, AR try-on, no watermark |
+| **Business** | $79/mo | + Analytics, priority support, custom branding |
+| **Enterprise** | Custom | White-label, API access, dedicated support |
+
+### Revenue Projections (Conservative)
+
+| Metric | Year 1 | Year 2 | Year 3 |
+|--------|--------|--------|--------|
+| Free users | 500 | 2,000 | 5,000 |
+| Paid users | 50 | 200 | 600 |
+| MRR | $1,450 | $5,800 | $17,400 |
+| ARR | $17,400 | $69,600 | $208,800 |
+
+---
+
+## Customer Journey
+
+### Merchant (B2B)
+1. **Discovery** - Finds app in Shopify App Store searching "3D glasses" or "virtual try-on"
+2. **Installation** - One-click install, OAuth flow
+3. **Setup** - Upload GLB model, configure colors/materials/pricing
+4. **Integration** - Add App Block to product page via theme editor
+5. **Launch** - Customers can now use 3D configurator
+6. **Growth** - Upgrade to Pro for AR try-on
+
+### End Customer (B2C)
+1. **Browse** - Visits Shopify store product page
+2. **Explore** - Interacts with 3D model (rotate, zoom)
+3. **Customize** - Selects color, material
+4. **Try On** - Opens AR try-on, sees glasses on face
+5. **Capture** - Takes photo, shares with friends
+6. **Purchase** - Adds to cart with configuration saved
+
+---
+
+## Key Metrics to Track
+
+### Product Metrics
+- **Configurator loads** - How many times 3D viewer opened
+- **Customization rate** - % who change color/material
+- **Try-on usage** - % who use AR feature
+- **Photo captures** - Engagement with try-on
+- **Add to cart rate** - Conversion from configurator
+
+### Business Metrics
+- **Install rate** - App Store → Install
+- **Activation rate** - Install → First product configured
+- **Conversion rate** - Free → Paid
+- **Churn rate** - Monthly cancellations
+- **NPS** - Customer satisfaction
+
+---
+
+## Marketing Strategy
+
+### App Store Optimization
+- **Title**: "Iani 3D Configurator - Virtual Try-On for Glasses"
+- **Keywords**: 3D glasses, virtual try-on, AR eyewear, product customizer
+- **Screenshots**: Show 3D viewer, try-on, mobile experience
+- **Video**: 30-second demo of customer journey
+
+### Content Marketing
+- Blog posts: "How AR Try-On Increases Eyewear Sales by 50%"
+- Case studies with early merchants
+- YouTube tutorials: "Setting Up 3D Products on Shopify"
+- Social proof: Before/after conversion rates
+
+### Partnerships
+- 3D model creation services
+- Shopify theme developers
+- Eyewear industry associations
+- Influencer opticians/fashion bloggers
+
+---
+
+## Technical Roadmap (Future Features)
+
+### Q1 2025 (Current)
+- [x] Core 3D configurator
+- [x] Virtual try-on AR
+- [ ] Shopify App Store launch
+
+### Q2 2025
+- [ ] Analytics dashboard
+- [ ] Multiple 3D models per product
+- [ ] Prescription lens visualization
+
+### Q3 2025
+- [ ] AI face shape recommendations
+- [ ] Social sharing integration
+- [ ] Multi-language support
+
+### Q4 2025
+- [ ] iOS/Android native SDK
+- [ ] Enterprise API
+- [ ] White-label solution
+
+### 2026+
+- [ ] Jewelry support (earrings, necklaces)
+- [ ] Hats and headwear
+- [ ] Full outfit visualization
+
+---
+
+## Risk Assessment
+
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|--------|------------|
+| Shopify API changes | Medium | High | Stay updated, modular architecture |
+| Browser compatibility | Low | Medium | Progressive enhancement, fallbacks |
+| MediaPipe deprecation | Low | High | Abstract face tracking service |
+| Competition from Shopify native | Medium | High | Differentiate with features, pricing |
+| Slow merchant adoption | Medium | Medium | Free tier, excellent onboarding |
 
 ---
 
 ## Support & Resources
 
-- **Shopify App Development**: https://shopify.dev/docs/apps
-- **Theme App Extensions**: https://shopify.dev/docs/apps/online-store/theme-app-extensions
-- **Remix Documentation**: https://remix.run/docs
-- **Three.js Documentation**: https://threejs.org/docs
-- **Prisma Documentation**: https://www.prisma.io/docs
-- **Shopify Partner Dashboard**: https://partners.shopify.com
+### For Merchants
+- In-app onboarding wizard
+- Help center documentation
+- Email support (Pro+)
+- Live chat (Business+)
+
+### For Development
+- **Shopify Dev Docs**: https://shopify.dev/docs/apps
+- **Three.js Docs**: https://threejs.org/docs
+- **MediaPipe**: https://developers.google.com/mediapipe
+- **Remix**: https://remix.run/docs
 
 ---
 
-## Progress Tracker
+## Team & Contacts
 
-Use this to track your progress:
-
-```
-[ ] Phase 1: Test Current State
-    [ ] Install on dev store
-    [ ] Test admin interface
-    [ ] Test 3D configurator
-    [ ] Test cart integration
-
-[ ] Phase 2: Theme App Extension
-    [ ] Generate extension
-    [ ] Create app block
-    [ ] Create JS loader
-    [ ] Deploy extension
-    [ ] Test on theme
-
-[ ] Phase 3: Production Infrastructure
-    [ ] Set up PostgreSQL
-    [ ] Deploy to permanent host
-    [ ] Update app config
-    [ ] Test production flow
-
-[ ] Phase 4: GDPR Compliance
-    [ ] Implement webhooks
-    [ ] Create privacy policy
-    [ ] Test data deletion
-
-[ ] Phase 5: App Store Submission
-    [ ] Create listing assets
-    [ ] Write app description
-    [ ] Set up pricing
-    [ ] Submit for review
-    [ ] Address feedback
-    [ ] Launch!
-```
+**Project Owner**: Florian
+**Development**: Claude AI assisted
+**Store**: ianii.myshopify.com
+**App URL**: https://iani-configurator.vercel.app
 
 ---
 
-*Last updated: December 28, 2025*
-*Created for: Iani 3D Configurator Shopify App*
+## Glossary
+
+| Term | Definition |
+|------|------------|
+| **GLB/GLTF** | 3D model file formats (GL Transmission Format) |
+| **Three.js** | JavaScript 3D library for WebGL rendering |
+| **MediaPipe** | Google's ML framework for face detection |
+| **OrthographicCamera** | Camera without perspective distortion |
+| **App Block** | Shopify theme component merchants can add |
+| **PostMessage** | Browser API for cross-origin communication |
+| **AR** | Augmented Reality - overlaying digital on real world |
+| **MRR/ARR** | Monthly/Annual Recurring Revenue |
+
+---
+
+*Last updated: January 2025*
+*Version: 1.0*
