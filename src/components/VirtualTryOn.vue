@@ -71,10 +71,6 @@
             <p>Loading 3D model...</p>
           </div>
 
-          <!-- Capture Success Message -->
-          <div v-if="showCaptureSuccess" class="capture-success">
-            ✓ Preview captured for cart!
-          </div>
         </div>
       </div>
 
@@ -98,15 +94,6 @@
 
         <!-- Action Buttons -->
         <div class="action-buttons">
-          <!-- Capture for Cart -->
-          <button class="capture-btn" @click="captureAndSave" title="Use as cart preview">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"></circle>
-              <circle cx="12" cy="12" r="3"></circle>
-            </svg>
-            <span>Save Preview</span>
-          </button>
-
           <!-- Download Photo -->
           <button class="download-btn" @click="downloadPhoto" title="Download photo">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -152,7 +139,6 @@ const cameraReady = ref(false)
 const cameraError = ref<string | null>(null)
 const faceDetected = ref(false)
 const isLoadingModel = ref(true)
-const showCaptureSuccess = ref(false)
 const selectedColorLocal = ref(props.selectedColor)
 
 // Three.js instances
@@ -735,46 +721,33 @@ function applyColorToModel(hexColor: string) {
 
 /**
  * Combine video and 3D overlay into single canvas
+ * Uses the overlay canvas size to maintain correct proportions
  */
 function combineVideoAndModel(): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
   const video = videoElement.value!
   const overlay = tryOnCanvas.value!
 
-  canvas.width = video.videoWidth || 640
-  canvas.height = video.videoHeight || 480
+  // Use overlay canvas dimensions to maintain correct glasses size
+  // The overlay is sized to match the displayed video, not the native resolution
+  canvas.width = overlay.width
+  canvas.height = overlay.height
 
   const ctx = canvas.getContext('2d')!
 
-  // Draw mirrored video (selfie style)
+  // Draw mirrored video scaled to match overlay size
   ctx.save()
   ctx.scale(-1, 1)
   ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height)
   ctx.restore()
 
-  // Draw 3D overlay (also mirrored)
+  // Draw 3D overlay (also mirrored) - no scaling needed, same size
   ctx.save()
   ctx.scale(-1, 1)
   ctx.drawImage(overlay, -canvas.width, 0, canvas.width, canvas.height)
   ctx.restore()
 
   return canvas
-}
-
-/**
- * Capture and save as cart preview
- */
-function captureAndSave() {
-  const canvas = combineVideoAndModel()
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
-
-  emit('capturePreview', dataUrl)
-
-  // Show success message
-  showCaptureSuccess.value = true
-  setTimeout(() => {
-    showCaptureSuccess.value = false
-  }, 2000)
 }
 
 /**
