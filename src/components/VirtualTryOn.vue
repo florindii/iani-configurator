@@ -73,7 +73,7 @@
 
           <!-- Capture Success Message -->
           <div v-if="showCaptureSuccess" class="capture-success">
-            Photo saved!
+            ✓ Preview captured for cart!
           </div>
         </div>
       </div>
@@ -288,7 +288,8 @@ async function initThreeJS() {
   renderer = new THREE.WebGLRenderer({
     canvas,
     alpha: true,
-    antialias: true
+    antialias: true,
+    preserveDrawingBuffer: true  // Required for screenshot capture
   })
   renderer.setSize(canvasWidth, canvasHeight)
   renderer.setClearColor(0x000000, 0) // Fully transparent
