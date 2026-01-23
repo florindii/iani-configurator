@@ -300,16 +300,20 @@ async function initThreeJS() {
 
   // Create OrthographicCamera for flat 2D appearance (no perspective distortion)
   // This makes temples appear straight/parallel like in a mirror
-  // Near plane is NEGATIVE to include temples that extend behind the glasses (negative Z)
+  //
+  // IMPORTANT: For temples to render fully when glasses are rotated 180°:
+  // - Camera at z=1000 looking towards -Z
+  // - Model at z=0, rotated 180° means temples extend towards +Z (towards camera)
+  // - Near=1 (just in front of camera), Far=2000 (covers everything)
   camera = new THREE.OrthographicCamera(
     -canvasWidth / 2,   // left
     canvasWidth / 2,    // right
     canvasHeight / 2,   // top
     -canvasHeight / 2,  // bottom
-    -500,               // near (negative to render temples behind the frame)
-    2000                // far
+    1,                  // near (minimum positive value)
+    3000                // far (large enough to cover model at any depth)
   )
-  camera.position.z = 500
+  camera.position.z = 1000  // Move camera further back
 
   console.log('📷 OrthographicCamera created, canvas:', canvasWidth, 'x', canvasHeight)
 
