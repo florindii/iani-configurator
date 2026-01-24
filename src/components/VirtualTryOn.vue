@@ -649,15 +649,14 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     // Rotate model so:
     // - Front of glasses faces camera (+Z direction)
     // - Temples extend backward (-Z direction, into the scene/toward face)
-    // Most glasses models are made with front facing +Z or -Z
-    // We use rotation to orient correctly based on head pose
+    //
+    // Y-axis rotation of PI flips front/back (temples go backward)
+    // X-axis follows head pitch (looking up/down)
+    // Z-axis follows head roll (tilting head side to side)
 
-    // Base rotation: flip on X axis to face camera (if model faces -Z by default)
-    // Then apply head rotation
-    const basePitch = Math.PI  // Flip to face camera
-    model.rotation.x = basePitch - landmarks.rotation.pitch * 0.3
-    model.rotation.y = landmarks.rotation.yaw * 0.3  // Follow head yaw
-    model.rotation.z = landmarks.rotation.roll * 0.5  // Roll follows head tilt
+    model.rotation.x = -landmarks.rotation.pitch * 0.3  // Follow head pitch
+    model.rotation.y = Math.PI + landmarks.rotation.yaw * 0.3  // Flip to face user + follow yaw
+    model.rotation.z = landmarks.rotation.roll * 0.5  // Follow head tilt
 
     // Debug logging
     if (Math.random() < 0.02) {
