@@ -615,7 +615,7 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     model.visible = true
 
     // Calculate center point between the two eyes (in world coords)
-    // This is the MIDPOINT between the green dots - where glasses bridge should be
+    // This is the MIDPOINT between the green dots - glasses center should be HERE
     const centerX = (leftEyePos.x + rightEyePos.x) / 2
     const centerY = (leftEyePos.y + rightEyePos.y) / 2
 
@@ -625,29 +625,26 @@ function updateModelPosition(landmarks: FaceLandmarks) {
       Math.pow(rightEyePos.y - leftEyePos.y, 2)
     )
 
-    // Position glasses at the center between eyes
-    // Small upward offset to position bridge at eye level (not lens centers)
-    const lensOffsetY = eyeDistanceWorld * 0.05 // Small offset - glasses should be AT eye level
+    // Position glasses EXACTLY at the midpoint between eyes (green dots)
+    // No offset - the model's center should align with the center between eyes
     model.position.x = centerX
-    model.position.y = centerY + lensOffsetY  // Slight UP adjustment
+    model.position.y = centerY  // Exactly at eye level
 
     // Z position: Place model at z=0 (camera looks at this plane)
     model.position.z = 0
 
     // Scale glasses based on eye distance
-    // Glasses lens-to-lens distance should match eye distance
-    const targetGlassesWidth = eyeDistanceWorld * 2.5
+    // The lens centers should be approximately at the eye positions
+    // Most glasses have lenses that are about 1.8-2.2x the inter-pupillary distance apart
+    const targetGlassesWidth = eyeDistanceWorld * 2.2
     const finalScale = targetGlassesWidth / 150 * baseModelScale
 
     model.scale.setScalar(Math.max(finalScale, 10)) // Minimum scale
 
     // Apply face rotation
-    // IMPORTANT: Video is mirrored (selfie mode), so yaw needs to be inverted
-    // When you turn head RIGHT, yaw is positive, but in mirrored video it looks LEFT
-    // So we need NEGATIVE yaw to make glasses follow the mirrored view correctly
-
+    // Video is mirrored (selfie mode)
     model.rotation.x = -landmarks.rotation.pitch * 0.3  // Follow head pitch
-    model.rotation.y = -landmarks.rotation.yaw * 0.5  // INVERTED yaw for mirrored video
+    model.rotation.y = landmarks.rotation.yaw * 0.5  // Follow head yaw
     model.rotation.z = landmarks.rotation.roll * 0.5  // Follow head tilt
 
     // Debug logging
