@@ -625,35 +625,29 @@ function updateModelPosition(landmarks: FaceLandmarks) {
       Math.pow(rightEyePos.y - leftEyePos.y, 2)
     )
 
-    // Position glasses so the LENS CENTERS align with the eyes
-    // The model's origin is at the bridge, but lenses are below that
-    // So we need to move the glasses DOWN so the lens centers match the eye positions
-    const lensOffsetY = eyeDistanceWorld * 0.3 // Offset to align lens centers with eyes
+    // Position glasses at the center between eyes
+    // Small upward offset to position bridge at eye level (not lens centers)
+    const lensOffsetY = eyeDistanceWorld * 0.05 // Small offset - glasses should be AT eye level
     model.position.x = centerX
-    model.position.y = centerY - lensOffsetY  // Move glasses DOWN so lenses align with eyes
+    model.position.y = centerY + lensOffsetY  // Slight UP adjustment
 
     // Z position: Place model at z=0 (camera looks at this plane)
-    // Temples will naturally extend into -Z (away from camera, toward face)
     model.position.z = 0
 
     // Scale glasses based on eye distance
     // Glasses lens-to-lens distance should match eye distance
-    // Total glasses width is about 2.5x eye distance (lenses + temples)
     const targetGlassesWidth = eyeDistanceWorld * 2.5
-    // baseModelScale was set to make model ~150 units wide, so scale proportionally
     const finalScale = targetGlassesWidth / 150 * baseModelScale
 
     model.scale.setScalar(Math.max(finalScale, 10)) // Minimum scale
 
     // Apply face rotation
-    // The glasses model faces +Z by default (front toward camera)
-    // Temples extend in -Z direction (backward, toward the face/ears)
-    //
-    // DO NOT rotate Y by PI - that flips temples toward camera!
-    // Just apply head tracking rotations
+    // IMPORTANT: Video is mirrored (selfie mode), so yaw needs to be inverted
+    // When you turn head RIGHT, yaw is positive, but in mirrored video it looks LEFT
+    // So we need NEGATIVE yaw to make glasses follow the mirrored view correctly
 
     model.rotation.x = -landmarks.rotation.pitch * 0.3  // Follow head pitch
-    model.rotation.y = landmarks.rotation.yaw * 0.3  // Follow head yaw (no PI flip!)
+    model.rotation.y = -landmarks.rotation.yaw * 0.5  // INVERTED yaw for mirrored video
     model.rotation.z = landmarks.rotation.roll * 0.5  // Follow head tilt
 
     // Debug logging
