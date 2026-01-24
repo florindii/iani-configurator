@@ -144,8 +144,9 @@ const selectedColorLocal = ref(props.selectedColor)
 // Three.js instances
 let renderer: THREE.WebGLRenderer | null = null
 let scene: THREE.Scene | null = null
-let camera: THREE.OrthographicCamera | null = null
+let camera: THREE.PerspectiveCamera | null = null
 let model: THREE.Object3D | null = null
+let cameraDistance = 1000 // Will be calculated based on canvas size
 let animationFrameId: number | null = null
 
 
@@ -285,24 +286,19 @@ async function initThreeJS() {
 
   // No clipping plane - show full glasses including temples
 
-  // Create OrthographicCamera for flat 2D appearance (no perspective distortion)
-  // This makes temples appear straight/parallel like in a mirror
-  //
-  // IMPORTANT: For temples to render fully when glasses are rotated 180°:
-  // - Camera at z=1000 looking towards -Z
-  // - Model at z=0, rotated 180° means temples extend towards +Z (towards camera)
-  // - Near=1 (just in front of camera), Far=2000 (covers everything)
-  camera = new THREE.OrthographicCamera(
-    -canvasWidth / 2,   // left
-    canvasWidth / 2,    // right
-    canvasHeight / 2,   // top
-    -canvasHeight / 2,  // bottom
-    1,                  // near (minimum positive value)
-    3000                // far (large enough to cover model at any depth)
-  )
-  camera.position.z = 1000  // Move camera further back
+  // Use PerspectiveCamera with low FOV for natural temple rendering
+  // Low FOV (10°) gives almost orthographic look but preserves depth/perspective for temples
+  // This way temples extending backward from the face render naturally
+  const fov = 10 // Very low FOV for minimal perspective distortion
+  const aspect = canvasWidth / canvasHeight
+  camera = new THREE.PerspectiveCamera(fov, aspect, 1, 5000)
 
-  console.log('📷 OrthographicCamera created, canvas:', canvasWidth, 'x', canvasHeight)
+  // Position camera far back to compensate for low FOV
+  // Distance needed = (canvasHeight/2) / tan(fov/2) to fill the view
+  cameraDistance = (canvasHeight / 2) / Math.tan((fov * Math.PI / 180) / 2)
+  camera.position.z = cameraDistance
+
+  console.log('📷 PerspectiveCamera created, FOV:', fov, 'distance:', cameraDistance.toFixed(0), 'canvas:', canvasWidth, 'x', canvasHeight)
 
   // Add lights
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.8)
@@ -636,7 +632,8 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     model.position.x = centerX
     model.position.y = centerY - lensOffsetY  // Move glasses DOWN so lenses align with eyes
 
-    // Z position: With OrthographicCamera, Z doesn't affect size, just render order
+    // Z position: Place model at z=0 (camera looks at this plane)
+    // Temples will naturally extend into -Z (away from camera, toward face)
     model.position.z = 0
 
     // Scale glasses based on eye distance
@@ -649,9 +646,17 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     model.scale.setScalar(Math.max(finalScale, 10)) // Minimum scale
 
     // Apply face rotation
-    // IMPORTANT: Add Math.PI to flip glasses 180° so they face the user (not backwards)
-    model.rotation.x = -landmarks.rotation.pitch * 0.3
-    model.rotation.y = Math.PI  // Keep glasses facing forward, minimal yaw
+    // Rotate model so:
+    // - Front of glasses faces camera (+Z direction)
+    // - Temples extend backward (-Z direction, into the scene/toward face)
+    // Most glasses models are made with front facing +Z or -Z
+    // We use rotation to orient correctly based on head pose
+
+    // Base rotation: flip on X axis to face camera (if model faces -Z by default)
+    // Then apply head rotation
+    const basePitch = Math.PI  // Flip to face camera
+    model.rotation.x = basePitch - landmarks.rotation.pitch * 0.3
+    model.rotation.y = landmarks.rotation.yaw * 0.3  // Follow head yaw
     model.rotation.z = landmarks.rotation.roll * 0.5  // Roll follows head tilt
 
     // Debug logging
