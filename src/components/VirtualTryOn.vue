@@ -646,16 +646,14 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     model.scale.setScalar(Math.max(finalScale, 10)) // Minimum scale
 
     // Apply face rotation
-    // Rotate model so:
-    // - Front of glasses faces camera (+Z direction)
-    // - Temples extend backward (-Z direction, into the scene/toward face)
+    // The glasses model faces +Z by default (front toward camera)
+    // Temples extend in -Z direction (backward, toward the face/ears)
     //
-    // Y-axis rotation of PI flips front/back (temples go backward)
-    // X-axis follows head pitch (looking up/down)
-    // Z-axis follows head roll (tilting head side to side)
+    // DO NOT rotate Y by PI - that flips temples toward camera!
+    // Just apply head tracking rotations
 
     model.rotation.x = -landmarks.rotation.pitch * 0.3  // Follow head pitch
-    model.rotation.y = Math.PI + landmarks.rotation.yaw * 0.3  // Flip to face user + follow yaw
+    model.rotation.y = landmarks.rotation.yaw * 0.3  // Follow head yaw (no PI flip!)
     model.rotation.z = landmarks.rotation.roll * 0.5  // Follow head tilt
 
     // Debug logging
