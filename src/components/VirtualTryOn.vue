@@ -625,26 +625,29 @@ function updateModelPosition(landmarks: FaceLandmarks) {
       Math.pow(rightEyePos.y - leftEyePos.y, 2)
     )
 
-    // Position glasses EXACTLY at the midpoint between eyes (green dots)
-    // No offset - the model's center should align with the center between eyes
+    // Position glasses so LENSES align with the green dots (eyes)
+    // Models have origin at bridge/top, so move DOWN significantly
+    const lensOffset = eyeDistanceWorld * 0.35  // Larger offset to put lenses at eye level
     model.position.x = centerX
-    model.position.y = centerY  // Exactly at eye level
+    model.position.y = centerY - lensOffset  // Move DOWN to align lenses with eyes
 
     // Z position: Place model at z=0 (camera looks at this plane)
     model.position.z = 0
 
     // Scale glasses based on eye distance
-    // The lens centers should be approximately at the eye positions
-    // Most glasses have lenses that are about 1.8-2.2x the inter-pupillary distance apart
     const targetGlassesWidth = eyeDistanceWorld * 2.2
     const finalScale = targetGlassesWidth / 150 * baseModelScale
 
     model.scale.setScalar(Math.max(finalScale, 10)) // Minimum scale
 
     // Apply face rotation
-    // Video is mirrored (selfie mode)
+    // When head turns RIGHT (yaw positive), we should see the RIGHT temple going back
+    // This means glasses should rotate so right side goes INTO the screen (-Z)
+    // In Three.js, positive Y rotation turns right side toward -Z
+    // But video is MIRRORED, so what looks like turning right is actually left
+    // So we need positive yaw to match the mirrored appearance
     model.rotation.x = -landmarks.rotation.pitch * 0.3  // Follow head pitch
-    model.rotation.y = landmarks.rotation.yaw * 0.5  // Follow head yaw
+    model.rotation.y = landmarks.rotation.yaw * 0.6  // Positive for mirrored video
     model.rotation.z = landmarks.rotation.roll * 0.5  // Follow head tilt
 
     // Debug logging
