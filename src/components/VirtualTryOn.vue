@@ -641,13 +641,12 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     model.scale.setScalar(Math.max(finalScale, 10)) // Minimum scale
 
     // Apply face rotation
-    // When head turns RIGHT (yaw positive), we should see the RIGHT temple going back
-    // This means glasses should rotate so right side goes INTO the screen (-Z)
-    // In Three.js, positive Y rotation turns right side toward -Z
-    // But video is MIRRORED, so what looks like turning right is actually left
-    // So we need positive yaw to match the mirrored appearance
+    // Video is mirrored (selfie mode):
+    // - When YOU turn your head to YOUR right, it appears as LEFT in the video
+    // - The yaw from face tracking gives the actual head direction
+    // - We need to INVERT yaw so glasses match the mirrored appearance
     model.rotation.x = -landmarks.rotation.pitch * 0.3  // Follow head pitch
-    model.rotation.y = landmarks.rotation.yaw * 0.6  // Positive for mirrored video
+    model.rotation.y = -landmarks.rotation.yaw * 0.6  // Inverted for mirrored video
     model.rotation.z = landmarks.rotation.roll * 0.5  // Follow head tilt
 
     // Debug logging
