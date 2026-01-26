@@ -22,7 +22,8 @@
       "mcp__Neon__get_database_tables",
       "mcp__Neon__run_sql",
       "mcp__Neon__describe_table_schema",
-      "Bash(git revert:*)"
+      "Bash(git revert:*)",
+      "Bash(shopify app deploy)"
     ]
   }
 }

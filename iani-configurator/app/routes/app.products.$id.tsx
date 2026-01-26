@@ -1,6 +1,6 @@
 import { json, redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData, useSubmit, useNavigation, useRouteError, isRouteErrorResponse } from "@remix-run/react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   Page,
   Layout,
@@ -243,6 +243,39 @@ export default function EditProduct() {
   const [tryOnType, setTryOnType] = useState(product3D.tryOnType || "glasses");
   const [tryOnOffsetY, setTryOnOffsetY] = useState(product3D.tryOnOffsetY || 0);
   const [tryOnScale, setTryOnScale] = useState(product3D.tryOnScale || 1);
+
+  // Iframe ref for live preview communication
+  const previewIframeRef = useRef<HTMLIFrameElement>(null);
+  const [previewReady, setPreviewReady] = useState(false);
+
+  // Get model URL for preview
+  const modelUrlForPreview = shopifyProduct?.modelUrl || product3D.baseModelUrl || "";
+
+  // Listen for preview ready message
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "ADMIN_PREVIEW_READY") {
+        setPreviewReady(true);
+        console.log("Preview iframe ready");
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  // Send updates to preview iframe when offset/scale changes
+  useEffect(() => {
+    if (previewReady && previewIframeRef.current?.contentWindow) {
+      previewIframeRef.current.contentWindow.postMessage(
+        {
+          type: "UPDATE_TRYON_SETTINGS",
+          offsetY: tryOnOffsetY,
+          scale: tryOnScale,
+        },
+        "*"
+      );
+    }
+  }, [tryOnOffsetY, tryOnScale, previewReady]);
 
   const tryOnTypeOptions = [
     { label: "Glasses / Sunglasses", value: "glasses" },
@@ -511,58 +544,134 @@ export default function EditProduct() {
                   Customers can use their camera to see how the product looks on them.
                 </Text>
                 <Divider />
-                <Checkbox
-                  label="Enable Virtual Try-On"
-                  checked={tryOnEnabled}
-                  onChange={setTryOnEnabled}
-                  helpText="When enabled, customers will see a 'Try On' button on the product page"
-                />
-                {tryOnEnabled && (
-                  <Select
-                    label="Product Type"
-                    options={tryOnTypeOptions}
-                    value={tryOnType}
-                    onChange={setTryOnType}
-                    helpText="Select the type of product for proper face positioning"
-                  />
-                )}
-                {tryOnEnabled && (
-                  <RangeSlider
-                    label={`Vertical Offset: ${tryOnOffsetY}%`}
-                    value={tryOnOffsetY}
-                    min={-50}
-                    max={50}
-                    step={1}
-                    onChange={(value) => setTryOnOffsetY(value as number)}
-                    output
-                    helpText="Adjust if the model sits too high or too low. Negative = up, Positive = down"
-                  />
-                )}
-                {tryOnEnabled && (
-                  <RangeSlider
-                    label={`Scale: ${tryOnScale.toFixed(2)}x`}
-                    value={tryOnScale}
-                    min={0.5}
-                    max={2}
-                    step={0.05}
-                    onChange={(value) => setTryOnScale(value as number)}
-                    output
-                    helpText="Adjust the size of the model on the face"
-                  />
-                )}
-                {tryOnEnabled && !shopifyProduct?.has3DModel && (
-                  <Banner tone="warning">
-                    <p>
-                      Please upload a 3D model (GLB/GLTF) in the Shopify product media for virtual try-on to work.
-                      The model should be a face-worn item like glasses or sunglasses.
-                    </p>
-                  </Banner>
-                )}
-                <InlineStack align="end">
-                  <Button onClick={handleTryOnSave} loading={isSubmitting}>
-                    Save Try-On Settings
-                  </Button>
-                </InlineStack>
+
+                {/* Two-column layout when try-on is enabled */}
+                <div style={{ display: "flex", gap: "24px", flexWrap: "wrap" }}>
+                  {/* Left column: Controls */}
+                  <div style={{ flex: "1", minWidth: "280px" }}>
+                    <BlockStack gap="400">
+                      <Checkbox
+                        label="Enable Virtual Try-On"
+                        checked={tryOnEnabled}
+                        onChange={setTryOnEnabled}
+                        helpText="When enabled, customers will see a 'Try On' button on the product page"
+                      />
+                      {tryOnEnabled && (
+                        <Select
+                          label="Product Type"
+                          options={tryOnTypeOptions}
+                          value={tryOnType}
+                          onChange={setTryOnType}
+                          helpText="Select the type of product for proper face positioning"
+                        />
+                      )}
+                      {tryOnEnabled && (
+                        <RangeSlider
+                          label={`Vertical Offset: ${tryOnOffsetY}%`}
+                          value={tryOnOffsetY}
+                          min={-50}
+                          max={50}
+                          step={1}
+                          onChange={(value) => setTryOnOffsetY(value as number)}
+                          output
+                          helpText="Adjust if the model sits too high or too low. Negative = up, Positive = down"
+                        />
+                      )}
+                      {tryOnEnabled && (
+                        <RangeSlider
+                          label={`Scale: ${tryOnScale.toFixed(2)}x`}
+                          value={tryOnScale}
+                          min={0.5}
+                          max={2}
+                          step={0.05}
+                          onChange={(value) => setTryOnScale(value as number)}
+                          output
+                          helpText="Adjust the size of the model on the face"
+                        />
+                      )}
+                      {tryOnEnabled && !shopifyProduct?.has3DModel && !product3D.baseModelUrl && (
+                        <Banner tone="warning">
+                          <p>
+                            Please upload a 3D model (GLB/GLTF) in the Shopify product media for virtual try-on to work.
+                          </p>
+                        </Banner>
+                      )}
+                      <InlineStack align="end">
+                        <Button onClick={handleTryOnSave} loading={isSubmitting}>
+                          Save Try-On Settings
+                        </Button>
+                      </InlineStack>
+                    </BlockStack>
+                  </div>
+
+                  {/* Right column: Live Preview */}
+                  {tryOnEnabled && modelUrlForPreview && (
+                    <div style={{ flex: "1", minWidth: "320px", maxWidth: "450px" }}>
+                      <BlockStack gap="200">
+                        <Text as="p" variant="bodyMd" fontWeight="semibold">
+                          Live Preview
+                        </Text>
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "350px",
+                            borderRadius: "8px",
+                            overflow: "hidden",
+                            backgroundColor: "#1a1a2e",
+                            border: "1px solid #e1e3e5",
+                          }}
+                        >
+                          <iframe
+                            ref={previewIframeRef}
+                            src={`https://iani-configurator.vercel.app?admin-preview=true&modelUrl=${encodeURIComponent(modelUrlForPreview)}&offsetY=${tryOnOffsetY}&scale=${tryOnScale}&tryOnType=${tryOnType}`}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              border: "none",
+                            }}
+                            allow="camera"
+                            title="Virtual Try-On Preview"
+                          />
+                        </div>
+                        <Text as="p" variant="bodySm" tone="subdued">
+                          Adjust the sliders to see changes in real-time. Allow camera access when prompted.
+                        </Text>
+                      </BlockStack>
+                    </div>
+                  )}
+
+                  {/* Placeholder when no model */}
+                  {tryOnEnabled && !modelUrlForPreview && (
+                    <div style={{ flex: "1", minWidth: "320px", maxWidth: "450px" }}>
+                      <div
+                        style={{
+                          width: "100%",
+                          height: "350px",
+                          borderRadius: "8px",
+                          backgroundColor: "#f6f6f7",
+                          border: "2px dashed #c9cccf",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexDirection: "column",
+                          gap: "8px",
+                          color: "#6d7175",
+                        }}
+                      >
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                          <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <Text as="p" variant="bodyMd" tone="subdued">
+                          Live Preview
+                        </Text>
+                        <Text as="p" variant="bodySm" tone="subdued">
+                          Upload a 3D model to enable preview
+                        </Text>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </BlockStack>
             </Card>
 
