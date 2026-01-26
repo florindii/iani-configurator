@@ -218,6 +218,8 @@
       :product-type="tryOnType"
       :color-options="colorOptionsForTryOn"
       :selected-color="configuration.cushionColor"
+      :offset-y="tryOnOffsetY"
+      :scale="tryOnScale"
       @close="closeTryOn"
       @capturePreview="handleTryOnCapture"
       @colorChange="handleTryOnColorChange"
@@ -313,6 +315,8 @@ const shopifyCurrency = ref('USD')
 // Virtual Try-On state
 const tryOnEnabled = ref(false)
 const tryOnType = ref('glasses')
+const tryOnOffsetY = ref(0) // Vertical offset percentage
+const tryOnScale = ref(1) // Scale multiplier
 const showTryOnModal = ref(false)
 const tryOnModelUrl = ref('')
 const tryOnPreviewImage = ref(null) // Captured try-on image for cart
@@ -392,7 +396,9 @@ const loadProductConfig = async () => {
           if (data.config.tryOnEnabled) {
             tryOnEnabled.value = true
             tryOnType.value = data.config.tryOnType || 'glasses'
-            console.log('👓 Try-On enabled:', tryOnType.value)
+            tryOnOffsetY.value = data.config.tryOnOffsetY || 0
+            tryOnScale.value = data.config.tryOnScale || 1
+            console.log('👓 Try-On enabled:', tryOnType.value, 'offset:', tryOnOffsetY.value, 'scale:', tryOnScale.value)
           }
 
           configLoaded.value = true

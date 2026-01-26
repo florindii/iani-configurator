@@ -121,6 +121,8 @@ const props = defineProps<{
   productType: string // 'glasses', 'hat', 'earrings', 'necklace'
   colorOptions: Array<{ value: string; name: string; hex: string }>
   selectedColor: string
+  offsetY?: number // Vertical offset percentage (-50 to 50)
+  scale?: number // Scale multiplier (0.5 to 2.0)
 }>()
 
 // Emits
@@ -626,17 +628,26 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     )
 
     // Position glasses so LENSES align with the green dots (eyes)
-    // Models have origin at bridge/top, so move DOWN significantly
-    const lensOffset = eyeDistanceWorld * 0.35  // Larger offset to put lenses at eye level
+    // Base offset to align lenses with eyes (most models have origin at bridge)
+    const baseLensOffset = eyeDistanceWorld * 0.35
+
+    // Apply custom offset from props (percentage of eye distance)
+    // Positive offsetY = move DOWN, Negative = move UP
+    const customOffset = (props.offsetY || 0) / 100 * eyeDistanceWorld
+
     model.position.x = centerX
-    model.position.y = centerY - lensOffset  // Move DOWN to align lenses with eyes
+    model.position.y = centerY - baseLensOffset - customOffset  // Apply both offsets
 
     // Z position: Place model at z=0 (camera looks at this plane)
     model.position.z = 0
 
     // Scale glasses based on eye distance
     const targetGlassesWidth = eyeDistanceWorld * 2.2
-    const finalScale = targetGlassesWidth / 150 * baseModelScale
+    const baseScale = targetGlassesWidth / 150 * baseModelScale
+
+    // Apply custom scale multiplier from props
+    const customScaleMultiplier = props.scale || 1
+    const finalScale = baseScale * customScaleMultiplier
 
     model.scale.setScalar(Math.max(finalScale, 10)) // Minimum scale
 

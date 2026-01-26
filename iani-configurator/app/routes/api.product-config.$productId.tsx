@@ -53,6 +53,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
             // Virtual Try-On disabled by default
             tryOnEnabled: false,
             tryOnType: null,
+            tryOnOffsetY: 0,
+            tryOnScale: 1,
             colorOptions: [
               { name: "Ocean Blue", hexCode: "#1E90FF", price: 299.99, isDefault: true },
               { name: "Crimson Red", hexCode: "#DC143C", price: 319.99, isDefault: false },
@@ -88,6 +90,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
           // Virtual Try-On settings
           tryOnEnabled: product3D.tryOnEnabled,
           tryOnType: product3D.tryOnType,
+          tryOnOffsetY: product3D.tryOnOffsetY,
+          tryOnScale: product3D.tryOnScale,
           colorOptions: product3D.colorOptions.map((c) => ({
             id: c.id,
             name: c.name,

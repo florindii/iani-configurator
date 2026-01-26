@@ -47,6 +47,8 @@ model Product3D {
   // Virtual Try-On Settings
   tryOnEnabled    Boolean  @default(false) // Enable try-on feature for this product
   tryOnType       String?  // "glasses", "hat", "earrings", "necklace" - type of try-on product
+  tryOnOffsetY    Float    @default(0) // Vertical offset for positioning (-50 to 50, percentage of eye distance)
+  tryOnScale      Float    @default(1) // Scale multiplier for the model (0.5 to 2.0)
 
   // Relations
   configurations  ProductConfiguration[]

@@ -17,6 +17,7 @@ import {
   TextContainer,
   Checkbox,
   Select,
+  RangeSlider,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -158,12 +159,16 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   if (intent === "update-try-on") {
     const tryOnEnabled = formData.get("tryOnEnabled") === "true";
     const tryOnType = formData.get("tryOnType") as string | null;
+    const tryOnOffsetY = parseFloat(formData.get("tryOnOffsetY") as string) || 0;
+    const tryOnScale = parseFloat(formData.get("tryOnScale") as string) || 1;
 
     await db.product3D.update({
       where: { id },
       data: {
         tryOnEnabled,
         tryOnType: tryOnEnabled ? tryOnType : null,
+        tryOnOffsetY: tryOnEnabled ? tryOnOffsetY : 0,
+        tryOnScale: tryOnEnabled ? tryOnScale : 1,
       },
     });
     return json({ success: true });
@@ -236,6 +241,8 @@ export default function EditProduct() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [tryOnEnabled, setTryOnEnabled] = useState(product3D.tryOnEnabled || false);
   const [tryOnType, setTryOnType] = useState(product3D.tryOnType || "glasses");
+  const [tryOnOffsetY, setTryOnOffsetY] = useState(product3D.tryOnOffsetY || 0);
+  const [tryOnScale, setTryOnScale] = useState(product3D.tryOnScale || 1);
 
   const tryOnTypeOptions = [
     { label: "Glasses / Sunglasses", value: "glasses" },
@@ -306,6 +313,8 @@ export default function EditProduct() {
     formData.set("intent", "update-try-on");
     formData.set("tryOnEnabled", tryOnEnabled.toString());
     formData.set("tryOnType", tryOnType);
+    formData.set("tryOnOffsetY", tryOnOffsetY.toString());
+    formData.set("tryOnScale", tryOnScale.toString());
     submit(formData, { method: "post" });
   };
 
@@ -515,6 +524,30 @@ export default function EditProduct() {
                     value={tryOnType}
                     onChange={setTryOnType}
                     helpText="Select the type of product for proper face positioning"
+                  />
+                )}
+                {tryOnEnabled && (
+                  <RangeSlider
+                    label={`Vertical Offset: ${tryOnOffsetY}%`}
+                    value={tryOnOffsetY}
+                    min={-50}
+                    max={50}
+                    step={1}
+                    onChange={(value) => setTryOnOffsetY(value as number)}
+                    output
+                    helpText="Adjust if the model sits too high or too low. Negative = up, Positive = down"
+                  />
+                )}
+                {tryOnEnabled && (
+                  <RangeSlider
+                    label={`Scale: ${tryOnScale.toFixed(2)}x`}
+                    value={tryOnScale}
+                    min={0.5}
+                    max={2}
+                    step={0.05}
+                    onChange={(value) => setTryOnScale(value as number)}
+                    output
+                    helpText="Adjust the size of the model on the face"
                   />
                 )}
                 {tryOnEnabled && !shopifyProduct?.has3DModel && (
