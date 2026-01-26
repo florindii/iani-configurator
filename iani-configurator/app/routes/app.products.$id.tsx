@@ -629,7 +629,7 @@ export default function EditProduct() {
                               height: "100%",
                               border: "none",
                             }}
-                            allow="camera"
+                            allow="camera *; microphone *"
                             title="Virtual Try-On Preview"
                           />
                         </div>

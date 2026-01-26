@@ -225,10 +225,19 @@ async function requestCameraAccess() {
     console.error('Camera access error:', error)
     cameraReady.value = false
 
+    // Check if we're in an iframe
+    const isInIframe = window !== window.parent
+
     if (error.name === 'NotAllowedError') {
-      cameraError.value = 'Camera access was denied. Please allow camera access in your browser settings.'
+      if (isInIframe) {
+        cameraError.value = 'Camera access is blocked in this embedded view. Please open the configurator directly to use camera features, or grant camera permissions to iani-configurator.vercel.app in your browser settings.'
+      } else {
+        cameraError.value = 'Camera access was denied. Please allow camera access in your browser settings.'
+      }
     } else if (error.name === 'NotFoundError') {
       cameraError.value = 'No camera found. Please connect a camera and try again.'
+    } else if (error.name === 'NotReadableError') {
+      cameraError.value = 'Camera is in use by another application. Please close other apps using the camera.'
     } else {
       cameraError.value = `Failed to access camera: ${error.message}`
     }
