@@ -1,6 +1,6 @@
 import { json, redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData, useSubmit, useNavigation, useRouteError, isRouteErrorResponse } from "@remix-run/react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Page,
   Layout,
@@ -247,10 +247,50 @@ export default function EditProduct() {
   // Get model URL for preview
   const modelUrlForPreview = shopifyProduct?.modelUrl || product3D.baseModelUrl || "";
 
-  // Open try-on test in new window
-  const openPreview = () => {
-    const previewUrl = `https://iani-configurator.vercel.app?admin-test=true&modelUrl=${encodeURIComponent(modelUrlForPreview)}&offsetY=${tryOnOffsetY}&scale=${tryOnScale}&tryOnType=${tryOnType}`;
-    window.open(previewUrl, '_blank', 'width=1000,height=700');
+  // Try-on test modal state
+  const [tryOnTestModalOpen, setTryOnTestModalOpen] = useState(false);
+  const [testOffsetY, setTestOffsetY] = useState(tryOnOffsetY);
+  const [testScale, setTestScale] = useState(tryOnScale);
+  const tryOnWindowRef = useRef<Window | null>(null);
+
+  // Open try-on camera in popup and show controls in modal
+  const openTryOnTest = () => {
+    setTestOffsetY(tryOnOffsetY);
+    setTestScale(tryOnScale);
+    setTryOnTestModalOpen(true);
+
+    // Open camera window
+    const popupUrl = `https://iani-configurator.vercel.app?admin-test=true&modelUrl=${encodeURIComponent(modelUrlForPreview)}&offsetY=${tryOnOffsetY}&scale=${tryOnScale}&tryOnType=${tryOnType}`;
+    tryOnWindowRef.current = window.open(popupUrl, 'TryOnTest', 'width=800,height=600,left=100,top=100');
+  };
+
+  // Send updated settings to the popup window
+  useEffect(() => {
+    if (tryOnTestModalOpen && tryOnWindowRef.current && !tryOnWindowRef.current.closed) {
+      tryOnWindowRef.current.postMessage({
+        type: 'UPDATE_TRYON_SETTINGS',
+        offsetY: testOffsetY,
+        scale: testScale,
+      }, '*');
+    }
+  }, [testOffsetY, testScale, tryOnTestModalOpen]);
+
+  // Apply test settings to main form
+  const applyTestSettings = () => {
+    setTryOnOffsetY(testOffsetY);
+    setTryOnScale(testScale);
+    if (tryOnWindowRef.current && !tryOnWindowRef.current.closed) {
+      tryOnWindowRef.current.close();
+    }
+    setTryOnTestModalOpen(false);
+  };
+
+  // Close modal and popup
+  const closeTryOnTest = () => {
+    if (tryOnWindowRef.current && !tryOnWindowRef.current.closed) {
+      tryOnWindowRef.current.close();
+    }
+    setTryOnTestModalOpen(false);
   };
 
   const tryOnTypeOptions = [
@@ -599,8 +639,8 @@ export default function EditProduct() {
 
                 <InlineStack align="end" gap="300">
                   {tryOnEnabled && modelUrlForPreview && (
-                    <Button onClick={openPreview}>
-                      Test Try-On in New Window
+                    <Button onClick={openTryOnTest}>
+                      Test & Adjust Try-On
                     </Button>
                   )}
                   <Button variant="primary" onClick={handleTryOnSave} loading={isSubmitting}>
@@ -647,6 +687,78 @@ export default function EditProduct() {
               and material options. The Shopify product itself will not be affected.
             </p>
           </TextContainer>
+        </Modal.Section>
+      </Modal>
+
+      {/* Try-On Test Modal with Controls */}
+      <Modal
+        open={tryOnTestModalOpen}
+        onClose={closeTryOnTest}
+        title="Adjust Try-On Settings"
+        primaryAction={{
+          content: "Apply Settings",
+          onAction: applyTestSettings,
+        }}
+        secondaryActions={[
+          {
+            content: "Cancel",
+            onAction: closeTryOnTest,
+          },
+        ]}
+        size="large"
+      >
+        <Modal.Section>
+          <BlockStack gap="400">
+            <Banner tone="info">
+              <p>
+                A camera window has opened. Adjust the sliders below and watch the glasses
+                position update in real-time. When satisfied, click "Apply Settings".
+              </p>
+            </Banner>
+
+            <RangeSlider
+              label={`Vertical Offset: ${testOffsetY}%`}
+              value={testOffsetY}
+              min={-50}
+              max={50}
+              step={1}
+              onChange={(value) => setTestOffsetY(value as number)}
+              output
+              helpText="Negative = glasses move up, Positive = glasses move down"
+            />
+
+            <RangeSlider
+              label={`Scale: ${testScale.toFixed(2)}x`}
+              value={testScale}
+              min={0.5}
+              max={2}
+              step={0.05}
+              onChange={(value) => setTestScale(value as number)}
+              output
+              helpText="Adjust the size of the glasses on the face"
+            />
+
+            <div
+              style={{
+                padding: "16px",
+                backgroundColor: "#f6f6f7",
+                borderRadius: "8px",
+                textAlign: "center",
+              }}
+            >
+              <Text as="p" variant="bodyMd" fontWeight="semibold">
+                Current Test Values
+              </Text>
+              <Text as="p" variant="bodyLg">
+                Offset: <strong>{testOffsetY}%</strong> | Scale: <strong>{testScale.toFixed(2)}x</strong>
+              </Text>
+            </div>
+
+            <Text as="p" variant="bodySm" tone="subdued">
+              Note: If the camera window was blocked or closed, click "Cancel" and try again.
+              Make sure to allow popups for this site.
+            </Text>
+          </BlockStack>
         </Modal.Section>
       </Modal>
     </Page>

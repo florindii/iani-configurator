@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import VirtualTryOn from './VirtualTryOn.vue'
 
 const props = defineProps<{
@@ -23,63 +23,38 @@ const handleClose = () => {
   window.close()
 }
 
-// Copy settings to clipboard
-const copySettings = () => {
-  const settings = `Offset: ${offsetY.value}%, Scale: ${scale.value.toFixed(2)}x`
-  navigator.clipboard.writeText(settings)
-  alert('Settings copied! Paste these values in the admin panel.')
+// Listen for settings updates from parent window (Shopify admin modal)
+const handleMessage = (event: MessageEvent) => {
+  if (event.data?.type === 'UPDATE_TRYON_SETTINGS') {
+    console.log('Received settings update:', event.data)
+    if (event.data.offsetY !== undefined) {
+      offsetY.value = event.data.offsetY
+    }
+    if (event.data.scale !== undefined) {
+      scale.value = event.data.scale
+    }
+  }
 }
+
+onMounted(() => {
+  window.addEventListener('message', handleMessage)
+  console.log('AdminTryOnTest: Listening for postMessage updates')
+})
+
+onUnmounted(() => {
+  window.removeEventListener('message', handleMessage)
+})
 </script>
 
 <template>
   <div class="admin-test-container">
-    <!-- Control Panel -->
-    <div class="control-panel">
-      <h2>Try-On Settings Tester</h2>
-
-      <div class="control-group">
-        <label>
-          Vertical Offset: <strong>{{ offsetY }}%</strong>
-        </label>
-        <input
-          type="range"
-          v-model.number="offsetY"
-          min="-50"
-          max="50"
-          step="1"
-        />
-        <span class="hint">Negative = up, Positive = down</span>
-      </div>
-
-      <div class="control-group">
-        <label>
-          Scale: <strong>{{ scale.toFixed(2) }}x</strong>
-        </label>
-        <input
-          type="range"
-          v-model.number="scale"
-          min="0.5"
-          max="2"
-          step="0.05"
-        />
-        <span class="hint">Adjust the size of the glasses</span>
-      </div>
-
-      <div class="current-values">
-        <span>Offset: <strong>{{ offsetY }}%</strong></span>
-        <span>Scale: <strong>{{ scale.toFixed(2) }}x</strong></span>
-      </div>
-
-      <button class="copy-btn" @click="copySettings">
-        Copy Settings
-      </button>
-
-      <p class="instructions">
-        Adjust the sliders until the glasses fit perfectly, then copy the settings and paste them in the Shopify admin panel.
-      </p>
+    <!-- Header with current values -->
+    <div class="header-bar">
+      <span class="title">Virtual Try-On Preview</span>
+      <span class="values">Offset: {{ offsetY }}% | Scale: {{ scale.toFixed(2) }}x</span>
     </div>
 
-    <!-- Try-On Preview -->
+    <!-- Try-On Preview (full screen) -->
     <div class="tryon-area">
       <VirtualTryOn
         :model-url="modelUrl"
@@ -98,108 +73,32 @@ const copySettings = () => {
 <style scoped>
 .admin-test-container {
   display: flex;
+  flex-direction: column;
   width: 100vw;
   height: 100vh;
   background: #1a1a2e;
   overflow: hidden;
 }
 
-.control-panel {
-  width: 300px;
-  padding: 20px;
+.header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
   background: #252542;
   color: white;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  overflow-y: auto;
-}
-
-.control-panel h2 {
-  margin: 0;
-  font-size: 18px;
-  color: #fff;
-  padding-bottom: 15px;
   border-bottom: 1px solid #3a3a5c;
 }
 
-.control-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.control-group label {
-  font-size: 14px;
-  color: #ccc;
-}
-
-.control-group label strong {
-  color: #fff;
-}
-
-.control-group input[type="range"] {
-  width: 100%;
-  height: 8px;
-  border-radius: 4px;
-  background: #3a3a5c;
-  outline: none;
-  cursor: pointer;
-}
-
-.control-group input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #667eea;
-  cursor: pointer;
-}
-
-.control-group .hint {
-  font-size: 11px;
-  color: #888;
-}
-
-.current-values {
-  display: flex;
-  justify-content: space-between;
-  padding: 12px;
-  background: #1a1a2e;
-  border-radius: 8px;
-  font-size: 14px;
-}
-
-.current-values span {
-  color: #ccc;
-}
-
-.current-values strong {
-  color: #667eea;
-}
-
-.copy-btn {
-  padding: 12px 20px;
-  background: #667eea;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
+.header-bar .title {
+  font-size: 16px;
   font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
 }
 
-.copy-btn:hover {
-  background: #5a6fd6;
-}
-
-.instructions {
-  font-size: 12px;
-  color: #888;
-  line-height: 1.5;
-  margin-top: auto;
+.header-bar .values {
+  font-size: 14px;
+  color: #667eea;
+  font-weight: 500;
 }
 
 .tryon-area {
@@ -238,21 +137,5 @@ const copySettings = () => {
 
 :deep(.action-buttons) {
   display: none !important;
-}
-
-/* Mobile responsive */
-@media (max-width: 768px) {
-  .admin-test-container {
-    flex-direction: column;
-  }
-
-  .control-panel {
-    width: 100%;
-    max-height: 250px;
-  }
-
-  .tryon-area {
-    flex: 1;
-  }
 }
 </style>
