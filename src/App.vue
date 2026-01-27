@@ -2,21 +2,26 @@
 import { onMounted, ref } from 'vue'
 import ThreeSceneMinimal from './components/ThreeSceneMinimal.vue'
 import AdminTryOnTest from './components/AdminTryOnTest.vue'
+import AdminCalibrateTryOn from './components/AdminCalibrateTryOn.vue'
 import shopifyService from './services/shopifyService'
 
 // Check URL parameters
 const urlParams = new URLSearchParams(window.location.search)
 const isEmbedded = urlParams.get('embedded') === 'true'
 const isAdminTest = urlParams.get('admin-test') === 'true'
+const isAdminCalibrate = urlParams.get('admin-calibrate') === 'true' || window.location.pathname === '/admin-calibrate'
 
-// Admin test params
+// Admin test params (legacy)
 const modelUrl = ref(urlParams.get('modelUrl') || '')
-const initialOffsetY = ref(parseFloat(urlParams.get('offsetY') || '0'))
-const initialScale = ref(parseFloat(urlParams.get('scale') || '1'))
+const initialOffsetY = ref(parseFloat(urlParams.get('offsetY') || urlParams.get('currentOffsetY') || '0'))
+const initialScale = ref(parseFloat(urlParams.get('scale') || urlParams.get('currentScale') || '1'))
 const tryOnType = ref(urlParams.get('tryOnType') || 'glasses')
 
 onMounted(() => {
-  if (isAdminTest) {
+  if (isAdminCalibrate) {
+    console.log('🎯 Admin Calibration Mode - Full calibration tool')
+    console.log('📐 Initial offset:', initialOffsetY.value, 'scale:', initialScale.value)
+  } else if (isAdminTest) {
     console.log('🎛️ Admin Test Mode - Try-On with Sliders')
     console.log('📐 Initial offset:', initialOffsetY.value, 'scale:', initialScale.value)
   } else {
@@ -37,9 +42,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- Admin Test Mode: Try-On with adjustment sliders -->
+  <!-- Admin Calibration Mode: Full calibration tool with sliders -->
+  <AdminCalibrateTryOn v-if="isAdminCalibrate" />
+
+  <!-- Admin Test Mode: Simple try-on preview (legacy) -->
   <AdminTryOnTest
-    v-if="isAdminTest"
+    v-else-if="isAdminTest"
     :model-url="modelUrl"
     :initial-offset-y="initialOffsetY"
     :initial-scale="initialScale"
