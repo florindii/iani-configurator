@@ -364,11 +364,12 @@ const loadProductConfig = async () => {
 
           // Update color options
           if (data.config.colorOptions && data.config.colorOptions.length > 0) {
-            colorOptions.value = data.config.colorOptions.map(c => ({
+            colorOptions.value = data.config.colorOptions.map((c, index) => ({
               label: c.name,
               value: c.name.toLowerCase().replace(/\s+/g, '-'),
               hex: c.hexCode,
-              price: c.price
+              price: c.price,
+              isDefault: c.isDefault || index === 0 // Mark first as default if none specified
             }))
             // Set default color
             const defaultColor = data.config.colorOptions.find(c => c.isDefault) || data.config.colorOptions[0]
@@ -434,14 +435,24 @@ const legOptions = ref([
 
 // Computed price - uses Shopify product price as base when available
 const calculatedPrice = computed(() => {
-  // Start with Shopify product price if available, otherwise use color price or default
-  let basePrice = shopifyBasePrice.value || 299.99
-
-  // If we have color options with prices, use the selected color's price as the base
-  // This allows merchants to set different prices per color
+  // Get the selected color option
   const selectedColor = colorOptions.value.find(c => c.value === configuration.value.cushionColor)
-  if (selectedColor && selectedColor.price && !shopifyBasePrice.value) {
-    basePrice = selectedColor.price
+
+  // Determine base price:
+  // - If Shopify provides a price, use it as the starting point
+  // - Otherwise use the selected color's price, or fallback to default
+  let basePrice = shopifyBasePrice.value || (selectedColor?.price) || 299.99
+
+  // If we have Shopify base price AND color options with different prices,
+  // we need to add the color price difference from the lowest/default color
+  if (shopifyBasePrice.value && selectedColor && colorOptions.value.length > 0) {
+    // Find the default/first color to use as baseline
+    const defaultColor = colorOptions.value.find(c => c.isDefault) || colorOptions.value[0]
+    if (defaultColor && selectedColor.price !== defaultColor.price) {
+      // Add the price difference between selected color and default color
+      const colorPriceDiff = selectedColor.price - defaultColor.price
+      basePrice += colorPriceDiff
+    }
   }
 
   // Add extra costs from selected options
