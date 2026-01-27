@@ -247,10 +247,10 @@ export default function EditProduct() {
   // Get model URL for preview
   const modelUrlForPreview = shopifyProduct?.modelUrl || product3D.baseModelUrl || "";
 
-  // Open preview in new tab
+  // Open try-on test in new window
   const openPreview = () => {
-    const previewUrl = `https://iani-configurator.vercel.app?embedded=true&modelUrl=${encodeURIComponent(modelUrlForPreview)}&tryOnOffsetY=${tryOnOffsetY}&tryOnScale=${tryOnScale}&tryOnType=${tryOnType}`;
-    window.open(previewUrl, '_blank', 'width=800,height=700');
+    const previewUrl = `https://iani-configurator.vercel.app?admin-test=true&modelUrl=${encodeURIComponent(modelUrlForPreview)}&offsetY=${tryOnOffsetY}&scale=${tryOnScale}&tryOnType=${tryOnType}`;
+    window.open(previewUrl, '_blank', 'width=1000,height=700');
   };
 
   const tryOnTypeOptions = [
