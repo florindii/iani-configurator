@@ -4,12 +4,12 @@
 {% endcomment %}
 
 <!-- Iani Cart Preview Handler -->
-<div id="iani-cart-preview-handler" style="display:none;" data-iani-version="1.26"></div>
+<div id="iani-cart-preview-handler" style="display:none;" data-iani-version="1.27"></div>
 
 <script>
 (function(){
   'use strict';
-  console.log('[Iani Cart] v1.26 loaded');
+  console.log('[Iani Cart] v1.27 loaded');
 
   function applyCartCustomizations(){
     const storedPreviews=JSON.parse(localStorage.getItem('iani_cart_previews')||'{}');
@@ -17,41 +17,67 @@
     const priceKeys=Object.keys(storedPrices);
     const previewKeys=Object.keys(storedPreviews);
 
-    console.log('[Iani Cart] Prices stored:',storedPrices);
+    console.log('[Iani Cart] Previews:',previewKeys);
+    console.log('[Iani Cart] Prices:',storedPrices);
 
-    if(priceKeys.length===0)return;
+    if(priceKeys.length===0&&previewKeys.length===0)return;
 
     // Calculate total of ALL stored configured prices
     let totalConfiguredPrice=0;
     priceKeys.forEach(function(key){
       totalConfiguredPrice+=storedPrices[key];
-      console.log('[Iani Cart] Adding price:',key,'=',storedPrices[key]);
     });
-
     console.log('[Iani Cart] Total configured price:',totalConfiguredPrice);
 
-    // Apply preview images to Iani cart items
+    // Track which previews have been used
+    let usedPreviewKeys=[];
+
+    // Apply preview images to Iani cart items - match by config ID
     const cartContainers=document.querySelectorAll('tr, [class*="cart-item"], .line-item');
     cartContainers.forEach(function(container){
-      if(container.dataset.ianiPreviewDone)return;
-      const text=container.textContent||'';
-      if(!text.includes('Extra Colors'))return;
+      if(container.dataset.ianiDone)return;
 
-      container.dataset.ianiPreviewDone='true';
+      const containerHTML=container.innerHTML||'';
+      const containerText=container.textContent||'';
+
+      // Check if this is an Iani item (has Extra Colors or Configured Price)
+      if(!containerText.includes('Extra Colors')&&!containerText.includes('Configured Price'))return;
+
+      container.dataset.ianiDone='true';
+
+      // Find the config ID in this container
+      const configMatch=containerHTML.match(/config_\d+_[a-z0-9]+/i);
+      const configId=configMatch?configMatch[0]:null;
+      console.log('[Iani Cart] Processing item with config ID:',configId);
+
+      // Apply preview image - match by config ID
       const img=container.querySelector('img');
-      if(img&&previewKeys.length>0&&!img.dataset.ianiPreview){
-        // Find matching preview or use latest
-        const configMatch=container.innerHTML.match(/config_\d+_[a-z0-9]+/i);
+      if(img&&!img.dataset.ianiPreview){
         let previewUrl=null;
-        if(configMatch&&storedPreviews[configMatch[0]]){
-          previewUrl=storedPreviews[configMatch[0]];
-        }else{
-          previewUrl=storedPreviews[previewKeys[previewKeys.length-1]];
+
+        // Try to match by exact config ID first
+        if(configId&&storedPreviews[configId]){
+          previewUrl=storedPreviews[configId];
+          usedPreviewKeys.push(configId);
+          console.log('[Iani Cart] Matched preview by config ID:',configId);
         }
+        // Otherwise find an unused preview
+        else if(previewKeys.length>0){
+          for(let i=0;i<previewKeys.length;i++){
+            if(!usedPreviewKeys.includes(previewKeys[i])){
+              previewUrl=storedPreviews[previewKeys[i]];
+              usedPreviewKeys.push(previewKeys[i]);
+              console.log('[Iani Cart] Using fallback preview:',previewKeys[i]);
+              break;
+            }
+          }
+        }
+
         if(previewUrl){
           img.src=previewUrl;
           img.style.border='2px solid #4CAF50';
           img.style.borderRadius='4px';
+          img.style.objectFit='cover';
           img.dataset.ianiPreview='true';
         }
       }
@@ -67,12 +93,9 @@
     if(document.body.dataset.ianiTotalDone)return;
 
     const formattedPrice='$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-    console.log('[Iani Cart] Formatted total:',formattedPrice);
+    console.log('[Iani Cart] Updating estimated total to:',formattedPrice);
 
-    // Find the Estimated total element - it's usually near text "Estimated total"
-    // In Dawn theme, it's in .totals with a span containing the price
-
-    // Strategy: find all elements with "RSD" (the currency) that are NOT in cart item rows
+    // Find elements in totals/footer area with RSD price
     const allElements=document.querySelectorAll('.totals *, .cart__footer *, [class*="total"] *');
     let found=false;
 
@@ -82,24 +105,21 @@
       if(el.closest('tr[class*="cart"]')||el.closest('[class*="cart-item"]'))return;
 
       const text=el.textContent.trim();
-      // Look for price pattern with RSD
       if(/^[\d,]+\.?\d*\s*RSD$/i.test(text)){
-        console.log('[Iani Cart] Found total element:',text,el);
+        console.log('[Iani Cart] Found total element:',text);
         el.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.9em;">'+text+'</span><br><span style="color:#4CAF50;font-weight:bold;font-size:1.1em;">'+formattedPrice+'</span>';
         found=true;
         document.body.dataset.ianiTotalDone='true';
       }
     });
 
-    // Fallback: search entire page for "Estimated total" text and update nearby price
+    // Fallback: search for "Estimated total" label
     if(!found){
       document.querySelectorAll('*').forEach(function(el){
         if(found)return;
         if(el.children.length>5)return;
-
         const text=el.textContent.toLowerCase();
         if(text==='estimated total'){
-          // Found the label, look for sibling or parent's price
           const parent=el.parentElement;
           if(parent){
             const spans=parent.querySelectorAll('span');
@@ -107,7 +127,6 @@
               if(found)return;
               const spanText=span.textContent.trim();
               if(/[\d,]+\.?\d*\s*RSD/i.test(spanText)){
-                console.log('[Iani Cart] Found total via label:',spanText);
                 span.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.9em;">'+spanText+'</span><br><span style="color:#4CAF50;font-weight:bold;">'+formattedPrice+'</span>';
                 found=true;
                 document.body.dataset.ianiTotalDone='true';
@@ -116,10 +135,6 @@
           }
         }
       });
-    }
-
-    if(!found){
-      console.log('[Iani Cart] Could not find Estimated total element');
     }
   }
 

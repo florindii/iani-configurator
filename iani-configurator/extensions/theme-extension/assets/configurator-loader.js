@@ -172,9 +172,10 @@ containers.forEach(function(w){
         const configId=p.configurationId||('config_'+Date.now());
         if(configId)props['_configuration_id']=configId;
 
-        // Store configured price in localStorage only (not as a visible cart property)
-        // The price will be displayed by cart-preview.liquid using localStorage
+        // Add configured price as visible property so it shows on each line item
         if(p.price){
+          props['Configured Price']='$'+Number(p.price).toFixed(2);
+          // Also store in localStorage for total calculation
           try{
             const prices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');
             prices[configId]=Number(p.price);
@@ -183,13 +184,13 @@ containers.forEach(function(w){
           }catch(e){console.warn('[Iani] Could not store price:',e);}
         }
 
-        // Store preview image in localStorage (Shopify properties have size limits)
+        // Store preview image in localStorage with config ID for proper matching
         if(p.previewImage){
           try{
             const previews=JSON.parse(localStorage.getItem('iani_cart_previews')||'{}');
             previews[configId]=p.previewImage;
             localStorage.setItem('iani_cart_previews',JSON.stringify(previews));
-            console.log('[Iani] Preview image stored in localStorage for config:',configId);
+            console.log('[Iani] Preview image stored for config:',configId);
           }catch(e){console.warn('[Iani] Could not store preview:',e);}
         }
 
