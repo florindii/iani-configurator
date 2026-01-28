@@ -172,10 +172,9 @@ containers.forEach(function(w){
         const configId=p.configurationId||('config_'+Date.now());
         if(configId)props['_configuration_id']=configId;
 
-        // Add configured price as visible property (Shopify doesn't allow changing actual price via AJAX)
+        // Store configured price in localStorage only (not as a visible cart property)
+        // The price will be displayed by cart-preview.liquid using localStorage
         if(p.price){
-          props['Configured Price']='$'+Number(p.price).toFixed(2);
-          // Store in localStorage for cart display
           try{
             const prices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');
             prices[configId]=Number(p.price);

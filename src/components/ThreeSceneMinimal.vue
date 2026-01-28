@@ -1641,13 +1641,30 @@ const addToCart = async () => {
     // Capture preview image before adding to cart
     const previewImage = capturePreviewImage()
 
+    // Build list of extra colors selected (colors that differ from default)
+    const extraColors = []
+
+    // Get selected color label
+    const selectedColor = colorOptions.value.find(c => c.value === configuration.value.cushionColor)
+    if (selectedColor) {
+      extraColors.push(selectedColor.label)
+    }
+
+    // Build clean configuration for cart display (visible to customer)
+    // Properties starting with _ are hidden in Shopify cart
     const fullConfiguration = {
-      cushionColor: configuration.value.cushionColor,
-      frameMaterial: configuration.value.frameMaterial,
-      pillowStyle: configuration.value.pillowStyle,
-      legStyle: configuration.value.legStyle,
-      size: configuration.value.size,
-      model: selectedModel.value
+      // Hidden properties (prefixed with _)
+      _cushionColor: configuration.value.cushionColor,
+      _frameMaterial: configuration.value.frameMaterial,
+      _pillowStyle: configuration.value.pillowStyle,
+      _legStyle: configuration.value.legStyle,
+      _size: configuration.value.size,
+      _model: selectedModel.value
+    }
+
+    // Only add "Extra Colors" if there are colors selected
+    if (extraColors.length > 0) {
+      fullConfiguration['Extra Colors'] = extraColors.join(', ')
     }
 
     const shopifyContext = getShopifyContext()
