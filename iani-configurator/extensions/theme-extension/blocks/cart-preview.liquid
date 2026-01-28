@@ -4,12 +4,12 @@
 {% endcomment %}
 
 <!-- Iani Cart Preview Handler - This block enables custom 3D preview images and prices -->
-<div id="iani-cart-preview-handler" style="display:none;" data-iani-version="1.23"></div>
+<div id="iani-cart-preview-handler" style="display:none;" data-iani-version="1.24"></div>
 
 <script>
 (function(){
   'use strict';
-  console.log('[Iani Cart] Cart preview script loaded v1.23');
+  console.log('[Iani Cart] Cart preview script loaded v1.24');
 
   function applyCartCustomizations(){
     const storedPreviews=JSON.parse(localStorage.getItem('iani_cart_previews')||'{}');
@@ -17,110 +17,145 @@
     const previewKeys=Object.keys(storedPreviews);
     const priceKeys=Object.keys(storedPrices);
     console.log('[Iani Cart] Stored previews:',previewKeys.length,'prices:',priceKeys.length);
-
-    if(previewKeys.length===0&&priceKeys.length===0)return;
+    console.log('[Iani Cart] Price keys:',priceKeys);
+    console.log('[Iani Cart] Prices:',storedPrices);
 
     // Calculate total configured price for all Iani items
     let totalConfiguredPrice=0;
     let ianiItemCount=0;
+    let usedPriceKeys=[];
 
-    // Find all cart item containers
-    const images=document.querySelectorAll('.cart img, [class*="cart"] img, main img, table img');
-    console.log('[Iani Cart] Found images:',images.length);
+    // Find all cart item containers - look for product rows in the cart
+    const cartContainers=document.querySelectorAll('tr, [class*="cart-item"], .cart__row, .line-item, [class*="line-item"]');
+    console.log('[Iani Cart] Found cart containers:',cartContainers.length);
 
-    images.forEach(function(img){
-      if(img.dataset.ianiApplied)return;
-
-      // Find the parent container that has the properties
-      let container=img.closest('tr')||img.closest('[class*="cart-item"]')||img.closest('.cart__row')||img.closest('.line-item');
-      if(!container){
-        // Try going up a few levels
-        let parent=img.parentElement;
-        for(let i=0;i<5&&parent;i++){
-          if(parent.tagName==='TR'||parent.className&&(parent.className.includes('cart')||parent.className.includes('line'))){
-            container=parent;
-            break;
-          }
-          parent=parent.parentElement;
-        }
-      }
-      if(!container)return;
+    cartContainers.forEach(function(container){
+      if(container.dataset.ianiProcessed)return;
 
       const containerText=container.textContent||'';
       const containerHTML=container.innerHTML||'';
 
-      // Check if this container has Iani configuration properties (including hidden ones with _)
-      const hasIaniProps=containerText.includes('Extra Colors')||containerText.includes('_cushionColor')||containerText.includes('_configuration_id');
+      // Check if this container has Iani configuration properties
+      // Support BOTH old format (cushionColor, frameMaterial, model, Configured Price)
+      // AND new format (Extra Colors, _cushionColor, _configuration_id)
+      const hasOldFormat=containerText.includes('cushionColor:')||containerText.includes('frameMaterial:')||containerText.includes('model:')||containerText.includes('Configured Price');
+      const hasNewFormat=containerText.includes('Extra Colors')||containerText.includes('_cushionColor')||containerText.includes('_configuration_id');
+      const hasIaniProps=hasOldFormat||hasNewFormat;
 
       if(!hasIaniProps)return;
 
-      console.log('[Iani Cart] Found cart item with Iani properties');
+      console.log('[Iani Cart] Found Iani cart item, format:',hasOldFormat?'OLD':'NEW');
       ianiItemCount++;
+      container.dataset.ianiProcessed='true';
 
-      // Apply preview image
-      const latestPreviewKey=previewKeys[previewKeys.length-1];
-      if(latestPreviewKey&&storedPreviews[latestPreviewKey]&&!img.dataset.ianiPreviewApplied){
-        console.log('[Iani Cart] Applying preview image');
-        img.src=storedPreviews[latestPreviewKey];
-        img.style.objectFit='cover';
-        img.style.backgroundColor='#f8f9fa';
-        img.style.border='2px solid #4CAF50';
-        img.style.borderRadius='4px';
-        img.dataset.ianiPreviewApplied='true';
+      // Try to find the configuration ID in this container
+      let configId=null;
+      const configIdMatch=containerHTML.match(/config_\d+_[a-z0-9]+/i);
+      if(configIdMatch){
+        configId=configIdMatch[0];
+        console.log('[Iani Cart] Found config ID:',configId);
       }
 
-      // Apply configured price - find and update price elements
-      const latestPriceKey=priceKeys[priceKeys.length-1];
-      if(latestPriceKey&&storedPrices[latestPriceKey]&&!container.dataset.ianiPriceApplied){
-        const configuredPrice=storedPrices[latestPriceKey];
-        console.log('[Iani Cart] Configured price:',configuredPrice);
+      // Find the configured price for this item
+      let configuredPrice=null;
+
+      // First try to match by config ID
+      if(configId&&storedPrices[configId]){
+        configuredPrice=storedPrices[configId];
+        usedPriceKeys.push(configId);
+        console.log('[Iani Cart] Matched price by config ID:',configuredPrice);
+      }
+      // For old format items, try to extract from "Configured Price: $X" text
+      else if(hasOldFormat){
+        const priceMatch=containerText.match(/Configured Price[:\s]*\$?([\d,]+\.?\d*)/i);
+        if(priceMatch){
+          configuredPrice=parseFloat(priceMatch[1].replace(/,/g,''));
+          console.log('[Iani Cart] Extracted price from old format:',configuredPrice);
+        }
+      }
+      // Fallback: use the most recent unused price
+      if(!configuredPrice&&priceKeys.length>0){
+        for(let i=priceKeys.length-1;i>=0;i--){
+          if(!usedPriceKeys.includes(priceKeys[i])){
+            configuredPrice=storedPrices[priceKeys[i]];
+            usedPriceKeys.push(priceKeys[i]);
+            console.log('[Iani Cart] Using fallback price:',configuredPrice);
+            break;
+          }
+        }
+      }
+
+      if(configuredPrice){
         totalConfiguredPrice+=configuredPrice;
+        console.log('[Iani Cart] Added to total:',configuredPrice,'Running total:',totalConfiguredPrice);
 
-        // Find price elements in this container - look for money/price class elements
-        const priceSelectors=[
-          '.cart-item__price','.price','.money','[class*="price"]','[class*="Price"]',
-          '.cart__price','td:last-child','.line-item__price','[data-cart-item-price]'
-        ];
+        // Apply preview image to the item's image
+        const img=container.querySelector('img');
+        if(img&&!img.dataset.ianiPreviewApplied){
+          // Try to find matching preview by config ID or use latest
+          let previewUrl=null;
+          if(configId&&storedPreviews[configId]){
+            previewUrl=storedPreviews[configId];
+          }else if(previewKeys.length>0){
+            previewUrl=storedPreviews[previewKeys[previewKeys.length-1]];
+          }
+          if(previewUrl){
+            console.log('[Iani Cart] Applying preview image');
+            img.src=previewUrl;
+            img.style.objectFit='cover';
+            img.style.backgroundColor='#f8f9fa';
+            img.style.border='2px solid #4CAF50';
+            img.style.borderRadius='4px';
+            img.dataset.ianiPreviewApplied='true';
+          }
+        }
 
-        priceSelectors.forEach(function(selector){
-          const priceElements=container.querySelectorAll(selector);
-          priceElements.forEach(function(el){
-            // Skip if already processed or if it's a quantity/remove element
-            if(el.dataset.ianiPriceReplaced)return;
-            if(el.querySelector('input')||el.querySelector('button'))return;
+        // Update price displays in this container
+        if(!container.dataset.ianiPriceApplied){
+          const priceSelectors=[
+            '.cart-item__price','.price','.money','[class*="price"]','[class*="Price"]',
+            '.cart__price','td:last-child','.line-item__price','[data-cart-item-price]'
+          ];
 
-            const text=el.textContent.trim();
-            // Check if this looks like a price (contains currency symbol or number pattern)
-            if(/[\$€£¥₹]|RSD|\d+[.,]\d{2}|\d+\s*(USD|EUR|RSD)/i.test(text)){
-              console.log('[Iani Cart] Updating price element:',text,'->','$'+configuredPrice.toFixed(2));
+          priceSelectors.forEach(function(selector){
+            const priceElements=container.querySelectorAll(selector);
+            priceElements.forEach(function(el){
+              if(el.dataset.ianiPriceReplaced)return;
+              if(el.querySelector('input')||el.querySelector('button'))return;
 
-              // Create styled price replacement
-              const originalPrice=el.innerHTML;
-              el.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.85em;">'+originalPrice+'</span> <span style="color:#4CAF50;font-weight:bold;">$'+configuredPrice.toFixed(2)+'</span>';
-              el.dataset.ianiPriceReplaced='true';
-            }
+              const text=el.textContent.trim();
+              if(/[\$€£¥₹]|RSD|\d+[.,]\d{2}|\d+\s*(USD|EUR|RSD)/i.test(text)){
+                // Skip if this already shows the configured price
+                if(text.includes(configuredPrice.toFixed(2)))return;
+
+                console.log('[Iani Cart] Updating price element:',text,'->','$'+configuredPrice.toFixed(2));
+                const originalPrice=el.innerHTML;
+                el.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.85em;">'+originalPrice+'</span> <span style="color:#4CAF50;font-weight:bold;">$'+configuredPrice.toFixed(2)+'</span>';
+                el.dataset.ianiPriceReplaced='true';
+              }
+            });
           });
-        });
-
-        container.dataset.ianiPriceApplied='true';
+          container.dataset.ianiPriceApplied='true';
+        }
       }
-
-      img.dataset.ianiApplied='true';
     });
 
-    // Update the Estimated Total / Cart Total if we have Iani items
+    console.log('[Iani Cart] Total Iani items:',ianiItemCount,'Total configured price:',totalConfiguredPrice);
+
+    // Update the Estimated Total / Cart Total if we have Iani items with prices
     if(ianiItemCount>0&&totalConfiguredPrice>0){
       updateCartTotal(totalConfiguredPrice);
     }
   }
 
   function updateCartTotal(configuredTotal){
+    console.log('[Iani Cart] Updating cart total to:',configuredTotal);
+
     // Find cart total elements - various theme selectors
     const totalSelectors=[
       '.totals__subtotal-value','.cart__subtotal','.cart-subtotal__price',
       '[data-cart-subtotal]','[data-cart-total]','.cart__total-price',
       '.cart-total__price','.totals .money','.cart__footer .money',
-      '[class*="total"] .money','[class*="subtotal"] .money',
       '.cart-drawer__subtotal','.mini-cart__subtotal'
     ];
 
@@ -132,11 +167,8 @@
         if(el.dataset.ianiTotalReplaced)return;
 
         const text=el.textContent.trim();
-        // Check if this looks like a price
         if(/[\$€£¥₹]|RSD|\d+[.,]\d{2}|\d+\s*(USD|EUR|RSD)/i.test(text)){
-          console.log('[Iani Cart] Updating cart total:',text,'->','$'+configuredTotal.toFixed(2));
-
-          // Replace with configured total
+          console.log('[Iani Cart] Updating cart total element:',text,'->','$'+configuredTotal.toFixed(2));
           const originalTotal=el.innerHTML;
           el.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.85em;display:block;">'+originalTotal+'</span><span style="color:#4CAF50;font-weight:bold;">$'+configuredTotal.toFixed(2)+'</span>';
           el.dataset.ianiTotalReplaced='true';
@@ -145,33 +177,50 @@
       });
     });
 
-    // Also try to find and update "Estimated total" text that appears near totals
+    // If standard selectors didn't work, search more broadly
     if(!totalUpdated){
-      // Look for elements containing "Estimated" or "Total" near price elements
-      const allElements=document.querySelectorAll('*');
-      allElements.forEach(function(el){
+      // Look specifically for "Estimated total" or similar text
+      document.querySelectorAll('*').forEach(function(el){
         if(el.dataset.ianiTotalReplaced)return;
-        if(el.children.length>3)return; // Skip containers with many children
+        if(el.children.length>5)return;
 
         const text=el.textContent.toLowerCase();
-        if((text.includes('estimated')||text.includes('subtotal')||text.includes('total'))&&
-           !text.includes('shipping')&&!text.includes('tax')){
-          // Find money element nearby
-          const parent=el.parentElement;
-          if(parent){
-            const moneyEl=parent.querySelector('.money')||parent.querySelector('[class*="price"]');
+        // Must contain total-related word but not be too long (avoid full page match)
+        if(text.length<100&&(text.includes('estimated total')||text.includes('subtotal')||text.includes('cart total'))){
+          // Find the money/price element
+          const priceMatch=el.innerHTML.match(/([\d,]+\.?\d*)\s*(RSD|USD|EUR|\$|€|£)/i);
+          if(priceMatch&&!el.dataset.ianiTotalReplaced){
+            console.log('[Iani Cart] Found total text, updating...');
+            // Find the specific element containing the price
+            const moneyEl=el.querySelector('.money')||el.querySelector('[class*="price"]');
             if(moneyEl&&!moneyEl.dataset.ianiTotalReplaced){
-              const priceText=moneyEl.textContent.trim();
-              if(/[\$€£¥₹]|RSD|\d+[.,]\d{2}/i.test(priceText)){
-                console.log('[Iani Cart] Updating estimated total:',priceText,'->','$'+configuredTotal.toFixed(2));
-                const originalTotal=moneyEl.innerHTML;
-                moneyEl.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.85em;display:block;">'+originalTotal+'</span><span style="color:#4CAF50;font-weight:bold;">$'+configuredTotal.toFixed(2)+'</span>';
-                moneyEl.dataset.ianiTotalReplaced='true';
-              }
+              const originalTotal=moneyEl.innerHTML;
+              moneyEl.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.85em;display:block;">'+originalTotal+'</span><span style="color:#4CAF50;font-weight:bold;">$'+configuredTotal.toFixed(2)+'</span>';
+              moneyEl.dataset.ianiTotalReplaced='true';
+              totalUpdated=true;
             }
           }
         }
       });
+    }
+
+    // Last resort: find any element that looks like it contains the base total
+    if(!totalUpdated){
+      // Get the Shopify cart total from the page
+      const cartFooter=document.querySelector('.cart__footer, .cart-footer, [class*="cart-total"], [class*="totals"]');
+      if(cartFooter){
+        const moneyEls=cartFooter.querySelectorAll('.money, [class*="price"]');
+        moneyEls.forEach(function(el){
+          if(el.dataset.ianiTotalReplaced)return;
+          const text=el.textContent.trim();
+          if(/[\d,]+\.?\d*\s*(RSD|USD|EUR)/i.test(text)||/[\$€£][\d,]+\.?\d*/i.test(text)){
+            console.log('[Iani Cart] Updating footer price element:',text);
+            const originalTotal=el.innerHTML;
+            el.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.85em;display:block;">'+originalTotal+'</span><span style="color:#4CAF50;font-weight:bold;">$'+configuredTotal.toFixed(2)+'</span>';
+            el.dataset.ianiTotalReplaced='true';
+          }
+        });
+      }
     }
   }
 
