@@ -435,7 +435,7 @@ export default function EditProduct() {
                   </Button>
                 </InlineStack>
                 <Text as="p" variant="bodyMd" tone="subdued">
-                  Define the colors customers can choose from. Each color can have its own price.
+                  Define the colors customers can choose from. Extra cost is added to the base price.
                 </Text>
                 <Divider />
                 {colors.map((color, index) => (
@@ -465,11 +465,11 @@ export default function EditProduct() {
                       labelHidden={index > 0}
                     />
                     <TextField
-                      label="Price"
+                      label="Extra Cost"
                       value={color.price.toString()}
                       onChange={(v) => handleColorChange(index, "price", v)}
                       type="number"
-                      prefix="$"
+                      prefix="+$"
                       autoComplete="off"
                       labelHidden={index > 0}
                     />

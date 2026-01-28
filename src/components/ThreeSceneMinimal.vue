@@ -135,7 +135,7 @@
                       :style="{ backgroundColor: color.hex }"
                     ></div>
                     <span class="color-name">{{ color.label }}</span>
-                    <span class="color-price">${{ color.price.toFixed(0) }}</span>
+                    <span class="color-price">+${{ color.price.toFixed(0) }}</span>
                   </div>
                 </div>
               </div>
@@ -435,33 +435,24 @@ const legOptions = ref([
 
 // Computed price - uses Shopify product price as base when available
 const calculatedPrice = computed(() => {
-  // Get the selected color option
+  // Start with Shopify product price if available, otherwise use default
+  let basePrice = shopifyBasePrice.value || 299.99
+
+  // Add extra cost from selected color (price field now represents extra cost)
   const selectedColor = colorOptions.value.find(c => c.value === configuration.value.cushionColor)
-
-  // Determine base price:
-  // - If Shopify provides a price, use it as the starting point
-  // - Otherwise use the selected color's price, or fallback to default
-  let basePrice = shopifyBasePrice.value || (selectedColor?.price) || 299.99
-
-  // If we have Shopify base price AND color options with different prices,
-  // we need to add the color price difference from the lowest/default color
-  if (shopifyBasePrice.value && selectedColor && colorOptions.value.length > 0) {
-    // Find the default/first color to use as baseline
-    const defaultColor = colorOptions.value.find(c => c.isDefault) || colorOptions.value[0]
-    if (defaultColor && selectedColor.price !== defaultColor.price) {
-      // Add the price difference between selected color and default color
-      const colorPriceDiff = selectedColor.price - defaultColor.price
-      basePrice += colorPriceDiff
-    }
+  if (selectedColor && selectedColor.price) {
+    basePrice += selectedColor.price
   }
 
-  // Add extra costs from selected options
+  // Add extra costs from selected frame material
   const selectedFrame = frameOptions.value.find(f => f.value === configuration.value.frameMaterial)
   if (selectedFrame) basePrice += selectedFrame.extraCost
 
+  // Add extra costs from selected pillow style
   const selectedPillow = pillowOptions.value.find(p => p.value === configuration.value.pillowStyle)
   if (selectedPillow) basePrice += selectedPillow.extraCost
 
+  // Add extra costs from selected leg style
   const selectedLeg = legOptions.value.find(l => l.value === configuration.value.legStyle)
   if (selectedLeg) basePrice += selectedLeg.extraCost
 
