@@ -1,15 +1,15 @@
 {% comment %}
   Iani 3D Configurator - Cart Preview Handler
-  Updates preview images and Estimated Total for configured items
+  Updates preview images and line item TOTAL prices for configured items
 {% endcomment %}
 
 <!-- Iani Cart Preview Handler -->
-<div id="iani-cart-preview-handler" style="display:none;" data-iani-version="1.27"></div>
+<div id="iani-cart-preview-handler" style="display:none;" data-iani-version="1.28"></div>
 
 <script>
 (function(){
   'use strict';
-  console.log('[Iani Cart] v1.27 loaded');
+  console.log('[Iani Cart] v1.28 loaded');
 
   function applyCartCustomizations(){
     const storedPreviews=JSON.parse(localStorage.getItem('iani_cart_previews')||'{}');
@@ -22,17 +22,12 @@
 
     if(priceKeys.length===0&&previewKeys.length===0)return;
 
-    // Calculate total of ALL stored configured prices
-    let totalConfiguredPrice=0;
-    priceKeys.forEach(function(key){
-      totalConfiguredPrice+=storedPrices[key];
-    });
-    console.log('[Iani Cart] Total configured price:',totalConfiguredPrice);
-
-    // Track which previews have been used
+    // Track which previews/prices have been used
     let usedPreviewKeys=[];
+    let usedPriceKeys=[];
+    let totalConfiguredPrice=0;
 
-    // Apply preview images to Iani cart items - match by config ID
+    // Apply preview images and update line item prices
     const cartContainers=document.querySelectorAll('tr, [class*="cart-item"], .line-item');
     cartContainers.forEach(function(container){
       if(container.dataset.ianiDone)return;
@@ -55,19 +50,14 @@
       if(img&&!img.dataset.ianiPreview){
         let previewUrl=null;
 
-        // Try to match by exact config ID first
         if(configId&&storedPreviews[configId]){
           previewUrl=storedPreviews[configId];
           usedPreviewKeys.push(configId);
-          console.log('[Iani Cart] Matched preview by config ID:',configId);
-        }
-        // Otherwise find an unused preview
-        else if(previewKeys.length>0){
+        }else if(previewKeys.length>0){
           for(let i=0;i<previewKeys.length;i++){
             if(!usedPreviewKeys.includes(previewKeys[i])){
               previewUrl=storedPreviews[previewKeys[i]];
               usedPreviewKeys.push(previewKeys[i]);
-              console.log('[Iani Cart] Using fallback preview:',previewKeys[i]);
               break;
             }
           }
@@ -81,11 +71,83 @@
           img.dataset.ianiPreview='true';
         }
       }
+
+      // Find and update the line item TOTAL price (right column)
+      let configuredPrice=null;
+      if(configId&&storedPrices[configId]){
+        configuredPrice=storedPrices[configId];
+        usedPriceKeys.push(configId);
+      }else{
+        for(let i=0;i<priceKeys.length;i++){
+          if(!usedPriceKeys.includes(priceKeys[i])){
+            configuredPrice=storedPrices[priceKeys[i]];
+            usedPriceKeys.push(priceKeys[i]);
+            break;
+          }
+        }
+      }
+
+      if(configuredPrice){
+        totalConfiguredPrice+=configuredPrice;
+        updateLineItemPrice(container,configuredPrice);
+      }
     });
 
-    // Update Estimated Total
+    console.log('[Iani Cart] Total configured price:',totalConfiguredPrice);
+
+    // Update Estimated Total at bottom
     if(totalConfiguredPrice>0){
       updateEstimatedTotal(totalConfiguredPrice);
+    }
+  }
+
+  function updateLineItemPrice(container,configuredPrice){
+    // Find the TOTAL cell/column for this line item
+    // Common selectors: last td, .cart-item__totals, [class*="total"], .price
+    const formattedPrice='$'+configuredPrice.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+    // Try different selectors for the line item total
+    const selectors=[
+      'td:last-child',
+      '.cart-item__totals',
+      '[class*="line-item-total"]',
+      '[class*="cart-item__total"]'
+    ];
+
+    let priceElement=null;
+    for(const selector of selectors){
+      const el=container.querySelector(selector);
+      if(el&&/[\d,]+\.?\d*\s*RSD/i.test(el.textContent)){
+        priceElement=el;
+        break;
+      }
+    }
+
+    // Fallback: find any element with RSD price pattern in right part of container
+    if(!priceElement){
+      const allElements=container.querySelectorAll('*');
+      for(const el of allElements){
+        if(el.children.length>2)continue;
+        const text=el.textContent.trim();
+        // Match price pattern like "10,000.00 RSD"
+        if(/^[\d,]+\.?\d*\s*RSD$/i.test(text)&&!el.dataset.ianiPriceDone){
+          // Check if this is likely the TOTAL column (not the unit price column)
+          const rect=el.getBoundingClientRect();
+          const containerRect=container.getBoundingClientRect();
+          // If element is in the right half of container, it's likely the TOTAL
+          if(rect.left>containerRect.left+containerRect.width*0.5){
+            priceElement=el;
+            break;
+          }
+        }
+      }
+    }
+
+    if(priceElement&&!priceElement.dataset.ianiPriceDone){
+      const originalText=priceElement.textContent.trim();
+      console.log('[Iani Cart] Updating line item total from:',originalText,'to:',formattedPrice);
+      priceElement.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.85em;display:block;">'+originalText+'</span><span style="color:#4CAF50;font-weight:bold;">'+formattedPrice+'</span>';
+      priceElement.dataset.ianiPriceDone='true';
     }
   }
 
