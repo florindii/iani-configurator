@@ -4,90 +4,75 @@
 {% endcomment %}
 
 <!-- Iani Cart Preview Handler -->
-<div id="iani-cart-preview-handler" style="display:none;" data-iani-version="1.28"></div>
+<div id="iani-cart-preview-handler" style="display:none;" data-iani-version="1.29"></div>
 
 <script>
 (function(){
   'use strict';
-  console.log('[Iani Cart] v1.28 loaded');
+  console.log('[Iani Cart] v1.29 loaded');
 
   function applyCartCustomizations(){
     const storedPreviews=JSON.parse(localStorage.getItem('iani_cart_previews')||'{}');
     const storedPrices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');
-    const priceKeys=Object.keys(storedPrices);
-    const previewKeys=Object.keys(storedPreviews);
 
-    console.log('[Iani Cart] Previews:',previewKeys);
-    console.log('[Iani Cart] Prices:',storedPrices);
+    console.log('[Iani Cart] Stored Previews:',Object.keys(storedPreviews));
+    console.log('[Iani Cart] Stored Prices:',storedPrices);
 
-    if(priceKeys.length===0&&previewKeys.length===0)return;
-
-    // Track which previews/prices have been used
-    let usedPreviewKeys=[];
-    let usedPriceKeys=[];
-    let totalConfiguredPrice=0;
-
-    // Apply preview images and update line item prices
+    // STEP 1: First, find ALL Iani cart items and their config IDs
     const cartContainers=document.querySelectorAll('tr, [class*="cart-item"], .line-item');
-    cartContainers.forEach(function(container){
-      if(container.dataset.ianiDone)return;
+    const activeConfigIds=[];
+    const ianiItems=[];
 
+    cartContainers.forEach(function(container){
       const containerHTML=container.innerHTML||'';
       const containerText=container.textContent||'';
 
       // Check if this is an Iani item (has Extra Colors or Configured Price)
       if(!containerText.includes('Extra Colors')&&!containerText.includes('Configured Price'))return;
 
-      container.dataset.ianiDone='true';
-
       // Find the config ID in this container
       const configMatch=containerHTML.match(/config_\d+_[a-z0-9]+/i);
       const configId=configMatch?configMatch[0]:null;
+
+      if(configId){
+        activeConfigIds.push(configId);
+      }
+      ianiItems.push({container,configId});
+    });
+
+    console.log('[Iani Cart] Active config IDs in cart:',activeConfigIds);
+
+    // STEP 2: Clean up stale entries from localStorage (items no longer in cart)
+    cleanupStaleEntries(storedPreviews,storedPrices,activeConfigIds);
+
+    // STEP 3: Process each Iani item
+    let totalConfiguredPrice=0;
+    let usedPriceKeys=[];
+
+    ianiItems.forEach(function(item){
+      const container=item.container;
+      const configId=item.configId;
+
+      if(container.dataset.ianiDone)return;
+      container.dataset.ianiDone='true';
+
       console.log('[Iani Cart] Processing item with config ID:',configId);
 
-      // Apply preview image - match by config ID
+      // Apply preview image
       const img=container.querySelector('img');
-      if(img&&!img.dataset.ianiPreview){
-        let previewUrl=null;
-
-        if(configId&&storedPreviews[configId]){
-          previewUrl=storedPreviews[configId];
-          usedPreviewKeys.push(configId);
-        }else if(previewKeys.length>0){
-          for(let i=0;i<previewKeys.length;i++){
-            if(!usedPreviewKeys.includes(previewKeys[i])){
-              previewUrl=storedPreviews[previewKeys[i]];
-              usedPreviewKeys.push(previewKeys[i]);
-              break;
-            }
-          }
-        }
-
-        if(previewUrl){
-          img.src=previewUrl;
-          img.style.border='2px solid #4CAF50';
-          img.style.borderRadius='4px';
-          img.style.objectFit='cover';
-          img.dataset.ianiPreview='true';
-        }
+      if(img&&!img.dataset.ianiPreview&&configId&&storedPreviews[configId]){
+        img.src=storedPreviews[configId];
+        img.style.border='2px solid #4CAF50';
+        img.style.borderRadius='4px';
+        img.style.objectFit='cover';
+        img.dataset.ianiPreview='true';
       }
 
-      // Find and update the line item TOTAL price (right column)
+      // Get configured price - ONLY use price if config ID matches
       let configuredPrice=null;
-      if(configId&&storedPrices[configId]){
+      if(configId&&storedPrices[configId]&&!usedPriceKeys.includes(configId)){
         configuredPrice=storedPrices[configId];
         usedPriceKeys.push(configId);
-      }else{
-        for(let i=0;i<priceKeys.length;i++){
-          if(!usedPriceKeys.includes(priceKeys[i])){
-            configuredPrice=storedPrices[priceKeys[i]];
-            usedPriceKeys.push(priceKeys[i]);
-            break;
-          }
-        }
-      }
-
-      if(configuredPrice){
         totalConfiguredPrice+=configuredPrice;
         updateLineItemPrice(container,configuredPrice);
       }
@@ -95,9 +80,41 @@
 
     console.log('[Iani Cart] Total configured price:',totalConfiguredPrice);
 
-    // Update Estimated Total at bottom
+    // STEP 4: Update Estimated Total at bottom
     if(totalConfiguredPrice>0){
       updateEstimatedTotal(totalConfiguredPrice);
+    }
+  }
+
+  // Clean up localStorage entries for items no longer in cart
+  function cleanupStaleEntries(previews,prices,activeIds){
+    let previewsChanged=false;
+    let pricesChanged=false;
+
+    // Remove stale previews
+    Object.keys(previews).forEach(function(key){
+      if(!activeIds.includes(key)){
+        console.log('[Iani Cart] Removing stale preview:',key);
+        delete previews[key];
+        previewsChanged=true;
+      }
+    });
+
+    // Remove stale prices
+    Object.keys(prices).forEach(function(key){
+      if(!activeIds.includes(key)){
+        console.log('[Iani Cart] Removing stale price:',key);
+        delete prices[key];
+        pricesChanged=true;
+      }
+    });
+
+    // Save cleaned up data back to localStorage
+    if(previewsChanged){
+      localStorage.setItem('iani_cart_previews',JSON.stringify(previews));
+    }
+    if(pricesChanged){
+      localStorage.setItem('iani_cart_prices',JSON.stringify(prices));
     }
   }
 
@@ -200,11 +217,39 @@
     }
   }
 
+  // Clear localStorage on checkout (order completed, no need to keep data)
+  function setupCheckoutCleanup(){
+    // Find checkout buttons/forms
+    const checkoutSelectors=[
+      'button[name="checkout"]',
+      'input[name="checkout"]',
+      '[class*="checkout"]',
+      'form[action*="/checkout"]'
+    ];
+
+    checkoutSelectors.forEach(function(selector){
+      document.querySelectorAll(selector).forEach(function(el){
+        if(el.dataset.ianiCheckoutBound)return;
+        el.dataset.ianiCheckoutBound='true';
+
+        el.addEventListener('click',function(){
+          console.log('[Iani Cart] Checkout clicked - clearing localStorage');
+          localStorage.removeItem('iani_cart_previews');
+          localStorage.removeItem('iani_cart_prices');
+        });
+      });
+    });
+  }
+
   // Run after page loads
   if(document.readyState==='complete'){
     applyCartCustomizations();
+    setupCheckoutCleanup();
   }else{
-    window.addEventListener('load',applyCartCustomizations);
+    window.addEventListener('load',function(){
+      applyCartCustomizations();
+      setupCheckoutCleanup();
+    });
   }
   setTimeout(applyCartCustomizations,800);
   setTimeout(applyCartCustomizations,2000);
