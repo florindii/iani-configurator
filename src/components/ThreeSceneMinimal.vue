@@ -71,6 +71,11 @@
 
         <!-- Price Display -->
         <div class="price-section">
+          <!-- Show crossed-out base price when extras are added -->
+          <div v-if="totalExtraCost > 0" class="base-price-crossed">
+            <span class="currency">{{ currencySymbol }}</span>
+            <span class="amount">{{ formatPrice(basePrice) }}</span>
+          </div>
           <div class="current-price">
             <span class="currency">{{ currencySymbol }}</span>
             <span class="amount">{{ formatPrice(calculatedPrice) }}</span>
@@ -277,6 +282,9 @@ let sofaParts = {
 // Custom color state
 const customColor = ref('#4A90E2')
 
+// Track if user has explicitly selected a color (vs initial default)
+const hasUserSelectedColor = ref(false)
+
 // Configuration state
 const configuration = ref({
   cushionColor: 'blue',
@@ -433,30 +441,41 @@ const legOptions = ref([
 
 
 
-// Computed price - uses Shopify product price as base when available
-const calculatedPrice = computed(() => {
-  // Start with Shopify product price if available, otherwise use default
-  let basePrice = shopifyBasePrice.value || 299.99
+// Base price from Shopify
+const basePrice = computed(() => {
+  return shopifyBasePrice.value || 299.99
+})
 
-  // Add extra cost from selected color (price field now represents extra cost)
-  const selectedColor = colorOptions.value.find(c => c.value === configuration.value.cushionColor)
-  if (selectedColor && selectedColor.price) {
-    basePrice += selectedColor.price
+// Total extra costs (for showing what's being added)
+const totalExtraCost = computed(() => {
+  let extras = 0
+
+  // Only add color extra cost if user explicitly selected a color
+  if (hasUserSelectedColor.value) {
+    const selectedColor = colorOptions.value.find(c => c.value === configuration.value.cushionColor)
+    if (selectedColor && selectedColor.price) {
+      extras += selectedColor.price
+    }
   }
 
   // Add extra costs from selected frame material
   const selectedFrame = frameOptions.value.find(f => f.value === configuration.value.frameMaterial)
-  if (selectedFrame) basePrice += selectedFrame.extraCost
+  if (selectedFrame) extras += selectedFrame.extraCost
 
   // Add extra costs from selected pillow style
   const selectedPillow = pillowOptions.value.find(p => p.value === configuration.value.pillowStyle)
-  if (selectedPillow) basePrice += selectedPillow.extraCost
+  if (selectedPillow) extras += selectedPillow.extraCost
 
   // Add extra costs from selected leg style
   const selectedLeg = legOptions.value.find(l => l.value === configuration.value.legStyle)
-  if (selectedLeg) basePrice += selectedLeg.extraCost
+  if (selectedLeg) extras += selectedLeg.extraCost
 
-  return basePrice
+  return extras
+})
+
+// Computed price - uses Shopify product price as base when available
+const calculatedPrice = computed(() => {
+  return basePrice.value + totalExtraCost.value
 })
 
 // Currency symbol based on Shopify currency
@@ -770,6 +789,7 @@ const setPresetColor = (colorValue, colorHex) => {
   configuration.value.cushionColor = colorValue
   configuration.value.isCustomColor = false
   configuration.value.customHex = null
+  hasUserSelectedColor.value = true // Mark that user explicitly selected a color
   updateCushionColors()
 }
 
@@ -779,6 +799,7 @@ const setCustomColor = () => {
   configuration.value.cushionColor = 'custom'
   configuration.value.isCustomColor = true
   configuration.value.customHex = customColor.value
+  hasUserSelectedColor.value = true // Mark that user explicitly selected a color
   updateCushionColors()
 }
 
@@ -787,6 +808,7 @@ const updateCushionColor = (colorValue) => {
   configuration.value.cushionColor = colorValue
   configuration.value.isCustomColor = false
   configuration.value.customHex = null
+  hasUserSelectedColor.value = true // Mark that user explicitly selected a color
   updateCushionColors()
 }
 
@@ -2027,6 +2049,27 @@ onUnmounted(() => {
   margin-bottom: 32px;
   padding: 16px 0;
   border-bottom: 1px solid #e1e5e9;
+}
+
+.base-price-crossed {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  text-decoration: line-through;
+  opacity: 0.5;
+  margin-bottom: 4px;
+}
+
+.base-price-crossed .currency {
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+}
+
+.base-price-crossed .amount {
+  font-size: 18px;
+  font-weight: 500;
+  color: #666;
 }
 
 .current-price {
