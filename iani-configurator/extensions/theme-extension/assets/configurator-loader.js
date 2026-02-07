@@ -170,7 +170,8 @@ containers.forEach(function(w){
         const p=d.payload||d;
         const props=p.configuration||p.properties||{};
         const configId=p.configurationId||('config_'+Date.now());
-        if(configId)props['_configuration_id']=configId;
+        // Store config ID without underscore so it's visible in cart HTML (needed for price matching)
+        if(configId)props['Configuration ID']=configId;
 
         // Add configured price as visible property so it shows on each line item
         if(p.price){

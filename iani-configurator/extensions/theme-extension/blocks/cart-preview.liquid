@@ -4,12 +4,12 @@
 {% endcomment %}
 
 <!-- Iani Cart Preview Handler -->
-<div id="iani-cart-preview-handler" style="display:none;" data-iani-version="1.29"></div>
+<div id="iani-cart-preview-handler" style="display:none;" data-iani-version="1.30"></div>
 
 <script>
 (function(){
   'use strict';
-  console.log('[Iani Cart] v1.29 loaded');
+  console.log('[Iani Cart] v1.30 loaded');
 
   function applyCartCustomizations(){
     const storedPreviews=JSON.parse(localStorage.getItem('iani_cart_previews')||'{}');
@@ -41,17 +41,22 @@
     });
 
     console.log('[Iani Cart] Active config IDs in cart:',activeConfigIds);
+    console.log('[Iani Cart] Found Iani items:',ianiItems.length);
 
-    // STEP 2: Clean up stale entries from localStorage (items no longer in cart)
-    cleanupStaleEntries(storedPreviews,storedPrices,activeConfigIds);
+    // STEP 2: Clean up stale entries ONLY if we found Iani items with config IDs
+    // This prevents false cleanup when page isn't fully loaded
+    if(activeConfigIds.length>0){
+      cleanupStaleEntries(storedPreviews,storedPrices,activeConfigIds);
+    }
 
     // STEP 3: Process each Iani item
     let totalConfiguredPrice=0;
     let usedPriceKeys=[];
+    const priceKeys=Object.keys(storedPrices);
 
     ianiItems.forEach(function(item){
       const container=item.container;
-      const configId=item.configId;
+      let configId=item.configId;
 
       if(container.dataset.ianiDone)return;
       container.dataset.ianiDone='true';
@@ -68,11 +73,27 @@
         img.dataset.ianiPreview='true';
       }
 
-      // Get configured price - ONLY use price if config ID matches
+      // Get configured price
       let configuredPrice=null;
+
+      // Try exact config ID match first
       if(configId&&storedPrices[configId]&&!usedPriceKeys.includes(configId)){
         configuredPrice=storedPrices[configId];
         usedPriceKeys.push(configId);
+      }
+      // Fallback: if no config ID found but this is an Iani item, use first available price
+      else if(!configId&&priceKeys.length>0){
+        for(let i=0;i<priceKeys.length;i++){
+          if(!usedPriceKeys.includes(priceKeys[i])){
+            configuredPrice=storedPrices[priceKeys[i]];
+            usedPriceKeys.push(priceKeys[i]);
+            console.log('[Iani Cart] Using fallback price for item without config ID');
+            break;
+          }
+        }
+      }
+
+      if(configuredPrice){
         totalConfiguredPrice+=configuredPrice;
         updateLineItemPrice(container,configuredPrice);
       }
