@@ -25,7 +25,8 @@
       "Bash(git revert:*)",
       "Bash(shopify app deploy)",
       "Bash(npx tsc:*)",
-      "Bash(shopify app deploy:*)"
+      "Bash(shopify app deploy:*)",
+      "Bash(timeout /t 15 /nobreak)"
     ]
   }
 }
