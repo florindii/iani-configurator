@@ -170,13 +170,14 @@ containers.forEach(function(w){
         const p=d.payload||d;
         const props=p.configuration||p.properties||{};
         const configId=p.configurationId||('config_'+Date.now());
+        const variantId=p.variantId||c.variantId;
         // Store config ID without underscore so it's visible in cart HTML (needed for price matching)
         if(configId)props['Configuration ID']=configId;
 
         // Add configured price as visible property so it shows on each line item
         if(p.price){
           props['Configured Price']='$'+Number(p.price).toFixed(2);
-          // Also store in localStorage for total calculation
+          // Store price in localStorage for cart display and draft order
           try{
             const prices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');
             prices[configId]=Number(p.price);
@@ -184,6 +185,19 @@ containers.forEach(function(w){
             console.log('[Iani] Configured price stored:',p.price);
           }catch(e){console.warn('[Iani] Could not store price:',e);}
         }
+
+        // Store line item data for draft order creation
+        try{
+          const items=JSON.parse(localStorage.getItem('iani_cart_items')||'{}');
+          items[configId]={
+            variantId:variantId,
+            configuredPrice:p.price?Number(p.price):null,
+            configuration:p.configuration||{},
+            productId:p.productId||c.productId
+          };
+          localStorage.setItem('iani_cart_items',JSON.stringify(items));
+          console.log('[Iani] Line item data stored for config:',configId);
+        }catch(e){console.warn('[Iani] Could not store line item:',e);}
 
         // Store preview image in localStorage with config ID for proper matching
         if(p.previewImage){
@@ -195,7 +209,7 @@ containers.forEach(function(w){
           }catch(e){console.warn('[Iani] Could not store preview:',e);}
         }
 
-        fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.variantId||c.variantId,quantity:p.quantity||1,properties:props})}).then(r=>r.json()).then(item=>{
+        fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:variantId,quantity:p.quantity||1,properties:props})}).then(r=>r.json()).then(item=>{
           if(iframe&&iframe.contentWindow)iframe.contentWindow.postMessage({type:'IANI_CART_SUCCESS',payload:item},c.configuratorUrl);
           fetch('/cart.js').then(r=>r.json()).then(cart=>{
             ['.cart-count','.cart-count-bubble','[data-cart-count]'].forEach(s=>{const el=document.querySelector(s);if(el)el.textContent=cart.item_count});

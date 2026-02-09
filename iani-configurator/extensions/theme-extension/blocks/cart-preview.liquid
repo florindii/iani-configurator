@@ -1,15 +1,25 @@
 {% comment %}
   Iani 3D Configurator - Cart Preview Handler
-  Updates preview images and line item TOTAL prices for configured items
+  Updates preview images, line item prices, and handles Draft Order checkout
 {% endcomment %}
 
 <!-- Iani Cart Preview Handler -->
-<div id="iani-cart-preview-handler" style="display:none;" data-iani-version="1.30"></div>
+<div id="iani-cart-preview-handler"
+     style="display:none;"
+     data-iani-version="1.31"
+     data-shop="{{ shop.permanent_domain }}"
+     data-api-url="https://iani-configurator-1.onrender.com">
+</div>
 
 <script>
 (function(){
   'use strict';
-  console.log('[Iani Cart] v1.30 loaded');
+  console.log('[Iani Cart] v1.31 loaded');
+
+  // Get config from data attributes
+  const handler=document.getElementById('iani-cart-preview-handler');
+  const SHOP=handler?handler.dataset.shop:'';
+  const API_URL=handler?handler.dataset.apiUrl:'https://iani-configurator-1.onrender.com';
 
   function applyCartCustomizations(){
     const storedPreviews=JSON.parse(localStorage.getItem('iani_cart_previews')||'{}');
@@ -238,14 +248,26 @@
     }
   }
 
-  // Clear localStorage on checkout (order completed, no need to keep data)
-  function setupCheckoutCleanup(){
+  // Intercept checkout to create Draft Order with correct pricing
+  function setupCheckoutIntercept(){
+    const storedPrices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');
+    const storedLineItems=JSON.parse(localStorage.getItem('iani_cart_items')||'{}');
+    const hasConfigure=Object.keys(storedPrices).length>0;
+
+    if(!hasConfigure){
+      console.log('[Iani Cart] No configured items, normal checkout');
+      return;
+    }
+
+    console.log('[Iani Cart] Found configured items, setting up checkout intercept');
+
     // Find checkout buttons/forms
     const checkoutSelectors=[
       'button[name="checkout"]',
       'input[name="checkout"]',
-      '[class*="checkout"]',
-      'form[action*="/checkout"]'
+      'button[type="submit"][form*="cart"]',
+      '.cart__checkout-button',
+      '[class*="checkout-button"]'
     ];
 
     checkoutSelectors.forEach(function(selector){
@@ -253,27 +275,166 @@
         if(el.dataset.ianiCheckoutBound)return;
         el.dataset.ianiCheckoutBound='true';
 
-        el.addEventListener('click',function(){
-          console.log('[Iani Cart] Checkout clicked - clearing localStorage');
-          localStorage.removeItem('iani_cart_previews');
-          localStorage.removeItem('iani_cart_prices');
+        el.addEventListener('click',function(e){
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('[Iani Cart] Checkout intercepted - creating Draft Order');
+          createDraftOrderAndCheckout();
         });
       });
     });
+
+    // Also intercept form submission
+    const cartForms=document.querySelectorAll('form[action*="/cart"], form[action="/checkout"]');
+    cartForms.forEach(function(form){
+      if(form.dataset.ianiFormBound)return;
+      form.dataset.ianiFormBound='true';
+
+      form.addEventListener('submit',function(e){
+        // Only intercept if submitting to checkout
+        if(form.action.includes('/checkout')||e.submitter?.name==='checkout'){
+          e.preventDefault();
+          console.log('[Iani Cart] Form submit intercepted - creating Draft Order');
+          createDraftOrderAndCheckout();
+        }
+      });
+    });
+  }
+
+  // Create Draft Order and redirect to checkout
+  async function createDraftOrderAndCheckout(){
+    const storedPrices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');
+    const storedLineItems=JSON.parse(localStorage.getItem('iani_cart_items')||'{}');
+
+    console.log('[Iani Cart] Creating draft order with prices:',storedPrices);
+    console.log('[Iani Cart] Line items data:',storedLineItems);
+
+    // Show loading state
+    showCheckoutLoading(true);
+
+    try{
+      // First, get current cart to build line items
+      const cartResponse=await fetch('/cart.js');
+      const cart=await cartResponse.json();
+      console.log('[Iani Cart] Current cart:',cart);
+
+      // Build line items for draft order
+      const lineItems=[];
+      cart.items.forEach(function(item){
+        // Check if this item has Iani configuration
+        const props=item.properties||{};
+        const configId=props['Configuration ID'];
+        const configuredPrice=configId?storedPrices[configId]:null;
+
+        // Get stored line item data
+        const storedData=configId?storedLineItems[configId]:null;
+
+        // Build custom attributes from properties
+        const customAttributes={};
+        Object.entries(props).forEach(function([key,value]){
+          if(key!=='Configuration ID'&&!key.startsWith('_')){
+            customAttributes[key]=value;
+          }
+        });
+
+        lineItems.push({
+          variantId:item.variant_id,
+          quantity:item.quantity,
+          configuredPrice:configuredPrice||null,
+          configurationSummary:configId?'Custom Configuration':'',
+          customAttributes:Object.keys(customAttributes).length>0?customAttributes:null
+        });
+      });
+
+      console.log('[Iani Cart] Draft order line items:',lineItems);
+
+      // Check if any items have configured prices
+      const hasConfiguredPrices=lineItems.some(function(item){return item.configuredPrice;});
+
+      if(!hasConfiguredPrices){
+        console.log('[Iani Cart] No configured prices, proceeding with normal checkout');
+        clearIaniStorage();
+        window.location.href='/checkout';
+        return;
+      }
+
+      // Call Draft Order API
+      const response=await fetch(API_URL+'/api/draft-order',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          shop:SHOP,
+          lineItems:lineItems
+        })
+      });
+
+      const result=await response.json();
+      console.log('[Iani Cart] Draft order result:',result);
+
+      if(result.success&&result.checkoutUrl){
+        // Clear storage and redirect to draft order checkout
+        clearIaniStorage();
+        console.log('[Iani Cart] Redirecting to draft order checkout:',result.checkoutUrl);
+        window.location.href=result.checkoutUrl;
+      }else{
+        console.error('[Iani Cart] Draft order failed:',result.error);
+        // Fallback to normal checkout with alert
+        showCheckoutLoading(false);
+        if(confirm('Could not apply custom pricing. Proceed with base prices?')){
+          clearIaniStorage();
+          window.location.href='/checkout';
+        }
+      }
+    }catch(err){
+      console.error('[Iani Cart] Checkout error:',err);
+      showCheckoutLoading(false);
+      if(confirm('Error processing custom pricing. Proceed with base prices?')){
+        clearIaniStorage();
+        window.location.href='/checkout';
+      }
+    }
+  }
+
+  function showCheckoutLoading(show){
+    let overlay=document.getElementById('iani-checkout-loading');
+    if(show){
+      if(!overlay){
+        overlay=document.createElement('div');
+        overlay.id='iani-checkout-loading';
+        overlay.innerHTML='<div style="background:white;padding:30px 50px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.3);text-align:center;"><div style="width:40px;height:40px;border:4px solid #e0e0e0;border-top-color:#4CAF50;border-radius:50%;animation:iani-spin 1s linear infinite;margin:0 auto 15px;"></div><div style="font-size:16px;color:#333;">Creating your order...</div><div style="font-size:12px;color:#666;margin-top:5px;">Applying custom configuration pricing</div></div>';
+        overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;';
+        const style=document.createElement('style');
+        style.textContent='@keyframes iani-spin{to{transform:rotate(360deg)}}';
+        document.head.appendChild(style);
+        document.body.appendChild(overlay);
+      }
+      overlay.style.display='flex';
+    }else if(overlay){
+      overlay.style.display='none';
+    }
+  }
+
+  function clearIaniStorage(){
+    localStorage.removeItem('iani_cart_previews');
+    localStorage.removeItem('iani_cart_prices');
+    localStorage.removeItem('iani_cart_items');
   }
 
   // Run after page loads
   if(document.readyState==='complete'){
     applyCartCustomizations();
-    setupCheckoutCleanup();
+    setupCheckoutIntercept();
   }else{
     window.addEventListener('load',function(){
       applyCartCustomizations();
-      setupCheckoutCleanup();
+      setupCheckoutIntercept();
     });
   }
   setTimeout(applyCartCustomizations,800);
-  setTimeout(applyCartCustomizations,2000);
+  setTimeout(function(){
+    applyCartCustomizations();
+    setupCheckoutIntercept();
+  },2000);
 })();
 </script>
 

@@ -12,7 +12,8 @@ automatically_update_urls_on_dev = true
 
 [access_scopes]
 # Required scopes for 3D configurator functionality
-scopes = "read_products,write_products"
+# write_draft_orders needed for custom pricing at checkout
+scopes = "read_products,write_products,write_draft_orders"
 
 [webhooks]
 api_version = "2025-04"
