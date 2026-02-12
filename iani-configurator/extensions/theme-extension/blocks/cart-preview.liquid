@@ -6,7 +6,7 @@
 <!-- Iani Cart Preview Handler -->
 <div id="iani-cart-preview-handler"
      style="display:none;"
-     data-iani-version="1.33"
+     data-iani-version="1.34"
      data-shop="{{ shop.permanent_domain }}"
      data-api-url="https://iani-configurator-1.onrender.com">
 </div>
@@ -14,7 +14,7 @@
 <script>
 (function(){
   'use strict';
-  console.log('[Iani Cart] v1.33 loaded');
+  console.log('[Iani Cart] v1.34 loaded');
 
   // Get config from data attributes
   const handler=document.getElementById('iani-cart-preview-handler');
@@ -63,14 +63,22 @@
     let totalFinalPrice=0;  // Sum of all items' final prices (configured or base)
     let hasAnyConfiguredPrice=false;
     let usedPriceKeys=[];
+    let processedConfigIds=[];  // Track which config IDs we've already processed (avoid duplicates)
     const priceKeys=Object.keys(storedPrices);
 
     ianiItems.forEach(function(item){
       const container=item.container;
       let configId=item.configId;
 
+      // Skip if this container or config ID was already processed
       if(container.dataset.ianiDone)return;
+      if(configId&&processedConfigIds.includes(configId)){
+        console.log('[Iani Cart] Skipping duplicate config ID:',configId);
+        container.dataset.ianiDone='true';
+        return;
+      }
       container.dataset.ianiDone='true';
+      if(configId)processedConfigIds.push(configId);
 
       console.log('[Iani Cart] Processing item with config ID:',configId);
 
