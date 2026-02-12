@@ -6,7 +6,7 @@
 <!-- Iani Cart Preview Handler -->
 <div id="iani-cart-preview-handler"
      style="display:none;"
-     data-iani-version="1.31"
+     data-iani-version="1.32"
      data-shop="{{ shop.permanent_domain }}"
      data-api-url="https://iani-configurator-1.onrender.com">
 </div>
@@ -14,7 +14,7 @@
 <script>
 (function(){
   'use strict';
-  console.log('[Iani Cart] v1.31 loaded');
+  console.log('[Iani Cart] v1.32 loaded');
 
   // Get config from data attributes
   const handler=document.getElementById('iani-cart-preview-handler');
@@ -193,8 +193,20 @@
 
     if(priceElement&&!priceElement.dataset.ianiPriceDone){
       const originalText=priceElement.textContent.trim();
-      console.log('[Iani Cart] Updating line item total from:',originalText,'to:',formattedPrice);
-      priceElement.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.85em;display:block;">'+originalText+'</span><span style="color:#4CAF50;font-weight:bold;">'+formattedPrice+'</span>';
+
+      // Extract numeric value from original price (e.g., "120,000.00 RSD" -> 120000)
+      const originalNumeric=parseFloat(originalText.replace(/[^\d.]/g,'').replace(/,/g,''));
+
+      // Only show crossed-out price + green configured price if there's a real difference
+      // Use a small tolerance (0.01) for floating point comparison
+      const priceDifference=Math.abs(configuredPrice-originalNumeric);
+
+      if(priceDifference>0.01){
+        console.log('[Iani Cart] Updating line item total from:',originalText,'('+originalNumeric+') to:',formattedPrice,'('+configuredPrice+')');
+        priceElement.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.85em;display:block;">'+originalText+'</span><span style="color:#4CAF50;font-weight:bold;">'+formattedPrice+'</span>';
+      }else{
+        console.log('[Iani Cart] Configured price matches original, no visual change needed:',configuredPrice,'vs',originalNumeric);
+      }
       priceElement.dataset.ianiPriceDone='true';
     }
   }
@@ -217,7 +229,16 @@
       const text=el.textContent.trim();
       if(/^[\d,]+\.?\d*\s*RSD$/i.test(text)){
         console.log('[Iani Cart] Found total element:',text);
-        el.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.9em;">'+text+'</span><br><span style="color:#4CAF50;font-weight:bold;font-size:1.1em;">'+formattedPrice+'</span>';
+        // Extract numeric value from original total
+        const originalNumeric=parseFloat(text.replace(/[^\d.]/g,'').replace(/,/g,''));
+        const priceDifference=Math.abs(total-originalNumeric);
+
+        // Only show styled price if there's a real difference
+        if(priceDifference>0.01){
+          el.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.9em;">'+text+'</span><br><span style="color:#4CAF50;font-weight:bold;font-size:1.1em;">'+formattedPrice+'</span>';
+        }else{
+          console.log('[Iani Cart] Estimated total matches configured, no visual change needed');
+        }
         found=true;
         document.body.dataset.ianiTotalDone='true';
       }
@@ -237,7 +258,16 @@
               if(found)return;
               const spanText=span.textContent.trim();
               if(/[\d,]+\.?\d*\s*RSD/i.test(spanText)){
-                span.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.9em;">'+spanText+'</span><br><span style="color:#4CAF50;font-weight:bold;">'+formattedPrice+'</span>';
+                // Extract numeric value from original total
+                const originalNumeric=parseFloat(spanText.replace(/[^\d.]/g,'').replace(/,/g,''));
+                const priceDifference=Math.abs(total-originalNumeric);
+
+                // Only show styled price if there's a real difference
+                if(priceDifference>0.01){
+                  span.innerHTML='<span style="text-decoration:line-through;color:#999;font-size:0.9em;">'+spanText+'</span><br><span style="color:#4CAF50;font-weight:bold;">'+formattedPrice+'</span>';
+                }else{
+                  console.log('[Iani Cart] Estimated total matches configured, no visual change needed');
+                }
                 found=true;
                 document.body.dataset.ianiTotalDone='true';
               }

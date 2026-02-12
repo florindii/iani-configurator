@@ -7,7 +7,6 @@ application_url = "https://iani-configurator-1.onrender.com"
 embedded = true
 
 [build]
-include_config_on_deploy = true
 automatically_update_urls_on_dev = true
 
 [access_scopes]
