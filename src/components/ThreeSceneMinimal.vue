@@ -1691,13 +1691,17 @@ const addToCart = async () => {
 
     const shopifyContext = getShopifyContext()
 
+    // Only include price info if there are actual extra costs from configuration
+    const hasExtraCosts = totalExtraCost.value > 0
+
     const cartData = {
       type: 'IANI_ADD_TO_CART',
       payload: {
         productId: shopifyContext.productId || 'customizable-sofa',
         variantId: shopifyContext.variantId,
         configuration: fullConfiguration,
-        price: Number(calculatedPrice.value),
+        // Only include price if there are extra costs - otherwise Shopify base price is used
+        ...(hasExtraCosts && { price: Number(calculatedPrice.value) }),
         quantity: 1,
         timestamp: new Date().toISOString(),
         configurationId: `config_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,

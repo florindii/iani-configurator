@@ -174,7 +174,8 @@ containers.forEach(function(w){
         // Store config ID without underscore so it's visible in cart HTML (needed for price matching)
         if(configId)props['Configuration ID']=configId;
 
-        // Add configured price as visible property so it shows on each line item
+        // Add configured price as visible property ONLY if there are extra costs
+        // p.price is only included by the configurator when totalExtraCost > 0
         if(p.price){
           props['Configured Price']='$'+Number(p.price).toFixed(2);
           // Store price in localStorage for cart display and draft order
@@ -182,8 +183,10 @@ containers.forEach(function(w){
             const prices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');
             prices[configId]=Number(p.price);
             localStorage.setItem('iani_cart_prices',JSON.stringify(prices));
-            console.log('[Iani] Configured price stored:',p.price);
+            console.log('[Iani] Configured price stored (has extra costs):',p.price);
           }catch(e){console.warn('[Iani] Could not store price:',e);}
+        }else{
+          console.log('[Iani] No extra costs - using base Shopify price');
         }
 
         // Store line item data for draft order creation
