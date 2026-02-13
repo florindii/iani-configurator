@@ -6,7 +6,7 @@
 <!-- Iani Cart Preview Handler -->
 <div id="iani-cart-preview-handler"
      style="display:none;"
-     data-iani-version="1.35"
+     data-iani-version="1.36"
      data-shop="{{ shop.permanent_domain }}"
      data-api-url="https://iani-configurator-1.onrender.com">
 </div>
@@ -14,14 +14,46 @@
 <script>
 (function(){
   'use strict';
-  console.log('[Iani Cart] v1.35 loaded');
+  console.log('[Iani Cart] v1.36 loaded');
 
   // Get config from data attributes
   const handler=document.getElementById('iani-cart-preview-handler');
   const SHOP=handler?handler.dataset.shop:'';
   const API_URL=handler?handler.dataset.apiUrl:'https://iani-configurator-1.onrender.com';
 
-  function applyCartCustomizations(){
+  // Track last known cart state to detect changes
+  let lastCartHTML='';
+  let processingInProgress=false;
+
+  function resetProcessingFlags(){
+    // Clear all processing flags to allow re-processing after cart update
+    document.querySelectorAll('[data-iani-done]').forEach(function(el){
+      delete el.dataset.ianiDone;
+    });
+    document.querySelectorAll('[data-iani-price-done]').forEach(function(el){
+      delete el.dataset.ianiPriceDone;
+    });
+    document.querySelectorAll('[data-iani-preview]').forEach(function(el){
+      delete el.dataset.ianiPreview;
+    });
+    delete document.body.dataset.ianiTotalDone;
+  }
+
+  function applyCartCustomizations(forceReset){
+    // Prevent concurrent processing
+    if(processingInProgress)return;
+    processingInProgress=true;
+
+    // Check if cart HTML changed (Shopify re-rendered)
+    const cartSection=document.querySelector('.cart, [class*="cart"], main');
+    const currentCartHTML=cartSection?cartSection.innerHTML.length.toString():'';
+
+    if(forceReset||currentCartHTML!==lastCartHTML){
+      console.log('[Iani Cart] Cart changed, resetting flags');
+      resetProcessingFlags();
+      lastCartHTML=currentCartHTML;
+    }
+
     const storedPreviews=JSON.parse(localStorage.getItem('iani_cart_previews')||'{}');
     const storedPrices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');
 
@@ -53,11 +85,8 @@
     console.log('[Iani Cart] Active config IDs in cart:',activeConfigIds);
     console.log('[Iani Cart] Found Iani items:',ianiItems.length);
 
-    // STEP 2: Clean up stale entries ONLY if we found Iani items with config IDs
-    // This prevents false cleanup when page isn't fully loaded
-    if(activeConfigIds.length>0){
-      cleanupStaleEntries(storedPreviews,storedPrices,activeConfigIds);
-    }
+    // STEP 2: DON'T clean up stale entries here - only clean when we're SURE items were removed
+    // (cleanup happens on checkout or explicit user action)
 
     // STEP 3: Process each Iani item and calculate totals
     let totalFinalPrice=0;  // Sum of all items' final prices (configured or base)
@@ -68,7 +97,7 @@
       const container=item.container;
       let configId=item.configId;
 
-      // Skip if this container was already processed
+      // Skip if this container was already processed in THIS run
       if(container.dataset.ianiDone)return;
       container.dataset.ianiDone='true';
 
@@ -123,6 +152,8 @@
     if(hasAnyConfiguredPrice&&totalFinalPrice>0){
       updateEstimatedTotal(totalFinalPrice);
     }
+
+    processingInProgress=false;
   }
 
   // Extract the base price from a cart item's TOTAL column
@@ -162,36 +193,57 @@
     return 0;
   }
 
-  // Clean up localStorage entries for items no longer in cart
-  function cleanupStaleEntries(previews,prices,activeIds){
-    let previewsChanged=false;
-    let pricesChanged=false;
+  // Setup MutationObserver to watch for cart DOM changes (Shopify AJAX updates)
+  function setupCartObserver(){
+    const cartSection=document.querySelector('.cart, [class*="cart-drawer"], [class*="cart-items"], main');
+    if(!cartSection){
+      console.log('[Iani Cart] No cart section found for observer');
+      return;
+    }
 
-    // Remove stale previews
-    Object.keys(previews).forEach(function(key){
-      if(!activeIds.includes(key)){
-        console.log('[Iani Cart] Removing stale preview:',key);
-        delete previews[key];
-        previewsChanged=true;
-      }
+    let debounceTimer=null;
+    const observer=new MutationObserver(function(mutations){
+      // Debounce rapid changes
+      clearTimeout(debounceTimer);
+      debounceTimer=setTimeout(function(){
+        console.log('[Iani Cart] DOM mutation detected, re-applying customizations');
+        applyCartCustomizations(true);  // force reset
+        setupCheckoutIntercept();  // re-bind checkout buttons
+      },300);
     });
 
-    // Remove stale prices
-    Object.keys(prices).forEach(function(key){
-      if(!activeIds.includes(key)){
-        console.log('[Iani Cart] Removing stale price:',key);
-        delete prices[key];
-        pricesChanged=true;
-      }
+    observer.observe(cartSection,{
+      childList:true,
+      subtree:true,
+      characterData:true
     });
 
-    // Save cleaned up data back to localStorage
-    if(previewsChanged){
-      localStorage.setItem('iani_cart_previews',JSON.stringify(previews));
-    }
-    if(pricesChanged){
-      localStorage.setItem('iani_cart_prices',JSON.stringify(prices));
-    }
+    console.log('[Iani Cart] MutationObserver attached to cart');
+  }
+
+  // Also intercept Shopify's cart AJAX requests
+  function interceptCartAjax(){
+    const originalFetch=window.fetch;
+    window.fetch=function(){
+      const args=arguments;
+      const url=args[0];
+
+      // Check if this is a cart-related request
+      if(typeof url==='string'&&(url.includes('/cart/change')||url.includes('/cart/update')||url.includes('/cart/add'))){
+        return originalFetch.apply(this,args).then(function(response){
+          // After cart update completes, re-apply customizations
+          setTimeout(function(){
+            console.log('[Iani Cart] Cart AJAX completed, re-applying');
+            applyCartCustomizations(true);
+            setupCheckoutIntercept();
+          },500);
+          return response;
+        });
+      }
+
+      return originalFetch.apply(this,args);
+    };
+    console.log('[Iani Cart] Fetch interceptor installed');
   }
 
   function updateLineItemPrice(container,configuredPrice){
@@ -496,18 +548,23 @@
   }
 
   // Run after page loads
-  if(document.readyState==='complete'){
-    applyCartCustomizations();
+  function initIaniCart(){
+    applyCartCustomizations(true);
     setupCheckoutIntercept();
-  }else{
-    window.addEventListener('load',function(){
-      applyCartCustomizations();
-      setupCheckoutIntercept();
-    });
+    setupCartObserver();
+    interceptCartAjax();
   }
-  setTimeout(applyCartCustomizations,800);
+
+  if(document.readyState==='complete'){
+    initIaniCart();
+  }else{
+    window.addEventListener('load',initIaniCart);
+  }
+
+  // Fallback delayed runs for slow-loading themes
+  setTimeout(function(){applyCartCustomizations(true);},800);
   setTimeout(function(){
-    applyCartCustomizations();
+    applyCartCustomizations(true);
     setupCheckoutIntercept();
   },2000);
 })();
