@@ -6,7 +6,7 @@
 <!-- Iani Cart Preview Handler -->
 <div id="iani-cart-preview-handler"
      style="display:none;"
-     data-iani-version="1.34"
+     data-iani-version="1.35"
      data-shop="{{ shop.permanent_domain }}"
      data-api-url="https://iani-configurator-1.onrender.com">
 </div>
@@ -14,7 +14,7 @@
 <script>
 (function(){
   'use strict';
-  console.log('[Iani Cart] v1.34 loaded');
+  console.log('[Iani Cart] v1.35 loaded');
 
   // Get config from data attributes
   const handler=document.getElementById('iani-cart-preview-handler');
@@ -62,29 +62,34 @@
     // STEP 3: Process each Iani item and calculate totals
     let totalFinalPrice=0;  // Sum of all items' final prices (configured or base)
     let hasAnyConfiguredPrice=false;
-    let usedPriceKeys=[];
     let processedConfigIds=[];  // Track which config IDs we've already processed (avoid duplicates)
-    const priceKeys=Object.keys(storedPrices);
 
     ianiItems.forEach(function(item){
       const container=item.container;
       let configId=item.configId;
 
-      // Skip if this container or config ID was already processed
+      // Skip if this container was already processed
       if(container.dataset.ianiDone)return;
-      if(configId&&processedConfigIds.includes(configId)){
-        console.log('[Iani Cart] Skipping duplicate config ID:',configId);
-        container.dataset.ianiDone='true';
+      container.dataset.ianiDone='true';
+
+      // Skip items without a config ID - they're likely duplicate parent containers
+      if(!configId){
+        console.log('[Iani Cart] Skipping container without config ID (likely parent element)');
         return;
       }
-      container.dataset.ianiDone='true';
-      if(configId)processedConfigIds.push(configId);
+
+      // Skip if this config ID was already processed (duplicate container)
+      if(processedConfigIds.includes(configId)){
+        console.log('[Iani Cart] Skipping duplicate config ID:',configId);
+        return;
+      }
+      processedConfigIds.push(configId);
 
       console.log('[Iani Cart] Processing item with config ID:',configId);
 
       // Apply preview image
       const img=container.querySelector('img');
-      if(img&&!img.dataset.ianiPreview&&configId&&storedPreviews[configId]){
+      if(img&&!img.dataset.ianiPreview&&storedPreviews[configId]){
         img.src=storedPreviews[configId];
         img.style.border='2px solid #4CAF50';
         img.style.borderRadius='4px';
@@ -93,24 +98,7 @@
       }
 
       // Get configured price if available
-      let configuredPrice=null;
-
-      // Try exact config ID match first
-      if(configId&&storedPrices[configId]&&!usedPriceKeys.includes(configId)){
-        configuredPrice=storedPrices[configId];
-        usedPriceKeys.push(configId);
-      }
-      // Fallback: if no config ID found but this is an Iani item, use first available price
-      else if(!configId&&priceKeys.length>0){
-        for(let i=0;i<priceKeys.length;i++){
-          if(!usedPriceKeys.includes(priceKeys[i])){
-            configuredPrice=storedPrices[priceKeys[i]];
-            usedPriceKeys.push(priceKeys[i]);
-            console.log('[Iani Cart] Using fallback price for item without config ID');
-            break;
-          }
-        }
-      }
+      let configuredPrice=storedPrices[configId]||null;
 
       // Get the item's final price (configured or base from displayed HTML)
       let itemFinalPrice=0;
@@ -118,10 +106,11 @@
         itemFinalPrice=configuredPrice;
         hasAnyConfiguredPrice=true;
         updateLineItemPrice(container,configuredPrice);
+        console.log('[Iani Cart] Using configured price:',configuredPrice);
       }else{
-        // No configured price - extract base price from the displayed total column
+        // No configured price stored - extract base price from the displayed total column
         itemFinalPrice=extractItemBasePrice(container);
-        console.log('[Iani Cart] Item has no configured price, using base:',itemFinalPrice);
+        console.log('[Iani Cart] No configured price stored, using base:',itemFinalPrice);
       }
 
       totalFinalPrice+=itemFinalPrice;
