@@ -42,24 +42,83 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // This requires the shop to have installed the app
     const { admin } = await unauthenticated.admin(shop);
 
+    // First, fetch variant prices to calculate discounts
+    const variantIds = lineItems.map((item: any) => `gid://shopify/ProductVariant/${item.variantId}`);
+
+    const variantPricesResponse = await admin.graphql(
+      `#graphql
+      query getVariantPrices($ids: [ID!]!) {
+        nodes(ids: $ids) {
+          ... on ProductVariant {
+            id
+            price
+          }
+        }
+      }`,
+      {
+        variables: {
+          ids: variantIds
+        }
+      }
+    );
+
+    const variantPricesJson = await variantPricesResponse.json();
+    console.log("📦 Variant prices response:", JSON.stringify(variantPricesJson, null, 2));
+
+    // Create a map of variant ID to original price
+    const variantPriceMap: Record<string, number> = {};
+    variantPricesJson.data?.nodes?.forEach((node: any) => {
+      if (node?.id && node?.price) {
+        variantPriceMap[node.id] = parseFloat(node.price);
+      }
+    });
+
+    console.log("📦 Variant price map:", variantPriceMap);
+
+    // Get shop currency from the first variant (or default to USD)
+    // We need to pass the currency code with priceOverride
+    let shopCurrency = "USD";
+
+    // Try to get currency from shop settings
+    try {
+      const shopResponse = await admin.graphql(
+        `#graphql
+        query getShopCurrency {
+          shop {
+            currencyCode
+          }
+        }`
+      );
+      const shopJson = await shopResponse.json();
+      shopCurrency = shopJson.data?.shop?.currencyCode || "USD";
+      console.log("📦 Shop currency:", shopCurrency);
+    } catch (e) {
+      console.log("📦 Could not fetch shop currency, defaulting to USD");
+    }
+
     // Build draft order line items
-    // Each line item needs: variantId, quantity, and custom price
+    // For custom pricing with variantId, we must use priceOverride (NOT originalUnitPrice)
+    // originalUnitPrice is ignored when variantId is present
     const draftOrderLineItems = lineItems.map((item: any) => {
+      const variantGid = `gid://shopify/ProductVariant/${item.variantId}`;
+      const originalPrice = variantPriceMap[variantGid] || 0;
+      const configuredPrice = item.configuredPrice ? parseFloat(item.configuredPrice) : null;
+
       const lineItem: any = {
-        variantId: `gid://shopify/ProductVariant/${item.variantId}`,
+        variantId: variantGid,
         quantity: item.quantity || 1,
       };
 
-      // Apply custom price if provided (this is the configured price)
-      if (item.configuredPrice) {
-        lineItem.appliedDiscount = {
-          title: "Custom Configuration",
-          description: item.configurationSummary || "Configured product",
-          valueType: "FIXED_AMOUNT",
-          value: 0, // We'll set the price directly instead
+      // Apply custom price if provided
+      // Use priceOverride to set custom price when using variantId
+      if (configuredPrice !== null) {
+        console.log(`📦 Item ${item.variantId}: original=${originalPrice}, configured=${configuredPrice}`);
+
+        // priceOverride requires amount and currencyCode
+        lineItem.priceOverride = {
+          amount: configuredPrice.toFixed(2),
+          currencyCode: shopCurrency,
         };
-        // Use originalUnitPrice to set the custom price
-        lineItem.originalUnitPrice = item.configuredPrice.toString();
       }
 
       // Add custom attributes (shown in order details)
