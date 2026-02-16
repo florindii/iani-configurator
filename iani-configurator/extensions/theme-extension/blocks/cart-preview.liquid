@@ -1,12 +1,14 @@
 {% comment %}
-  Iani 3D Configurator - Cart Preview Handler
-  Updates preview images, line item prices, and handles Draft Order checkout
+  Iani 3D Configurator - Cart Preview Handler v2.3
+  - Preview images for configured items
+  - Estimated total update (with quantity change support)
+  - Draft Order checkout for custom pricing
 {% endcomment %}
 
 <!-- Iani Cart Preview Handler -->
 <div id="iani-cart-preview-handler"
      style="display:none;"
-     data-iani-version="1.40"
+     data-iani-version="2.3"
      data-shop="{{ shop.permanent_domain }}"
      data-api-url="https://iani-configurator-1.onrender.com">
 </div>
@@ -14,356 +16,196 @@
 <script>
 (function(){
   'use strict';
-  console.log('[Iani Cart] v1.40 loaded');
+  console.log('[Iani Cart] v2.3 loaded');
 
-  // Get config from data attributes
   const handler=document.getElementById('iani-cart-preview-handler');
   const SHOP=handler?handler.dataset.shop:'';
   const API_URL=handler?handler.dataset.apiUrl:'https://iani-configurator-1.onrender.com';
 
-  // Track state
-  let processingInProgress=false;
-
-  function resetProcessingFlags(){
-    // Clear all processing flags to allow re-processing after cart update
-    document.querySelectorAll('[data-iani-done]').forEach(function(el){
-      delete el.dataset.ianiDone;
-    });
-    document.querySelectorAll('[data-iani-price-done]').forEach(function(el){
-      delete el.dataset.ianiPriceDone;
-    });
-    document.querySelectorAll('[data-iani-preview]').forEach(function(el){
-      delete el.dataset.ianiPreview;
-    });
-    delete document.body.dataset.ianiTotalDone;
-  }
-
-  function applyCartCustomizations(forceReset){
-    // Prevent concurrent processing
-    if(processingInProgress)return;
-    processingInProgress=true;
-
-    if(forceReset){
-      console.log('[Iani Cart] Force reset requested');
-      resetProcessingFlags();
-    }
-
-    const storedPreviews=JSON.parse(localStorage.getItem('iani_cart_previews')||'{}');
+  // Restore prices from cart properties if localStorage is empty
+  async function restorePricesFromCart(){
     const storedPrices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');
+    if(Object.keys(storedPrices).length>0)return;
 
-    console.log('[Iani Cart] Stored Previews:',Object.keys(storedPreviews));
-    console.log('[Iani Cart] Stored Prices:',storedPrices);
+    try{
+      const cartResponse=await fetch('/cart.js');
+      const cart=await cartResponse.json();
+      const restoredPrices={};
+      const restoredItems={};
 
-    // STEP 1: Find all config IDs first, then find their specific containers
-    const allConfigMatches=document.body.innerHTML.match(/config_\d+_[a-z0-9]+/gi)||[];
-    const uniqueConfigIds=[...new Set(allConfigMatches)];
-    console.log('[Iani Cart] Found config IDs in page:',uniqueConfigIds);
+      cart.items.forEach(function(item){
+        const props=item.properties||{};
+        const configId=props['_Configuration ID']||props['Configuration ID'];
+        const configuredPriceStr=props['Configured Price'];
 
-    const ianiItems=[];
-
-    // For each config ID, find the SMALLEST container that contains it
-    uniqueConfigIds.forEach(function(configId){
-      // Find all elements that contain this specific config ID
-      const allElements=document.querySelectorAll('tr, [class*="cart-item"], .line-item, [class*="cart"] li');
-      let bestContainer=null;
-      let smallestSize=Infinity;
-
-      allElements.forEach(function(el){
-        const html=el.innerHTML||'';
-        // Must contain THIS specific config ID
-        if(!html.includes(configId))return;
-
-        // Count how many config IDs are in this container - prefer containers with only ONE
-        const configCount=(html.match(/config_\d+_[a-z0-9]+/gi)||[]).length;
-        const size=html.length;
-
-        // Prefer container with fewest config IDs, then smallest size
-        if(configCount===1||(configCount<smallestSize&&size<smallestSize)){
-          // Make sure it's an actual cart item (has price or product info)
-          if(el.textContent.includes('RSD')||el.querySelector('img')){
-            bestContainer=el;
-            smallestSize=configCount*10000+size;  // Weight config count heavily
+        if(configId&&configuredPriceStr){
+          const priceMatch=configuredPriceStr.match(/[\d,]+\.?\d*/);
+          if(priceMatch){
+            const price=parseFloat(priceMatch[0].replace(/,/g,''));
+            if(!isNaN(price)&&price>0){
+              restoredPrices[configId]=price;
+              restoredItems[configId]={
+                variantId:item.variant_id.toString(),
+                configuredPrice:price,
+                productId:item.product_id.toString()
+              };
+            }
           }
         }
       });
 
-      if(bestContainer){
-        ianiItems.push({container:bestContainer,configId:configId});
+      if(Object.keys(restoredPrices).length>0){
+        localStorage.setItem('iani_cart_prices',JSON.stringify(restoredPrices));
+        localStorage.setItem('iani_cart_items',JSON.stringify(restoredItems));
+        console.log('[Iani Cart] Restored',Object.keys(restoredPrices).length,'prices');
       }
-    });
-
-    console.log('[Iani Cart] Matched items:',ianiItems.length);
-
-    // STEP 2: DON'T clean up stale entries here - only clean when we're SURE items were removed
-    // (cleanup happens on checkout or explicit user action)
-
-    // STEP 3: Process each Iani item and calculate totals
-    let totalFinalPrice=0;  // Sum of all items' final prices (configured or base)
-    let hasAnyConfiguredPrice=false;
-    let processedConfigIds=[];  // Track which config IDs we've already processed (avoid duplicates)
-
-    ianiItems.forEach(function(item){
-      const container=item.container;
-      let configId=item.configId;
-
-      // Skip if this container was already processed in THIS run
-      if(container.dataset.ianiDone)return;
-      container.dataset.ianiDone='true';
-
-      // Skip items without a config ID - they're likely duplicate parent containers
-      if(!configId){
-        console.log('[Iani Cart] Skipping container without config ID (likely parent element)');
-        return;
-      }
-
-      // Skip if this config ID was already processed (duplicate container)
-      if(processedConfigIds.includes(configId)){
-        console.log('[Iani Cart] Skipping duplicate config ID:',configId);
-        return;
-      }
-      processedConfigIds.push(configId);
-
-      console.log('[Iani Cart] Processing item with config ID:',configId);
-
-      // Apply preview image
-      const img=container.querySelector('img');
-      if(img&&!img.dataset.ianiPreview&&storedPreviews[configId]){
-        img.src=storedPreviews[configId];
-        img.style.border='2px solid #4CAF50';
-        img.style.borderRadius='4px';
-        img.style.objectFit='cover';
-        img.dataset.ianiPreview='true';
-      }
-
-      // Get configured price if available
-      let configuredPrice=storedPrices[configId]||null;
-
-      // Get the item's final price (configured or base from displayed HTML)
-      let itemFinalPrice=0;
-      if(configuredPrice){
-        itemFinalPrice=configuredPrice;
-        hasAnyConfiguredPrice=true;
-        updateLineItemPrice(container,configuredPrice);
-        console.log('[Iani Cart] Using configured price:',configuredPrice);
-      }else{
-        // No configured price stored - extract base price from the displayed total column
-        itemFinalPrice=extractItemBasePrice(container);
-        console.log('[Iani Cart] No configured price stored, using base:',itemFinalPrice);
-      }
-
-      totalFinalPrice+=itemFinalPrice;
-    });
-
-    console.log('[Iani Cart] Total final price (all items):',totalFinalPrice);
-    console.log('[Iani Cart] Has any configured prices:',hasAnyConfiguredPrice);
-
-    // STEP 4: Update Estimated Total at bottom only if there are configured prices
-    if(hasAnyConfiguredPrice&&totalFinalPrice>0){
-      updateEstimatedTotal(totalFinalPrice);
+    }catch(err){
+      console.error('[Iani Cart] Error restoring prices:',err);
     }
-
-    processingInProgress=false;
   }
 
-  // Extract the base price from a cart item's TOTAL column
-  function extractItemBasePrice(container){
-    // Try different selectors for the line item total
-    const selectors=[
-      'td:last-child',
-      '.cart-item__totals',
-      '[class*="line-item-total"]',
-      '[class*="cart-item__total"]'
-    ];
+  // Apply preview images and hide Configuration ID
+  function applyPreviewImages(){
+    const storedPreviews=JSON.parse(localStorage.getItem('iani_cart_previews')||'{}');
 
-    for(const selector of selectors){
-      const el=container.querySelector(selector);
-      if(el&&/[\d,]+\.?\d*\s*RSD/i.test(el.textContent)){
-        const text=el.textContent.trim();
-        const numeric=parseFloat(text.replace(/[^\d.]/g,'').replace(/,/g,''));
-        if(!isNaN(numeric))return numeric;
+    // Hide Configuration ID elements (only exact matches in leaf elements)
+    document.querySelectorAll('dt, dd, span, p, li').forEach(function(el){
+      if(el.dataset.ianiHidden)return;
+      if(el.children.length>0)return;
+
+      const text=(el.textContent||'').trim();
+
+      if(text==='Configuration ID:'||text==='Configuration ID'){
+        el.style.display='none';
+        el.dataset.ianiHidden='true';
+        return;
       }
-    }
 
-    // Fallback: find any element with RSD price pattern in right part of container
-    const allElements=container.querySelectorAll('*');
-    for(const el of allElements){
-      if(el.children.length>2)continue;
-      const text=el.textContent.trim();
-      if(/^[\d,]+\.?\d*\s*RSD$/i.test(text)){
-        const rect=el.getBoundingClientRect();
-        const containerRect=container.getBoundingClientRect();
-        if(rect.left>containerRect.left+containerRect.width*0.5){
-          const numeric=parseFloat(text.replace(/[^\d.]/g,'').replace(/,/g,''));
-          if(!isNaN(numeric))return numeric;
+      if(/^config_\d+_[a-z0-9]+$/i.test(text)){
+        el.style.display='none';
+        el.dataset.ianiHidden='true';
+        return;
+      }
+    });
+
+    // Apply preview images
+    if(Object.keys(storedPreviews).length===0)return;
+
+    document.querySelectorAll('*').forEach(function(el){
+      if(el.children.length>3)return;
+      const text=el.textContent||'';
+      const match=text.match(/config_\d+_[a-z0-9]+/i);
+      if(!match)return;
+
+      const configId=match[0];
+      if(!storedPreviews[configId])return;
+
+      let container=el;
+      while(container&&container!==document.body){
+        const img=container.querySelector('img');
+        if(img&&!img.dataset.ianiPreview){
+          img.src=storedPreviews[configId];
+          img.style.border='2px solid #4CAF50';
+          img.style.borderRadius='4px';
+          img.style.objectFit='cover';
+          img.dataset.ianiPreview='true';
+          return;
+        }
+        container=container.parentElement;
+      }
+    });
+  }
+
+  // Update the estimated total - can be called multiple times (on quantity change)
+  async function updateEstimatedTotal(forceUpdate){
+    const storedPrices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');
+    if(Object.keys(storedPrices).length===0)return;
+
+    try{
+      const cartResponse=await fetch('/cart.js');
+      const cart=await cartResponse.json();
+
+      let configuredTotal=0;
+      let hasConfiguredItems=false;
+
+      cart.items.forEach(function(item){
+        const props=item.properties||{};
+        const configId=props['_Configuration ID']||props['Configuration ID'];
+
+        if(configId&&storedPrices[configId]){
+          configuredTotal+=storedPrices[configId]*item.quantity;
+          hasConfiguredItems=true;
+        }else{
+          configuredTotal+=item.final_line_price/100;
+        }
+      });
+
+      if(!hasConfiguredItems)return;
+
+      const formattedPrice='$'+configuredTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+      console.log('[Iani Cart] Calculated total:',formattedPrice);
+
+      // Find existing iani total element and update it, or create new one
+      const existingTotal=document.querySelector('.iani-configured-total');
+      if(existingTotal){
+        existingTotal.textContent=formattedPrice;
+        console.log('[Iani Cart] Updated existing total');
+        return;
+      }
+
+      // Find the Shopify total element to enhance
+      const allElements=document.querySelectorAll('*');
+      for(const el of allElements){
+        if(el.querySelector('.iani-configured-total'))continue;
+        if(el.classList&&el.classList.contains('iani-configured-total'))continue;
+        if(el.closest('tr[class*="cart"]')||el.closest('[class*="cart-item"]')||el.closest('.cart-item'))continue;
+
+        const text=el.textContent.trim();
+        if(/^[\d,]+\.?\d*\s*RSD$/i.test(text)){
+          const parent=el.parentElement;
+          if(parent&&(parent.textContent.toLowerCase().includes('total')||parent.className.toLowerCase().includes('total'))){
+            el.innerHTML='<span class="iani-original-total" style="text-decoration:line-through;color:#999;font-size:0.9em;">'+text+'</span><br><span class="iani-configured-total" style="color:#4CAF50;font-weight:bold;font-size:1.1em;">'+formattedPrice+'</span>';
+            console.log('[Iani Cart] Created new total display');
+            return;
+          }
         }
       }
+    }catch(err){
+      console.error('[Iani Cart] Error updating total:',err);
     }
-
-    return 0;
   }
 
-  // No MutationObserver - rely on fetch interceptor instead (more reliable, no infinite loops)
-
-  // Also intercept Shopify's cart AJAX requests
+  // Intercept cart AJAX to recalculate on quantity change
   function interceptCartAjax(){
     const originalFetch=window.fetch;
     window.fetch=function(){
-      const args=arguments;
-      const url=args[0];
+      const url=arguments[0];
 
-      // Check if this is a cart-related request
-      if(typeof url==='string'&&(url.includes('/cart/change')||url.includes('/cart/update')||url.includes('/cart/add'))){
-        return originalFetch.apply(this,args).then(function(response){
-          // After cart update completes, re-apply customizations
+      if(typeof url==='string'&&(url.includes('/cart/change')||url.includes('/cart/update'))){
+        return originalFetch.apply(this,arguments).then(function(response){
+          // Clone response so we can read it and still return it
+          const clonedResponse=response.clone();
+
+          // After cart update, recalculate total
           setTimeout(function(){
-            console.log('[Iani Cart] Cart AJAX completed, re-applying');
-            applyCartCustomizations(true);
-            setupCheckoutIntercept();
-          },500);
+            console.log('[Iani Cart] Cart quantity changed, recalculating...');
+            updateEstimatedTotal(true);
+          },300);
+
           return response;
         });
       }
 
-      return originalFetch.apply(this,args);
+      return originalFetch.apply(this,arguments);
     };
-    console.log('[Iani Cart] Fetch interceptor installed');
+    console.log('[Iani Cart] Cart AJAX interceptor installed');
   }
 
-  function updateLineItemPrice(container,configuredPrice){
-    // Skip if already processed (check for our marker class)
-    if(container.querySelector('.iani-configured-price')){
-      console.log('[Iani Cart] Line item already has configured price, skipping');
-      return;
-    }
-
-    const formattedPrice='$'+configuredPrice.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-
-    // Try different selectors for the line item total
-    const selectors=[
-      'td:last-child',
-      '.cart-item__totals',
-      '[class*="line-item-total"]',
-      '[class*="cart-item__total"]'
-    ];
-
-    let priceElement=null;
-    for(const selector of selectors){
-      const el=container.querySelector(selector);
-      // Must contain RSD and NOT already have our styled price
-      if(el&&/[\d,]+\.?\d*\s*RSD/i.test(el.textContent)&&!el.querySelector('.iani-configured-price')){
-        priceElement=el;
-        break;
-      }
-    }
-
-    // Fallback: find any element with RSD price pattern in right part of container
-    if(!priceElement){
-      const allElements=container.querySelectorAll('*');
-      for(const el of allElements){
-        if(el.children.length>2)continue;
-        if(el.querySelector('.iani-configured-price'))continue;  // Already processed
-        const text=el.textContent.trim();
-        // Match price pattern like "10,000.00 RSD" - must be ONLY that text (no extra content)
-        if(/^[\d,]+\.?\d*\s*RSD$/i.test(text)){
-          const rect=el.getBoundingClientRect();
-          const containerRect=container.getBoundingClientRect();
-          if(rect.left>containerRect.left+containerRect.width*0.5){
-            priceElement=el;
-            break;
-          }
-        }
-      }
-    }
-
-    if(priceElement){
-      const originalText=priceElement.textContent.trim();
-      const originalNumeric=parseFloat(originalText.replace(/[^\d.]/g,'').replace(/,/g,''));
-      const priceDifference=Math.abs(configuredPrice-originalNumeric);
-
-      if(priceDifference>0.01){
-        console.log('[Iani Cart] Updating line item total from:',originalText,'to:',formattedPrice);
-        priceElement.innerHTML='<span class="iani-original-price" style="text-decoration:line-through;color:#999;font-size:0.85em;display:block;">'+originalText+'</span><span class="iani-configured-price" style="color:#4CAF50;font-weight:bold;">'+formattedPrice+'</span>';
-      }
-    }
-  }
-
-  function updateEstimatedTotal(total){
-    // Skip if already has our styled total
-    if(document.querySelector('.iani-configured-total')){
-      console.log('[Iani Cart] Estimated total already updated, skipping');
-      return;
-    }
-
-    const formattedPrice='$'+total.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-    console.log('[Iani Cart] Updating estimated total to:',formattedPrice);
-
-    // Find elements in totals/footer area with RSD price
-    const allElements=document.querySelectorAll('.totals *, .cart__footer *, [class*="total"] *');
-    let found=false;
-
-    allElements.forEach(function(el){
-      if(found)return;
-      if(el.closest('tr[class*="cart"]')||el.closest('[class*="cart-item"]'))return;
-      if(el.querySelector('.iani-configured-total'))return;  // Already processed
-
-      const text=el.textContent.trim();
-      if(/^[\d,]+\.?\d*\s*RSD$/i.test(text)){
-        console.log('[Iani Cart] Found total element:',text);
-        const originalNumeric=parseFloat(text.replace(/[^\d.]/g,'').replace(/,/g,''));
-        const priceDifference=Math.abs(total-originalNumeric);
-
-        if(priceDifference>0.01){
-          el.innerHTML='<span class="iani-original-total" style="text-decoration:line-through;color:#999;font-size:0.9em;">'+text+'</span><br><span class="iani-configured-total" style="color:#4CAF50;font-weight:bold;font-size:1.1em;">'+formattedPrice+'</span>';
-        }
-        found=true;
-      }
-    });
-
-    // Fallback: search for "Estimated total" label
-    if(!found){
-      document.querySelectorAll('*').forEach(function(el){
-        if(found)return;
-        if(el.children.length>5)return;
-        if(el.querySelector('.iani-configured-total'))return;
-        const text=el.textContent.toLowerCase();
-        if(text==='estimated total'){
-          const parent=el.parentElement;
-          if(parent){
-            const spans=parent.querySelectorAll('span');
-            spans.forEach(function(span){
-              if(found)return;
-              if(span.querySelector('.iani-configured-total'))return;
-              const spanText=span.textContent.trim();
-              if(/^[\d,]+\.?\d*\s*RSD$/i.test(spanText)){
-                const originalNumeric=parseFloat(spanText.replace(/[^\d.]/g,'').replace(/,/g,''));
-                const priceDifference=Math.abs(total-originalNumeric);
-
-                if(priceDifference>0.01){
-                  span.innerHTML='<span class="iani-original-total" style="text-decoration:line-through;color:#999;font-size:0.9em;">'+spanText+'</span><br><span class="iani-configured-total" style="color:#4CAF50;font-weight:bold;">'+formattedPrice+'</span>';
-                }
-                found=true;
-              }
-            });
-          }
-        }
-      });
-    }
-  }
-
-  // Intercept checkout to create Draft Order with correct pricing
+  // Setup checkout intercept for Draft Order
   function setupCheckoutIntercept(){
     const storedPrices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');
-    const storedLineItems=JSON.parse(localStorage.getItem('iani_cart_items')||'{}');
-    const hasConfigure=Object.keys(storedPrices).length>0;
+    if(Object.keys(storedPrices).length===0)return;
 
-    if(!hasConfigure){
-      console.log('[Iani Cart] No configured items, normal checkout');
-      return;
-    }
-
-    console.log('[Iani Cart] Found configured items, setting up checkout intercept');
-
-    // Find checkout buttons/forms
     const checkoutSelectors=[
       'button[name="checkout"]',
       'input[name="checkout"]',
@@ -380,23 +222,18 @@
         el.addEventListener('click',function(e){
           e.preventDefault();
           e.stopPropagation();
-          console.log('[Iani Cart] Checkout intercepted - creating Draft Order');
           createDraftOrderAndCheckout();
         });
       });
     });
 
-    // Also intercept form submission
-    const cartForms=document.querySelectorAll('form[action*="/cart"], form[action="/checkout"]');
-    cartForms.forEach(function(form){
+    document.querySelectorAll('form[action*="/cart"],form[action="/checkout"]').forEach(function(form){
       if(form.dataset.ianiFormBound)return;
       form.dataset.ianiFormBound='true';
 
       form.addEventListener('submit',function(e){
-        // Only intercept if submitting to checkout
         if(form.action.includes('/checkout')||e.submitter?.name==='checkout'){
           e.preventDefault();
-          console.log('[Iani Cart] Form submit intercepted - creating Draft Order');
           createDraftOrderAndCheckout();
         }
       });
@@ -406,35 +243,22 @@
   // Create Draft Order and redirect to checkout
   async function createDraftOrderAndCheckout(){
     const storedPrices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');
-    const storedLineItems=JSON.parse(localStorage.getItem('iani_cart_items')||'{}');
 
-    console.log('[Iani Cart] Creating draft order with prices:',storedPrices);
-    console.log('[Iani Cart] Line items data:',storedLineItems);
-
-    // Show loading state
     showCheckoutLoading(true);
 
     try{
-      // First, get current cart to build line items
       const cartResponse=await fetch('/cart.js');
       const cart=await cartResponse.json();
-      console.log('[Iani Cart] Current cart:',cart);
 
-      // Build line items for draft order
       const lineItems=[];
       cart.items.forEach(function(item){
-        // Check if this item has Iani configuration
         const props=item.properties||{};
-        const configId=props['Configuration ID'];
+        const configId=props['_Configuration ID']||props['Configuration ID'];
         const configuredPrice=configId?storedPrices[configId]:null;
 
-        // Get stored line item data
-        const storedData=configId?storedLineItems[configId]:null;
-
-        // Build custom attributes from properties
         const customAttributes={};
         Object.entries(props).forEach(function([key,value]){
-          if(key!=='Configuration ID'&&!key.startsWith('_')){
+          if(!key.startsWith('_')){
             customAttributes[key]=value;
           }
         });
@@ -443,44 +267,33 @@
           variantId:item.variant_id,
           quantity:item.quantity,
           configuredPrice:configuredPrice||null,
-          configurationSummary:configId?'Custom Configuration':'',
           customAttributes:Object.keys(customAttributes).length>0?customAttributes:null
         });
       });
 
-      console.log('[Iani Cart] Draft order line items:',lineItems);
-
-      // Check if any items have configured prices
       const hasConfiguredPrices=lineItems.some(function(item){return item.configuredPrice;});
-
       if(!hasConfiguredPrices){
-        console.log('[Iani Cart] No configured prices, proceeding with normal checkout');
         clearIaniStorage();
         window.location.href='/checkout';
         return;
       }
 
-      // Call Draft Order API
       const response=await fetch(API_URL+'/api/draft-order',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          shop:SHOP,
-          lineItems:lineItems
-        })
+        body:JSON.stringify({shop:SHOP,lineItems:lineItems})
       });
 
       const result=await response.json();
-      console.log('[Iani Cart] Draft order result:',result);
 
       if(result.success&&result.checkoutUrl){
-        // Clear storage and redirect to draft order checkout
-        clearIaniStorage();
-        console.log('[Iani Cart] Redirecting to draft order checkout:',result.checkoutUrl);
+        localStorage.setItem('iani_active_draft_order',JSON.stringify({
+          id:result.draftOrderId,
+          url:result.checkoutUrl,
+          createdAt:Date.now()
+        }));
         window.location.href=result.checkoutUrl;
       }else{
-        console.error('[Iani Cart] Draft order failed:',result.error);
-        // Fallback to normal checkout with alert
         showCheckoutLoading(false);
         if(confirm('Could not apply custom pricing. Proceed with base prices?')){
           clearIaniStorage();
@@ -490,7 +303,7 @@
     }catch(err){
       console.error('[Iani Cart] Checkout error:',err);
       showCheckoutLoading(false);
-      if(confirm('Error processing custom pricing. Proceed with base prices?')){
+      if(confirm('Error processing. Proceed with base prices?')){
         clearIaniStorage();
         window.location.href='/checkout';
       }
@@ -503,7 +316,7 @@
       if(!overlay){
         overlay=document.createElement('div');
         overlay.id='iani-checkout-loading';
-        overlay.innerHTML='<div style="background:white;padding:30px 50px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.3);text-align:center;"><div style="width:40px;height:40px;border:4px solid #e0e0e0;border-top-color:#4CAF50;border-radius:50%;animation:iani-spin 1s linear infinite;margin:0 auto 15px;"></div><div style="font-size:16px;color:#333;">Creating your order...</div><div style="font-size:12px;color:#666;margin-top:5px;">Applying custom configuration pricing</div></div>';
+        overlay.innerHTML='<div style="background:white;padding:30px 50px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.3);text-align:center;"><div style="width:40px;height:40px;border:4px solid #e0e0e0;border-top-color:#4CAF50;border-radius:50%;animation:iani-spin 1s linear infinite;margin:0 auto 15px;"></div><div style="font-size:16px;color:#333;">Creating your order...</div></div>';
         overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;';
         const style=document.createElement('style');
         style.textContent='@keyframes iani-spin{to{transform:rotate(360deg)}}';
@@ -522,26 +335,70 @@
     localStorage.removeItem('iani_cart_items');
   }
 
-  // Run after page loads
-  function initIaniCart(){
-    applyCartCustomizations(true);
+  function checkActiveDraftOrder(){
+    try{
+      const activeDraft=JSON.parse(localStorage.getItem('iani_active_draft_order')||'null');
+      if(!activeDraft||!activeDraft.url)return;
+
+      const ageMs=Date.now()-(activeDraft.createdAt||0);
+      if(ageMs>30*60*1000){
+        localStorage.removeItem('iani_active_draft_order');
+        return;
+      }
+
+      if(document.getElementById('iani-draft-order-banner'))return;
+      const banner=document.createElement('div');
+      banner.id='iani-draft-order-banner';
+      banner.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;"><span>You have a pending checkout with custom pricing.</span><div style="display:flex;gap:10px;"><button id="iani-resume-checkout" style="background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:bold;">Resume Checkout</button><button id="iani-dismiss-banner" style="background:transparent;color:#333;border:1px solid #ccc;padding:8px 16px;border-radius:4px;cursor:pointer;">Start Fresh</button></div></div>';
+      banner.style.cssText='position:fixed;top:0;left:0;right:0;background:#fff3cd;color:#856404;padding:12px 20px;z-index:9999;box-shadow:0 2px 10px rgba(0,0,0,0.1);font-size:14px;';
+      document.body.appendChild(banner);
+
+      document.getElementById('iani-resume-checkout').addEventListener('click',function(){
+        window.location.href=activeDraft.url;
+      });
+      document.getElementById('iani-dismiss-banner').addEventListener('click',function(){
+        banner.remove();
+        localStorage.removeItem('iani_active_draft_order');
+      });
+    }catch(e){}
+  }
+
+  function checkOrderComplete(){
+    const url=window.location.href.toLowerCase();
+    if(url.includes('/thank_you')||url.includes('/orders/')){
+      localStorage.removeItem('iani_cart_previews');
+      localStorage.removeItem('iani_cart_prices');
+      localStorage.removeItem('iani_cart_items');
+      localStorage.removeItem('iani_active_draft_order');
+    }
+  }
+
+  // Single initialization flag
+  let initialized=false;
+
+  async function init(){
+    if(initialized)return;
+    initialized=true;
+
+    checkOrderComplete();
+    await restorePricesFromCart();
+    applyPreviewImages();
+    await updateEstimatedTotal();
     setupCheckoutIntercept();
+    checkActiveDraftOrder();
     interceptCartAjax();
-    // No MutationObserver - fetch interceptor handles cart updates
   }
 
   if(document.readyState==='complete'){
-    initIaniCart();
+    init();
   }else{
-    window.addEventListener('load',initIaniCart);
+    window.addEventListener('load',init);
   }
 
-  // Fallback delayed runs for slow-loading themes
-  setTimeout(function(){applyCartCustomizations(true);},800);
+  // Single delayed run for slow themes
   setTimeout(function(){
-    applyCartCustomizations(true);
-    setupCheckoutIntercept();
-  },2000);
+    if(!initialized)init();
+  },1500);
 })();
 </script>
 

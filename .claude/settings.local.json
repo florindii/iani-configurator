@@ -26,7 +26,13 @@
       "Bash(shopify app deploy)",
       "Bash(npx tsc:*)",
       "Bash(shopify app deploy:*)",
-      "Bash(timeout /t 15 /nobreak)"
+      "Bash(timeout /t 15 /nobreak)",
+      "WebSearch",
+      "WebFetch(domain:community.shopify.dev)",
+      "WebFetch(domain:shopify.dev)",
+      "Bash(dir \"C:\\Users\\flori\\Desktop\\iani-configurator\\iani-configurator\")",
+      "Bash(pushd:*)",
+      "Bash(powershell -Command \"(Get-Item ''C:\\Users\\flori\\Desktop\\iani-configurator\\iani-configurator\\extensions\\theme-extension\\assets\\configurator-loader.js'').Length\")"
     ]
   }
 }

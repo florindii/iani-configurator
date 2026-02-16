@@ -42,9 +42,9 @@
       </div>
       
       <!-- Debug Toggle -->
-      <div class="debug-toggle" @click="showDebugInfo = !showDebugInfo">
+      <!-- <div class="debug-toggle" @click="showDebugInfo = !showDebugInfo">
         🔍
-      </div>
+      </div> -->
       
       <!-- Click Instructions -->
       <div class="click-instructions">
@@ -1819,6 +1819,17 @@ onMounted(async () => {
   setTimeout(() => {
     initThreeJS()
   }, 100)
+
+  // Force layout recalculation on mobile to fix button visibility issue
+  // This triggers a reflow which ensures the flex layout is properly calculated
+  setTimeout(() => {
+    window.dispatchEvent(new Event('resize'))
+    // Double-check scroll position to make button visible
+    const configSection = document.querySelector('.config-section')
+    if (configSection && window.innerWidth <= 768) {
+      configSection.scrollTop = 0
+    }
+  }, 300)
 })
 
 onUnmounted(() => {
@@ -2409,6 +2420,7 @@ onUnmounted(() => {
   margin-top: auto;
   padding-top: 24px;
   border-top: 1px solid #e1e5e9;
+  flex-shrink: 0;
 }
 
 .add-to-cart-btn {
@@ -2475,24 +2487,43 @@ onUnmounted(() => {
   .configurator-fullscreen {
     flex-direction: column;
     height: 100vh;
+    overflow: hidden;
   }
-  
+
   .viewer-section {
-    flex: 1;
-    min-height: 60vh;
+    flex: 0 0 55vh;
+    min-height: 0;
+    overflow: hidden;
   }
-  
+
   .config-section {
     width: 100%;
-    max-height: 40vh;
+    flex: 1 1 45vh;
+    min-height: 0;
     border-left: none;
     border-top: 1px solid #e1e5e9;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
   }
-  
+
   .config-content {
     padding: 16px;
+    padding-bottom: 100px;
   }
-  
+
+  .cart-section {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    padding: 16px;
+    margin: 0;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+  }
+
   .click-instructions {
     font-size: 12px;
     padding: 8px 12px;
