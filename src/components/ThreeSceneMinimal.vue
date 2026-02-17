@@ -48,7 +48,7 @@
       
       <!-- Click Instructions -->
       <div class="click-instructions">
-        <div class="instruction-text">💡 Click on different parts of the sofa to customize them</div>
+        <div class="instruction-text">💡 Click on different parts to customize them</div>
       </div>
       
       <!-- Loading Overlay -->
@@ -63,7 +63,7 @@
       <div class="config-content">
         <!-- Header -->
         <div class="config-header">
-          <h2>🛋️ {{ productName }}</h2>
+          <h2>{{ productName }}</h2>
           <p class="product-description">
             {{ selectedPart ? `Customizing: ${selectedPart.name}` : 'Click on parts to customize' }}
           </p>
@@ -350,14 +350,18 @@ const loadProductConfig = async () => {
 
   try {
     // Try to load from Shopify app API first, then fall back to Vercel API
+    // Use environment variable or default to production URL
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://iani-configurator-1.onrender.com'
+    const vercelBaseUrl = import.meta.env.VITE_VERCEL_URL || 'https://iani-configurator.vercel.app'
+
     const apiUrls = [
-      `https://iani-configurator-1.onrender.com/api/product-config/${context.productId}?shop=${context.shop}`,
-      `https://iani-configurator.vercel.app/api/product-config?productId=${context.productId}&shop=${context.shop}`
+      `${apiBaseUrl}/api/product-config/${context.productId}?shop=${context.shop}`,
+      `${vercelBaseUrl}/api/product-config?productId=${context.productId}&shop=${context.shop}`
     ]
 
     for (const apiUrl of apiUrls) {
       try {
-        console.log('📡 Fetching product config from:', apiUrl)
+        if (import.meta.env.DEV) console.log('📡 Fetching product config from:', apiUrl)
         const response = await fetch(apiUrl)
         if (!response.ok) continue
 
@@ -1073,14 +1077,14 @@ const identifySofaParts = () => {
     all: []
   }
   
-  console.log('🔍 Starting comprehensive model analysis for clicking...')
+  if (import.meta.env.DEV) console.log('🔍 Starting comprehensive model analysis for clicking...')
   
   model.traverse((child) => {
     if (child.isMesh) {
       const name = child.name.toLowerCase()
       const parentName = child.parent ? child.parent.name.toLowerCase() : ''
       
-      console.log(`🔍 Analyzing clickable mesh: "${child.name}" (parent: "${child.parent ? child.parent.name : 'ROOT'}")`)      
+      if (import.meta.env.DEV) console.log(`🔍 Analyzing clickable mesh: "${child.name}" (parent: "${child.parent ? child.parent.name : 'ROOT'}")`)      
       
       child.castShadow = true
       child.receiveShadow = true
@@ -1089,21 +1093,21 @@ const identifySofaParts = () => {
       if (child.material) {
         // Handle both single materials and material arrays
         if (Array.isArray(child.material)) {
-          console.log(`🔄 Cloning ${child.material.length} materials for: ${child.name}`)
+          if (import.meta.env.DEV) console.log(`🔄 Cloning ${child.material.length} materials for: ${child.name}`)
           child.material = child.material.map((mat, index) => {
             const cloned = mat.clone()
             cloned.uuid = THREE.MathUtils.generateUUID() // Force new UUID
-            console.log(`   Material ${index}: ${mat.uuid} -> ${cloned.uuid}`)
+            if (import.meta.env.DEV) console.log(`   Material ${index}: ${mat.uuid} -> ${cloned.uuid}`)
             return cloned
           })
           child.userData.originalMaterial = child.material.map(mat => mat.clone())
         } else {
-          console.log(`🔄 Cloning single material for: ${child.name}`)
+          if (import.meta.env.DEV) console.log(`🔄 Cloning single material for: ${child.name}`)
           const originalUuid = child.material.uuid
           child.material = child.material.clone()
           child.material.uuid = THREE.MathUtils.generateUUID() // Force new UUID
           child.userData.originalMaterial = child.material.clone()
-          console.log(`   Material: ${originalUuid} -> ${child.material.uuid}`)
+          if (import.meta.env.DEV) console.log(`   Material: ${originalUuid} -> ${child.material.uuid}`)
         }
         
         // Store original properties for single material
@@ -1118,58 +1122,60 @@ const identifySofaParts = () => {
       
       sofaParts.all.push(child)
 
-// For your rifle model, let's identify parts based on the mesh names
-let identified = false
+      // Universal auto-mesh detection patterns for ANY GLB model
+      let identified = false
 
-// Rifle-specific part patterns based on your model
-const receiverPatterns = ['receiver', 'body', 'frame', 'main']
-const barrelPatterns = ['barrel', 'tube', 'pipe']
-const stockPatterns = ['stock', 'butt', 'shoulder']
-const gripPatterns = ['grip', 'handle', 'pistol']
-const triggerPatterns = ['trigger', 'guard']
-const sightPatterns = ['sight', 'scope', 'optic']
+      // Frame/main body patterns (glasses frames, sofa frames, furniture frames, etc.)
+      const framePatterns = ['receiver', 'body', 'frame', 'main', 'base', 'structure', 'rim', 'temple', 'bridge']
+      // Cushion/padding patterns (sofa cushions, seat padding, etc.)
+      const cushionPatterns = ['cushion', 'seat', 'padding', 'back', 'fabric', 'upholstery', 'lens']
+      // Leg/barrel/support patterns
+      const legPatterns = ['barrel', 'tube', 'pipe', 'leg', 'support', 'foot', 'feet', 'stand']
+      // Arms/pillows/accessories patterns
+      const armPatterns = ['grip', 'handle', 'arm', 'pillow', 'rest', 'accessory', 'hinge']
 
-if (receiverPatterns.some(pattern => name.includes(pattern))) {
-sofaParts.frame.push(child) // Using 'frame' category for receiver
-  child.userData.partType = 'frame'
-console.log(`✅ IDENTIFIED AS RECEIVER/FRAME: ${child.name}`)
-identified = true
-} else if (barrelPatterns.some(pattern => name.includes(pattern))) {
-sofaParts.legs.push(child) // Using 'legs' category for barrel
-  child.userData.partType = 'leg'
-  console.log(`✅ IDENTIFIED AS BARREL: ${child.name}`)
-  identified = true
-} else if (stockPatterns.some(pattern => name.includes(pattern))) {
-sofaParts.cushions.push(child) // Using 'cushions' category for stock
-child.userData.partType = 'cushion'
-console.log(`✅ IDENTIFIED AS STOCK: ${child.name}`)
-identified = true
-} else if (gripPatterns.some(pattern => name.includes(pattern))) {
-sofaParts.pillows.push(child) // Using 'pillows' category for grip
-child.userData.partType = 'pillow'
-console.log(`✅ IDENTIFIED AS GRIP: ${child.name}`)
-identified = true
-}
+      if (framePatterns.some(pattern => name.includes(pattern))) {
+        sofaParts.frame.push(child)
+        child.userData.partType = 'frame'
+        if (import.meta.env.DEV) console.log(`✅ FRAME: ${child.name}`)
+        identified = true
+      } else if (cushionPatterns.some(pattern => name.includes(pattern))) {
+        sofaParts.cushions.push(child)
+        child.userData.partType = 'cushion'
+        if (import.meta.env.DEV) console.log(`✅ CUSHION: ${child.name}`)
+        identified = true
+      } else if (legPatterns.some(pattern => name.includes(pattern))) {
+        sofaParts.legs.push(child)
+        child.userData.partType = 'leg'
+        if (import.meta.env.DEV) console.log(`✅ LEG: ${child.name}`)
+        identified = true
+      } else if (armPatterns.some(pattern => name.includes(pattern))) {
+        sofaParts.pillows.push(child)
+        child.userData.partType = 'pillow'
+        if (import.meta.env.DEV) console.log(`✅ ARM/PILLOW: ${child.name}`)
+        identified = true
+      }
 
-// If no specific pattern matches, assign based on mesh name analysis
-if (!identified) {
-console.log(`❓ UNIDENTIFIED: ${child.name}, assigning to frame category`)
-sofaParts.frame.push(child)
-child.userData.partType = 'frame'
-console.log(`🔲 ASSIGNED AS FRAME: ${child.name}`)
-}
+      // If no specific pattern matches, default to frame category (most versatile)
+      if (!identified) {
+        if (import.meta.env.DEV) console.log(`❓ UNIDENTIFIED: ${child.name}, assigning to frame category`)
+        sofaParts.frame.push(child)
+        child.userData.partType = 'frame'
+      }
 
 // Make mesh clickable
 child.userData.isClickable = true
 }
 })
   
-  console.log('🎯 FINAL CLICKABLE PARTS:')
-  console.log(`   🟦 Cushions: ${sofaParts.cushions.length}`, sofaParts.cushions.map(p => p.name))
-  console.log(`   🔲 Frame: ${sofaParts.frame.length}`, sofaParts.frame.map(p => p.name))
-  console.log(`   🟨 Pillows: ${sofaParts.pillows.length}`, sofaParts.pillows.map(p => p.name))
-  console.log(`   ⚫ Legs: ${sofaParts.legs.length}`, sofaParts.legs.map(p => p.name))
-  console.log(`   📊 Total: ${sofaParts.all.length}`)
+  if (import.meta.env.DEV) {
+    console.log('🎯 FINAL CLICKABLE PARTS:')
+    console.log(`   🟦 Cushions: ${sofaParts.cushions.length}`, sofaParts.cushions.map(p => p.name))
+    console.log(`   🔲 Frame: ${sofaParts.frame.length}`, sofaParts.frame.map(p => p.name))
+    console.log(`   🟨 Pillows: ${sofaParts.pillows.length}`, sofaParts.pillows.map(p => p.name))
+    console.log(`   ⚫ Legs: ${sofaParts.legs.length}`, sofaParts.legs.map(p => p.name))
+    console.log(`   📊 Total: ${sofaParts.all.length}`)
+  }
   
   updateDebugStats()
 }

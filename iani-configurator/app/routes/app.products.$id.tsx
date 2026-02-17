@@ -141,6 +141,16 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const intent = formData.get("intent");
 
   if (intent === "delete") {
+    // Security: Verify shop ownership before deleting
+    const product = await db.product3D.findUnique({
+      where: { id },
+      select: { shop: true }
+    });
+
+    if (!product || product.shop !== session.shop) {
+      return json({ error: "Product not found or access denied" }, { status: 403 });
+    }
+
     await db.product3D.delete({ where: { id } });
     return redirect("/app/products");
   }

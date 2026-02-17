@@ -66,11 +66,11 @@ class MultiClientShopifyService {
     if (this.isProduction) {
       this.bridgeServerUrl = 'https://iani-configurator.vercel.app';
       this.baseUrl = 'https://iani-configurator.vercel.app';
-      console.log('🚀 Production mode: Multi-client system active');
+      if (import.meta.env.DEV) console.log('🚀 Production mode: Multi-client system active');
     } else {
       this.bridgeServerUrl = import.meta.env.VITE_BRIDGE_URL || 'http://localhost:3001';
       this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://iani-configurator.vercel.app';
-      console.log('🔧 Development mode: Multi-client system active');
+      if (import.meta.env.DEV) console.log('🔧 Development mode: Multi-client system active');
     }
     
     // Initialize client detection and configuration
@@ -93,11 +93,13 @@ class MultiClientShopifyService {
       this.customerId = urlParams.get('customerId');
       this.customerEmail = urlParams.get('customerEmail');
       
-      console.log('🏢 Client detection:', {
-        currentClient: this.currentClient,
-        shop: this.shop,
-        customerId: this.customerId
-      });
+      if (import.meta.env.DEV) {
+        console.log('🏢 Client detection:', {
+          currentClient: this.currentClient,
+          shop: this.shop,
+          customerId: this.customerId
+        });
+      }
       
       // Load client configuration
       await this.loadClientConfiguration();
@@ -105,11 +107,13 @@ class MultiClientShopifyService {
       // Set legacy compatibility values
       this.productId = this.currentConfig?.productId || null;
       
-      console.log('✅ Client initialized:', {
-        client: this.currentClient,
-        productId: this.productId,
-        storeUrl: this.currentConfig?.storeUrl
-      });
+      if (import.meta.env.DEV) {
+        console.log('✅ Client initialized:', {
+          client: this.currentClient,
+          productId: this.productId,
+          storeUrl: this.currentConfig?.storeUrl
+        });
+      }
       
     } catch (error) {
       console.error('❌ Client initialization failed:', error);

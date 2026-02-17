@@ -1,7 +1,6 @@
 // API route for adding configured products to cart
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { authenticate } from "../shopify.server";
 import { db } from "../db.server";
 
 // Add CORS headers to response
@@ -11,7 +10,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-export const action = async ({ request, params }: ActionFunctionArgs) => {
+export const action = async ({ request }: ActionFunctionArgs) => {
   // Handle preflight requests
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -21,7 +20,8 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     const body = await request.json();
     const {
       shop,
-      productId,
+      productId,  // This is the Product3D id from the database
+      shopifyProductId, // Alternatively, the Shopify product ID
       configurationData,
       totalPrice,
       customerId,
@@ -29,42 +29,62 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     } = body;
 
     // Validate required fields
-    if (!shop || !productId || !configurationData || !totalPrice) {
-      return json({ 
-        error: "Missing required fields: shop, productId, configurationData, totalPrice" 
-      }, { status: 400 });
+    if (!shop || (!productId && !shopifyProductId) || !configurationData || totalPrice === undefined) {
+      return json({
+        error: "Missing required fields: shop, productId/shopifyProductId, configurationData, totalPrice"
+      }, { status: 400, headers: corsHeaders });
     }
 
-    console.log("🛒 Adding to cart:", { shop, productId, totalPrice });
+    if (import.meta.env.DEV) {
+      console.log("🛒 Adding to cart:", { shop, productId, shopifyProductId, totalPrice });
+    }
 
-    // First, save the configuration
+    // Find the Product3D record
+    let product3D;
+
+    if (productId) {
+      // Direct product3D id lookup
+      product3D = await db.product3D.findUnique({
+        where: { id: productId },
+        include: {
+          colorOptions: true,
+          materialOptions: true,
+        }
+      });
+    } else if (shopifyProductId) {
+      // Lookup by Shopify product ID and shop
+      product3D = await db.product3D.findFirst({
+        where: {
+          shopifyProductId: shopifyProductId,
+          shop: shop
+        },
+        include: {
+          colorOptions: true,
+          materialOptions: true,
+        }
+      });
+    }
+
+    if (!product3D) {
+      return json({ error: "3D Product not found" }, { status: 404, headers: corsHeaders });
+    }
+
+    // Create the configuration
     const configuration = await db.productConfiguration.create({
       data: {
-        product3DId: productId,
-        customerEmail,
-        shopifyCustomerId: customerId,
+        product3DId: product3D.id,
+        customerEmail: customerEmail || null,
+        shopifyCustomerId: customerId || null,
         configurationData,
-        totalPrice,
+        totalPrice: parseFloat(String(totalPrice)) || 0,
         status: 'in_cart'
       }
     });
 
-    // Get the 3D product details
-    const product3D = await db.product3D.findUnique({
-      where: { id: productId },
-      include: {
-        customizationOptions: true
-      }
-    });
-
-    if (!product3D) {
-      return json({ error: "3D Product not found" }, { status: 404 });
-    }
-
-    // For now, return success with configuration data
-    // Later we'll integrate with actual Shopify Cart API
+    // Return success with configuration data
     const cartResponse = {
       success: true,
+      configurationId: configuration.id,
       configuration,
       cartItem: {
         id: `config_${configuration.id}`,
@@ -75,20 +95,31 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
         customProperties: {
           'Configuration ID': configuration.id,
           'Custom Options': JSON.stringify(configurationData),
-          'Total Price': `$${totalPrice.toFixed(2)}`
+          'Total Price': `$${parseFloat(String(totalPrice)).toFixed(2)}`
         }
       },
       message: 'Configuration saved and ready for cart'
     };
 
-    console.log("✅ Cart response:", cartResponse);
+    if (import.meta.env.DEV) {
+      console.log("✅ Cart response:", cartResponse);
+    }
+
     return json(cartResponse, { headers: corsHeaders });
 
   } catch (error) {
     console.error("❌ Error adding to cart:", error);
-    return json({ 
+    return json({
       error: "Failed to add to cart",
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500, headers: corsHeaders });
   }
+};
+
+// Handle OPTIONS preflight
+export const loader = async ({ request }: { request: Request }) => {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 200, headers: corsHeaders });
+  }
+  return json({ error: "Method not allowed" }, { status: 405, headers: corsHeaders });
 };

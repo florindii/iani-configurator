@@ -155,7 +155,7 @@ let animationFrameId: number | null = null
 // Debug eye markers
 let leftEyeMarker: THREE.Mesh | null = null
 let rightEyeMarker: THREE.Mesh | null = null
-const DEBUG_SHOW_EYE_MARKERS = true // Set to false to hide markers
+const DEBUG_SHOW_EYE_MARKERS = false // Set to false to hide markers
 
 // Face tracking service
 const faceTracker = getFaceTrackingService()
@@ -209,7 +209,7 @@ async function requestCameraAccess() {
         }
       })
 
-      console.log('Camera ready, video playing')
+      if (import.meta.env.DEV) console.log('Camera ready, video playing')
 
       // Initialize Three.js after video is ready
       await initThreeJS()
@@ -278,9 +278,11 @@ async function initThreeJS() {
   nativeVideoWidth = video.videoWidth || 640
   nativeVideoHeight = video.videoHeight || 480
 
-  console.log('📐 Video native size:', nativeVideoWidth, 'x', nativeVideoHeight)
-  console.log('📐 Video displayed size:', canvasWidth, 'x', canvasHeight)
-  console.log('📐 Scale factor:', (canvasWidth / nativeVideoWidth).toFixed(2), 'x', (canvasHeight / nativeVideoHeight).toFixed(2))
+  if (import.meta.env.DEV) {
+    console.log('📐 Video native size:', nativeVideoWidth, 'x', nativeVideoHeight)
+    console.log('📐 Video displayed size:', canvasWidth, 'x', canvasHeight)
+    console.log('📐 Scale factor:', (canvasWidth / nativeVideoWidth).toFixed(2), 'x', (canvasHeight / nativeVideoHeight).toFixed(2))
+  }
 
   // Create renderer with transparent background
   renderer = new THREE.WebGLRenderer({
@@ -309,7 +311,7 @@ async function initThreeJS() {
   cameraDistance = (canvasHeight / 2) / Math.tan((fov * Math.PI / 180) / 2)
   camera.position.z = cameraDistance
 
-  console.log('📷 PerspectiveCamera created, FOV:', fov, 'distance:', cameraDistance.toFixed(0), 'canvas:', canvasWidth, 'x', canvasHeight)
+  if (import.meta.env.DEV) console.log('📷 PerspectiveCamera created, FOV:', fov, 'distance:', cameraDistance.toFixed(0), 'canvas:', canvasWidth, 'x', canvasHeight)
 
   // Add lights
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.8)
@@ -337,7 +339,7 @@ async function initThreeJS() {
     scene.add(leftEyeMarker)
     scene.add(rightEyeMarker)
 
-    console.log('👁️ Debug eye markers created (green, 8px radius)')
+    if (import.meta.env.DEV) console.log('👁️ Debug eye markers created (green, 8px radius)')
   }
 
   // Load 3D model
@@ -364,7 +366,7 @@ async function loadModel() {
   modelLoaded.value = false
   modelLoadError.value = null
 
-  console.log('🔄 Loading try-on model from:', props.modelUrl)
+  if (import.meta.env.DEV) console.log('🔄 Loading try-on model from:', props.modelUrl)
 
   try {
     const loader = new GLTFLoader()
@@ -373,13 +375,13 @@ async function loadModel() {
       loader.load(
         props.modelUrl,
         (gltf) => {
-          console.log('✅ Model loaded successfully')
+          if (import.meta.env.DEV) console.log('✅ Model loaded successfully')
           resolve(gltf)
         },
         (progress) => {
           if (progress.total > 0) {
             const percent = Math.round((progress.loaded / progress.total) * 100)
-            console.log(`📦 Loading model: ${percent}%`)
+            if (import.meta.env.DEV) console.log(`📦 Loading model: ${percent}%`)
           }
         },
         (error) => {
@@ -395,15 +397,17 @@ async function loadModel() {
       throw new Error('Model scene is empty')
     }
 
-    console.log('📐 Model children:', model.children.length)
+    if (import.meta.env.DEV) console.log('📐 Model children:', model.children.length)
 
     // Calculate model bounding box to auto-scale
     const box = new THREE.Box3().setFromObject(model)
     const size = box.getSize(new THREE.Vector3())
     const center = box.getCenter(new THREE.Vector3())
 
-    console.log('📏 Original model size:', size)
-    console.log('📍 Original model center:', center)
+    if (import.meta.env.DEV) {
+      console.log('📏 Original model size:', size)
+      console.log('📍 Original model center:', center)
+    }
 
     // For OrthographicCamera, we scale to pixel units
     // Target: glasses should be about 150 pixels wide as default
@@ -411,7 +415,7 @@ async function loadModel() {
     const targetSizePixels = 150 // Target width in pixels
     const autoScale = targetSizePixels / maxDim
 
-    console.log('🔧 Auto-scale factor (for pixels):', autoScale)
+    if (import.meta.env.DEV) console.log('🔧 Auto-scale factor (for pixels):', autoScale)
 
     // Save base scale for face tracking adjustments
     baseModelScale = autoScale
@@ -434,16 +438,18 @@ async function loadModel() {
     scene.add(model)
     modelLoaded.value = true
 
-    console.log('✅ Try-on model added to scene:', props.modelUrl)
-    console.log('📊 Final model position:', model.position)
-    console.log('📊 Final model scale:', model.scale)
+    if (import.meta.env.DEV) {
+      console.log('✅ Try-on model added to scene:', props.modelUrl)
+      console.log('📊 Final model position:', model.position)
+      console.log('📊 Final model scale:', model.scale)
+    }
 
   } catch (error: any) {
     console.error('❌ Failed to load try-on model:', error)
     modelLoadError.value = error.message || 'Failed to load model'
 
     // If Shopify CDN fails, try creating a simple fallback glasses shape
-    console.log('🔧 Creating fallback glasses geometry...')
+    if (import.meta.env.DEV) console.log('🔧 Creating fallback glasses geometry...')
     createFallbackGlasses()
   } finally {
     isLoadingModel.value = false
@@ -541,7 +547,7 @@ function createFallbackGlasses() {
   scene.add(model)
 
   modelLoaded.value = true
-  console.log('✅ Fallback glasses created')
+  if (import.meta.env.DEV) console.log('✅ Fallback glasses created')
 }
 
 /**
@@ -671,11 +677,13 @@ function updateModelPosition(landmarks: FaceLandmarks) {
 
     // Debug logging
     if (Math.random() < 0.02) {
-      console.log('👁️ Left eye:', leftEyePos)
-      console.log('👁️ Right eye:', rightEyePos)
-      console.log('👓 Glasses center:', { x: centerX.toFixed(1), y: centerY.toFixed(1) })
-      console.log('👓 Eye distance:', eyeDistanceWorld.toFixed(1))
-      console.log('👓 Scale:', finalScale.toFixed(1))
+      if (import.meta.env.DEV) {
+        console.log('👁️ Left eye:', leftEyePos)
+        console.log('👁️ Right eye:', rightEyePos)
+        console.log('👓 Glasses center:', { x: centerX.toFixed(1), y: centerY.toFixed(1) })
+        console.log('👓 Eye distance:', eyeDistanceWorld.toFixed(1))
+        console.log('👓 Scale:', finalScale.toFixed(1))
+      }
     }
   }
 }
