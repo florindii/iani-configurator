@@ -22,6 +22,10 @@ api_version = "2025-04"
   uri = "/webhooks/app/uninstalled"
 
   [[webhooks.subscriptions]]
+  topics = [ "app_subscriptions/update" ]
+  uri = "/webhooks/app/subscriptions-update"
+
+  [[webhooks.subscriptions]]
   topics = [ "app/scopes_update" ]
   uri = "/webhooks/app/scopes_update"
 
@@ -43,3 +47,23 @@ redirect_urls = ["https://iani-configurator-1.onrender.com/auth/callback", "http
 
 [pos]
 embedded = false
+
+# Billing Configuration - Shopify App Subscriptions
+[billing]
+  [billing.starter]
+  amount = 19.00
+  currency_code = "USD"
+  interval = "EVERY_30_DAYS"
+  trial_days = 14
+
+  [billing.pro]
+  amount = 49.00
+  currency_code = "USD"
+  interval = "EVERY_30_DAYS"
+  trial_days = 14
+
+  [billing.business]
+  amount = 99.00
+  currency_code = "USD"
+  interval = "EVERY_30_DAYS"
+  trial_days = 14

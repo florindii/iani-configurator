@@ -22,6 +22,7 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { hasFeatureAccess, getShopSubscription, PLANS, type PlanType } from "../billing.server";
 
 // Error boundary to catch and display errors properly
 export function ErrorBoundary() {
@@ -131,7 +132,20 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     console.error("Error fetching Shopify product:", e);
   }
 
-  return json({ product3D, shopifyProduct });
+  // Check feature access for try-on
+  const canUseTryOn = await hasFeatureAccess(session.shop, "tryOnEnabled");
+  const subscription = await getShopSubscription(session.shop);
+  const planDetails = PLANS[subscription.plan as PlanType] || PLANS.free;
+
+  return json({
+    product3D,
+    shopifyProduct,
+    canUseTryOn,
+    subscription: {
+      plan: subscription.plan,
+      planName: planDetails.name,
+    }
+  });
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
@@ -171,6 +185,14 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     const tryOnType = formData.get("tryOnType") as string | null;
     const tryOnOffsetY = parseFloat(formData.get("tryOnOffsetY") as string) || 0;
     const tryOnScale = parseFloat(formData.get("tryOnScale") as string) || 1;
+
+    // Check if user has try-on access before enabling
+    if (tryOnEnabled) {
+      const canUseTryOn = await hasFeatureAccess(session.shop, "tryOnEnabled");
+      if (!canUseTryOn) {
+        return json({ error: "Virtual Try-On requires Pro plan or higher" }, { status: 403 });
+      }
+    }
 
     await db.product3D.update({
       where: { id },
@@ -227,7 +249,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 };
 
 export default function EditProduct() {
-  const { product3D, shopifyProduct } = useLoaderData<typeof loader>();
+  const { product3D, shopifyProduct, canUseTryOn, subscription } = useLoaderData<typeof loader>();
   const submit = useSubmit();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
@@ -552,8 +574,11 @@ export default function EditProduct() {
                   <Text as="h2" variant="headingMd">
                     Virtual Try-On Settings
                   </Text>
-                  {tryOnEnabled && (
+                  {tryOnEnabled && canUseTryOn && (
                     <Badge tone="info">Try-On Enabled</Badge>
+                  )}
+                  {!canUseTryOn && (
+                    <Badge tone="warning">Pro Plan Required</Badge>
                   )}
                 </InlineStack>
                 <Text as="p" variant="bodyMd" tone="subdued">
@@ -562,14 +587,27 @@ export default function EditProduct() {
                 </Text>
                 <Divider />
 
-                <Checkbox
-                  label="Enable Virtual Try-On"
-                  checked={tryOnEnabled}
-                  onChange={setTryOnEnabled}
-                  helpText="When enabled, customers will see a 'Try On' button on the product page"
-                />
+                {!canUseTryOn ? (
+                  <Banner
+                    title="Upgrade to Pro for Virtual Try-On"
+                    tone="warning"
+                    action={{ content: "Upgrade Plan", url: "/app/billing" }}
+                  >
+                    <p>
+                      Virtual Try-On is available on the Pro plan ($49/mo) and above.
+                      Let customers see how products look on them with AR face tracking.
+                    </p>
+                  </Banner>
+                ) : (
+                  <Checkbox
+                    label="Enable Virtual Try-On"
+                    checked={tryOnEnabled}
+                    onChange={setTryOnEnabled}
+                    helpText="When enabled, customers will see a 'Try On' button on the product page"
+                  />
+                )}
 
-                {tryOnEnabled && (
+                {tryOnEnabled && canUseTryOn && (
                   <BlockStack gap="400">
                     <Select
                       label="Product Type"

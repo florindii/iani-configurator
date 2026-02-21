@@ -13,6 +13,8 @@ import {
   Icon,
   Box,
   Divider,
+  Badge,
+  ProgressBar,
 } from "@shopify/polaris";
 import {
   ProductIcon,
@@ -22,10 +24,15 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { getShopSubscription, PLANS, type PlanType } from "../billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
+
+  // Get subscription status
+  const subscription = await getShopSubscription(shop);
+  const planDetails = PLANS[subscription.plan as PlanType] || PLANS.free;
 
   // Get counts for dashboard stats
   const totalProducts = await db.product3D.count({
@@ -54,6 +61,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     },
   });
 
+  // Calculate product limit usage
+  const productLimit = planDetails.productLimit;
+  const canAddMore = productLimit === -1 || totalProducts < productLimit;
+
   return json({
     shop,
     stats: {
@@ -62,28 +73,88 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       tryOnEnabledProducts,
     },
     recentProducts,
+    subscription: {
+      plan: subscription.plan,
+      planName: planDetails.name,
+      isTrialing: subscription.isTrialing,
+      trialEndsAt: subscription.trialEndsAt,
+      productLimit,
+      canAddMore,
+      features: planDetails.features,
+    },
   });
 };
 
 export default function Index() {
-  const { stats, recentProducts } = useLoaderData<typeof loader>();
+  const { stats, recentProducts, subscription } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
+
+  const getProductLimitText = () => {
+    if (subscription.productLimit === -1) return "Unlimited";
+    return `${stats.totalProducts} / ${subscription.productLimit}`;
+  };
+
+  const getProductLimitProgress = () => {
+    if (subscription.productLimit === -1) return 0;
+    return (stats.totalProducts / subscription.productLimit) * 100;
+  };
 
   return (
     <Page>
       <TitleBar title="Iani 3D Configurator" />
       <BlockStack gap="500">
-        {/* Welcome Banner */}
-        <Banner
-          title="Welcome to Iani 3D Configurator"
-          tone="info"
-          onDismiss={() => {}}
-        >
-          <p>
-            Transform your product pages with interactive 3D visualization and AR try-on.
-            Let customers customize colors, materials, and see products in real-time 3D.
-          </p>
-        </Banner>
+        {/* Subscription Status Banner */}
+        {subscription.isTrialing && (
+          <Banner
+            title={`Free Trial - ${subscription.planName} Plan`}
+            tone="warning"
+          >
+            <p>
+              Your free trial ends on {new Date(subscription.trialEndsAt!).toLocaleDateString()}.
+              Upgrade now to keep all features.
+            </p>
+          </Banner>
+        )}
+
+        {subscription.plan === "free" && (
+          <Banner
+            title="Upgrade to unlock more features"
+            tone="info"
+            action={{ content: "View Plans", onAction: () => navigate("/app/billing") }}
+          >
+            <p>
+              You're on the Free plan with 1 product. Upgrade to Pro for unlimited products and Virtual Try-On.
+            </p>
+          </Banner>
+        )}
+
+        {/* Subscription Card */}
+        <Card>
+          <InlineStack align="space-between" blockAlign="center">
+            <BlockStack gap="100">
+              <InlineStack gap="200" blockAlign="center">
+                <Text as="h2" variant="headingMd">Current Plan</Text>
+                <Badge tone={subscription.plan === "free" ? "info" : "success"}>
+                  {subscription.planName}
+                </Badge>
+              </InlineStack>
+              <Text as="p" variant="bodySm" tone="subdued">
+                Products: {getProductLimitText()}
+                {subscription.productLimit !== -1 && (
+                  <> • Try-On: {subscription.features.tryOnEnabled ? "Enabled" : "Upgrade to enable"}</>
+                )}
+              </Text>
+            </BlockStack>
+            <Button onClick={() => navigate("/app/billing")}>
+              {subscription.plan === "free" ? "Upgrade" : "Manage Subscription"}
+            </Button>
+          </InlineStack>
+          {subscription.productLimit !== -1 && subscription.productLimit > 0 && (
+            <Box paddingBlockStart="300">
+              <ProgressBar progress={getProductLimitProgress()} size="small" />
+            </Box>
+          )}
+        </Card>
 
         <Layout>
           {/* Stats Cards */}
@@ -160,9 +231,15 @@ export default function Index() {
                   <Button
                     variant="primary"
                     onClick={() => navigate("/app/products/new")}
+                    disabled={!subscription.canAddMore}
                   >
                     Add 3D Product
                   </Button>
+                  {!subscription.canAddMore && (
+                    <Button onClick={() => navigate("/app/billing")}>
+                      Upgrade for More Products
+                    </Button>
+                  )}
                   <Button onClick={() => navigate("/app/products")}>
                     View All Products
                   </Button>
@@ -224,7 +301,7 @@ export default function Index() {
                                 {product.isActive ? "Active" : "Inactive"}
                               </Text>
                               {product.tryOnEnabled && (
-                                <Text as="span" variant="bodySm" tone="info">
+                                <Text as="span" variant="bodySm" tone="subdued">
                                   • AR Try-On
                                 </Text>
                               )}

@@ -31,6 +31,20 @@ model Session {
   emailVerified Boolean?  @default(false)
 }
 
+// Shop subscription and billing information
+model Shop {
+  id                    String    @id @default(cuid())
+  shopDomain            String    @unique // e.g., "mystore.myshopify.com"
+  plan                  String    @default("free") // "free", "starter", "pro", "business"
+  subscriptionId        String?   // Shopify subscription ID
+  subscriptionStatus    String    @default("none") // "none", "active", "cancelled", "frozen", "pending"
+  trialEndsAt           DateTime? // When the trial expires
+  currentPeriodEnd      DateTime? // Current billing period end
+  productLimit          Int       @default(1) // Number of products allowed
+  installedAt           DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
 // NEW MODELS FOR 3D CONFIGURATOR
 model Product3D {
   id              String   @id @default(cuid())

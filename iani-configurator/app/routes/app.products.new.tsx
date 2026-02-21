@@ -1,5 +1,5 @@
 import { json, redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useSubmit, useNavigation } from "@remix-run/react";
+import { useLoaderData, useSubmit, useNavigation, useNavigate } from "@remix-run/react";
 import { useState, useCallback } from "react";
 import {
   Page,
@@ -14,10 +14,12 @@ import {
   Divider,
   Banner,
   FormLayout,
+  EmptyState,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { canAddProduct, getShopSubscription, PLANS, type PlanType } from "../billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -83,11 +85,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Filter out already configured products
   const availableProducts = products.filter((p: any) => !existingIds.has(p.id));
 
-  return json({ products: availableProducts, shop: session.shop });
+  // Check if shop can add more products based on their plan
+  const canAdd = await canAddProduct(session.shop);
+  const subscription = await getShopSubscription(session.shop);
+  const planDetails = PLANS[subscription.plan as PlanType] || PLANS.free;
+
+  return json({
+    products: availableProducts,
+    shop: session.shop,
+    canAdd,
+    subscription: {
+      plan: subscription.plan,
+      planName: planDetails.name,
+      productLimit: planDetails.productLimit,
+    }
+  });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
+
+  // Check product limit before creating
+  const canAdd = await canAddProduct(session.shop);
+  if (!canAdd) {
+    return json({ error: "Product limit reached. Please upgrade your plan." }, { status: 403 });
+  }
+
   const formData = await request.formData();
 
   const shopifyProductId = formData.get("shopifyProductId") as string;
@@ -151,10 +174,37 @@ const defaultMaterials = [
 ];
 
 export default function NewProduct() {
-  const { products } = useLoaderData<typeof loader>();
+  const { products, canAdd, subscription } = useLoaderData<typeof loader>();
   const submit = useSubmit();
   const navigation = useNavigation();
+  const navigate = useNavigate();
   const isSubmitting = navigation.state === "submitting";
+
+  // If user can't add more products, show upgrade message
+  if (!canAdd) {
+    return (
+      <Page
+        backAction={{ content: "Products", url: "/app/products" }}
+        title="Product Limit Reached"
+      >
+        <TitleBar title="Upgrade Required" />
+        <Card>
+          <EmptyState
+            heading="You've reached your product limit"
+            action={{ content: "Upgrade Plan", onAction: () => navigate("/app/billing") }}
+            secondaryAction={{ content: "View Products", url: "/app/products" }}
+            image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+          >
+            <p>
+              Your {subscription.planName} plan allows{" "}
+              {subscription.productLimit === -1 ? "unlimited" : subscription.productLimit} product(s).
+              Upgrade to add more 3D products.
+            </p>
+          </EmptyState>
+        </Card>
+      </Page>
+    );
+  }
 
   const [selectedProduct, setSelectedProduct] = useState("");
   const [name, setName] = useState("");
