@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData, useSubmit, useNavigation } from "@remix-run/react";
+import { useLoaderData, useSubmit, useNavigation, useActionData } from "@remix-run/react";
+import { useState } from "react";
 import {
   Page,
   Layout,
@@ -17,6 +18,7 @@ import {
 } from "@shopify/polaris";
 import { CheckIcon, XIcon } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
+import { db } from "../db.server";
 import {
   PLANS,
   getShopSubscription,
@@ -59,14 +61,36 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const formData = await request.formData();
   const plan = formData.get("plan") as PlanType;
+  const intent = formData.get("intent") as string;
 
   if (!plan || !PLANS[plan]) {
     return json({ error: "Invalid plan selected" }, { status: 400 });
   }
 
+  // DEV MODE: Allow manual plan switching for testing (custom apps can't use Billing API)
+  if (intent === "dev-upgrade") {
+    await updateShopSubscription(shop, plan, `dev-test-${Date.now()}`, 14);
+    return redirect("/app/billing?success=true");
+  }
+
   if (plan === "free") {
-    // Downgrade to free - handled separately
-    return json({ error: "Use the cancel subscription option to downgrade to free" }, { status: 400 });
+    // Downgrade to free
+    await db.shop.upsert({
+      where: { shopDomain: shop },
+      update: {
+        plan: "free",
+        subscriptionId: null,
+        subscriptionStatus: "none",
+        productLimit: PLANS.free.productLimit,
+      },
+      create: {
+        shopDomain: shop,
+        plan: "free",
+        subscriptionStatus: "none",
+        productLimit: PLANS.free.productLimit,
+      },
+    });
+    return redirect("/app/billing?success=true");
   }
 
   try {
@@ -78,21 +102,36 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     return json({ error: "Failed to create subscription" }, { status: 500 });
-  } catch (error) {
+  } catch (error: any) {
+    // Check if this is a custom app error - offer dev mode fallback
+    const errorMessage = String(error);
+    if (errorMessage.includes("Custom apps cannot use the Billing API")) {
+      return json({
+        error: "Custom apps cannot use Shopify Billing. Use 'Test Upgrade' button for development testing.",
+        isCustomAppError: true,
+        plan
+      }, { status: 400 });
+    }
     console.error("Billing error:", error);
-    return json({ error: String(error) }, { status: 500 });
+    return json({ error: errorMessage }, { status: 500 });
   }
 };
 
 export default function BillingPage() {
   const { subscription, plans, success } = useLoaderData<typeof loader>();
+  const actionData = useActionData<{ error?: string; isCustomAppError?: boolean; plan?: string }>();
   const submit = useSubmit();
   const navigation = useNavigation();
   const isLoading = navigation.state === "submitting";
+  const [showDevMode, setShowDevMode] = useState(false);
 
   const handleSelectPlan = (plan: PlanType) => {
     if (plan === subscription.plan) return;
     submit({ plan }, { method: "post" });
+  };
+
+  const handleDevUpgrade = (plan: PlanType) => {
+    submit({ plan, intent: "dev-upgrade" }, { method: "post" });
   };
 
   const features = [
@@ -125,6 +164,52 @@ export default function BillingPage() {
               onDismiss={() => {}}
             >
               <p>Your subscription is now active. Enjoy all the features of your new plan!</p>
+            </Banner>
+          </Layout.Section>
+        )}
+
+        {actionData?.isCustomAppError && (
+          <Layout.Section>
+            <Banner
+              title="Custom App Detected"
+              tone="warning"
+              action={{
+                content: "Enable Dev Mode",
+                onAction: () => setShowDevMode(true)
+              }}
+            >
+              <p>
+                Custom apps cannot use Shopify's Billing API. For development/testing,
+                enable Dev Mode to manually switch plans. For production, you'll need to
+                submit this app to the Shopify App Store or use an unlisted app distribution.
+              </p>
+            </Banner>
+          </Layout.Section>
+        )}
+
+        {showDevMode && (
+          <Layout.Section>
+            <Banner
+              title="Development Mode Active"
+              tone="info"
+            >
+              <BlockStack gap="300">
+                <p>Select a plan to test features without Shopify billing:</p>
+                <InlineStack gap="200">
+                  <Button onClick={() => handleDevUpgrade("free")} disabled={subscription.plan === "free"}>
+                    Free
+                  </Button>
+                  <Button onClick={() => handleDevUpgrade("starter")} disabled={subscription.plan === "starter"}>
+                    Starter
+                  </Button>
+                  <Button onClick={() => handleDevUpgrade("pro")} disabled={subscription.plan === "pro"} variant="primary">
+                    Pro
+                  </Button>
+                  <Button onClick={() => handleDevUpgrade("business")} disabled={subscription.plan === "business"}>
+                    Business
+                  </Button>
+                </InlineStack>
+              </BlockStack>
             </Banner>
           </Layout.Section>
         )}
