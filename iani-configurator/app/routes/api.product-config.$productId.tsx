@@ -1,5 +1,6 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import db from "../db.server";
+import { getShopSubscription, hasFeatureAccess } from "../billing.server";
 
 // CORS headers for cross-origin requests from the configurator iframe
 const corsHeaders = {
@@ -22,6 +23,9 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   }
 
   try {
+    // Check if shop has access to Try-On feature based on their plan
+    const canUseTryOn = await hasFeatureAccess(shop, "tryOnEnabled");
+
     // Find the 3D product configuration
     const product3D = await db.product3D.findFirst({
       where: {
@@ -76,6 +80,9 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     }
 
     // Return the custom configuration
+    // Only enable Try-On if BOTH the product has it enabled AND the shop's plan allows it
+    const effectiveTryOnEnabled = product3D.tryOnEnabled && canUseTryOn;
+
     return json(
       {
         configured: true,
@@ -87,9 +94,9 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
           basePrice: product3D.basePrice,
           useShopifyModel: product3D.useShopifyModel,
           baseModelUrl: product3D.baseModelUrl,
-          // Virtual Try-On settings
-          tryOnEnabled: product3D.tryOnEnabled,
-          tryOnType: product3D.tryOnType,
+          // Virtual Try-On settings - only enabled if shop plan allows it
+          tryOnEnabled: effectiveTryOnEnabled,
+          tryOnType: effectiveTryOnEnabled ? product3D.tryOnType : null,
           tryOnOffsetY: product3D.tryOnOffsetY,
           tryOnScale: product3D.tryOnScale,
           colorOptions: product3D.colorOptions.map((c) => ({
