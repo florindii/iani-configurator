@@ -143,3 +143,13 @@ model ProductConfiguration {
   @@index([shopifyOrderId])
   @@index([status])
 }
+
+// Store preview images for configurations
+model ConfigurationPreview {
+  id        String   @id // Same as configurationId from cart
+  shop      String
+  imageData String   @db.Text // Base64 encoded image data
+  createdAt DateTime @default(now())
+
+  @@index([shop])
+}
