@@ -78,6 +78,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     const configuration = await db.productConfiguration.create({
       data: {
         product3DId: productId,
+        shop,
         customerEmail,
         shopifyCustomerId: customerId,
         configurationData,

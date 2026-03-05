@@ -73,6 +73,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const configuration = await db.productConfiguration.create({
       data: {
         product3DId: product3D.id,
+        shop,
         customerEmail: customerEmail || null,
         shopifyCustomerId: customerId || null,
         configurationData,

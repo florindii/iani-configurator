@@ -119,18 +119,27 @@ model CustomizationOption {
 model ProductConfiguration {
   id              String   @id @default(cuid())
   product3DId     String
+  shop            String   // Which shop this belongs to
   customerEmail   String?  // For guest checkouts
   shopifyCustomerId String? // For logged-in customers
+  shopifyOrderId  String?  // Shopify order ID when ordered
+  shopifyOrderName String? // Shopify order name (e.g., "#1001")
   configurationData Json   // Store the 3D configuration as JSON
-  previewImageUrl String?  // Generated preview image
+  previewImageUrl String?  @db.Text // Generated preview image (base64 or URL)
+  colorName       String?  // Selected color name
+  colorHex        String?  // Selected color hex code
+  materialName    String?  // Selected material name
   totalPrice      Float
   status          String   @default("draft") // "draft", "saved", "ordered"
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  
+
   product3D       Product3D @relation(fields: [product3DId], references: [id], onDelete: Cascade)
-  
+
   @@index([product3DId])
+  @@index([shop])
   @@index([customerEmail])
   @@index([shopifyCustomerId])
+  @@index([shopifyOrderId])
+  @@index([status])
 }
