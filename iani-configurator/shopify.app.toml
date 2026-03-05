@@ -12,8 +12,7 @@ automatically_update_urls_on_dev = true
 [access_scopes]
 # Required scopes for 3D configurator functionality
 # write_draft_orders needed for custom pricing at checkout
-# read_orders needed to capture configuration orders via webhook
-scopes = "read_products,write_products,write_draft_orders,read_orders"
+scopes = "read_products,write_products,write_draft_orders"
 
 [webhooks]
 api_version = "2025-04"
@@ -29,11 +28,6 @@ api_version = "2025-04"
   [[webhooks.subscriptions]]
   topics = [ "app/scopes_update" ]
   uri = "/webhooks/app/scopes_update"
-
-  # Orders webhook - capture configuration details when order is placed
-  [[webhooks.subscriptions]]
-  topics = [ "orders/create" ]
-  uri = "/webhooks/orders/create"
 
   # GDPR Compliance Webhooks (Required for App Store)
   [[webhooks.subscriptions]]
