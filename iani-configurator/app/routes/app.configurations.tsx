@@ -153,8 +153,8 @@ export default function ConfigurationsPage() {
     : [];
 
   return (
-    <Page title="Customer Configurations" subtitle="View all product configurations from your customers">
-      <TitleBar title="Customer Configurations" />
+    <Page title="Configuration Orders" subtitle="View configured product orders ready for fulfillment">
+      <TitleBar title="Configuration Orders" />
       <Layout>
         <Layout.Section>
           <Card padding="0">
@@ -172,12 +172,12 @@ export default function ConfigurationsPage() {
             {configurations.length === 0 ? (
               <Box padding="400">
                 <EmptyState
-                  heading="No configurations yet"
+                  heading="No configuration orders yet"
                   image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
                 >
                   <p>
-                    When customers configure products and add them to cart,
-                    their configurations will appear here.
+                    When customers place orders with configured products,
+                    their configuration details will appear here for fulfillment.
                   </p>
                 </EmptyState>
               </Box>
@@ -292,7 +292,7 @@ export default function ConfigurationsPage() {
                         </Text>
                         <Button
                           size="slim"
-                          onClick={() => navigate(`/app/configurations/${config.id}`)}
+                          url={`/app/configurations/${config.id}`}
                         >
                           View Details
                         </Button>

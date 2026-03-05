@@ -99,7 +99,7 @@ export default function ConfigurationDetailPage() {
 
   return (
     <Page
-      backAction={{ content: "Configurations", url: "/app/configurations" }}
+      backAction={{ content: "Configuration Orders", url: "/app/configurations" }}
       title={`Configuration for ${configuration.product3D?.name || "Unknown Product"}`}
       titleMetadata={getStatusBadge(configuration.status)}
       secondaryActions={
@@ -114,7 +114,7 @@ export default function ConfigurationDetailPage() {
           : []
       }
     >
-      <TitleBar title="Configuration Details" />
+      <TitleBar title="Configuration Order Details" />
       <Layout>
         {/* Preview Image */}
         <Layout.Section variant="oneThird">
