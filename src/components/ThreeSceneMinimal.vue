@@ -1592,22 +1592,40 @@ const capturePreviewImage = () => {
     // Clear selection to remove highlight outline
     if (hadSelection) {
       console.log('📸 Clearing selection for clean preview')
-      // Temporarily clear selection visuals without triggering UI updates
-      if (clickedMesh.value && clickedMesh.value.userData) {
-        // Remove any selection highlight effects
-      }
     }
     selectedPart.value = null
     clickedMesh.value = null
 
-    // Zoom in for better preview - move camera closer to model
-    const zoomFactor = 0.65 // Closer zoom for cart thumbnail
-    camera.position.set(
-      originalPosition.x * zoomFactor,
-      originalPosition.y * zoomFactor,
-      originalPosition.z * zoomFactor
-    )
-    camera.lookAt(controls.target)
+    // Calculate model bounding box to zoom in properly
+    let modelToCapture = currentModel
+    if (modelToCapture) {
+      const box = new THREE.Box3().setFromObject(modelToCapture)
+      const center = box.getCenter(new THREE.Vector3())
+      const size = box.getSize(new THREE.Vector3())
+      const maxDim = Math.max(size.x, size.y, size.z)
+
+      // Position camera to fill frame with model (front-facing view)
+      const fov = camera.fov * (Math.PI / 180)
+      const cameraDistance = (maxDim / 2) / Math.tan(fov / 2) * 1.2 // 1.2 for some padding
+
+      // Set camera to front-facing position looking at model center
+      camera.position.set(
+        center.x + cameraDistance * 0.3, // Slight angle for 3D effect
+        center.y + cameraDistance * 0.2, // Slightly above
+        center.z + cameraDistance
+      )
+      controls.target.copy(center)
+      camera.lookAt(center)
+    } else {
+      // Fallback: just zoom in more aggressively
+      const zoomFactor = 0.4
+      camera.position.set(
+        originalPosition.x * zoomFactor,
+        originalPosition.y * zoomFactor,
+        originalPosition.z * zoomFactor
+      )
+      camera.lookAt(controls.target)
+    }
     camera.updateProjectionMatrix()
 
     // Render the zoomed, selection-free frame
@@ -1616,16 +1634,16 @@ const capturePreviewImage = () => {
     // Get the canvas
     const canvas = renderer.domElement
 
-    // Create a thumbnail canvas (200x200 for better quality in cart)
-    const thumbnailSize = 200
-    const thumbnailCanvas = document.createElement('canvas')
-    thumbnailCanvas.width = thumbnailSize
-    thumbnailCanvas.height = thumbnailSize
-    const ctx = thumbnailCanvas.getContext('2d')
+    // Create a larger preview canvas (500x500 for clear visibility)
+    const previewSize = 500
+    const previewCanvas = document.createElement('canvas')
+    previewCanvas.width = previewSize
+    previewCanvas.height = previewSize
+    const ctx = previewCanvas.getContext('2d')
 
-    // Fill with white background
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, thumbnailSize, thumbnailSize)
+    // Fill with light gray background (better than pure white for products)
+    ctx.fillStyle = '#f5f5f5'
+    ctx.fillRect(0, 0, previewSize, previewSize)
 
     // Calculate center crop to maintain aspect ratio
     const sourceSize = Math.min(canvas.width, canvas.height)
@@ -1636,11 +1654,11 @@ const capturePreviewImage = () => {
     ctx.drawImage(
       canvas,
       sourceX, sourceY, sourceSize, sourceSize, // Source rectangle (centered square)
-      0, 0, thumbnailSize, thumbnailSize // Destination rectangle
+      0, 0, previewSize, previewSize // Destination rectangle
     )
 
     // Convert to base64 with good quality
-    const dataUrl = thumbnailCanvas.toDataURL('image/jpeg', 0.85)
+    const dataUrl = previewCanvas.toDataURL('image/jpeg', 0.9)
 
     // Restore camera position
     camera.position.copy(originalPosition)
@@ -1651,7 +1669,7 @@ const capturePreviewImage = () => {
     // Re-render with original view
     renderer.render(scene, camera)
 
-    console.log('📸 Preview thumbnail captured (zoomed, no selection), size:', Math.round(dataUrl.length / 1024), 'KB')
+    console.log('📸 Preview captured (zoomed on model), size:', Math.round(dataUrl.length / 1024), 'KB')
     return dataUrl
   } catch (error) {
     console.error('❌ Failed to capture preview:', error)
