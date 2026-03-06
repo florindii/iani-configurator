@@ -32,7 +32,9 @@
       "WebFetch(domain:shopify.dev)",
       "Bash(dir \"C:\\Users\\flori\\Desktop\\iani-configurator\\iani-configurator\")",
       "Bash(pushd:*)",
-      "Bash(powershell -Command \"(Get-Item ''C:\\Users\\flori\\Desktop\\iani-configurator\\iani-configurator\\extensions\\theme-extension\\assets\\configurator-loader.js'').Length\")"
+      "Bash(powershell -Command \"(Get-Item ''C:\\Users\\flori\\Desktop\\iani-configurator\\iani-configurator\\extensions\\theme-extension\\assets\\configurator-loader.js'').Length\")",
+      "Bash(del \"C:\\Users\\flori\\Desktop\\iani-configurator\\iani-configurator\\app\\routes\\api.save-configuration.tsx\")",
+      "Bash(git -C \"C:\\Users\\flori\\Desktop\\iani-configurator\\iani-configurator\" log --oneline -5)"
     ]
   }
 }

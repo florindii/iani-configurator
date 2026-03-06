@@ -46,9 +46,14 @@
         🔍
       </div> -->
       
-      <!-- Click Instructions -->
-      <div class="click-instructions">
+      <!-- Click Instructions (hidden in readonly mode) -->
+      <div v-if="!isReadOnlyMode" class="click-instructions">
         <div class="instruction-text">💡 Click on different parts to customize them</div>
+      </div>
+
+      <!-- Read-only Banner for Merchants -->
+      <div v-if="isReadOnlyMode" class="readonly-banner">
+        <div class="readonly-text">👁️ Viewing Customer Configuration</div>
       </div>
       
       <!-- Loading Overlay -->
@@ -59,12 +64,15 @@
     </div>
 
     <!-- Right Side: Configuration Panel -->
-    <div class="config-section">
+    <div class="config-section" :class="{ 'readonly-mode': isReadOnlyMode }">
       <div class="config-content">
         <!-- Header -->
         <div class="config-header">
           <h2>{{ productName }}</h2>
-          <p class="product-description">
+          <p v-if="isReadOnlyMode" class="product-description readonly-subtitle">
+            📋 Configuration Details for Manufacturing
+          </p>
+          <p v-else class="product-description">
             {{ selectedPart ? `Customizing: ${selectedPart.name}` : 'Click on parts to customize' }}
           </p>
         </div>
@@ -84,16 +92,54 @@
 
         <!-- Configuration Options -->
         <div class="config-options">
-          
-          <!-- Default Overview -->
-          <div v-if="!selectedPart" class="overview-section">
+
+          <!-- READ-ONLY: Configuration Summary for Merchants -->
+          <div v-if="isReadOnlyMode" class="readonly-summary">
+            <div class="summary-section">
+              <h3>🎨 Selected Options</h3>
+
+              <div class="summary-item">
+                <span class="summary-label">Color:</span>
+                <span class="summary-value">
+                  <span
+                    class="color-preview-dot"
+                    :style="{ backgroundColor: configuration.cushionColorHex || '#6B7280' }"
+                  ></span>
+                  {{ getSelectedColorLabel() || 'Default' }}
+                </span>
+              </div>
+
+              <div class="summary-item">
+                <span class="summary-label">Color Code:</span>
+                <span class="summary-value color-code">{{ configuration.cushionColorHex || '#6B7280' }}</span>
+              </div>
+
+              <div class="summary-item">
+                <span class="summary-label">Material:</span>
+                <span class="summary-value">{{ getFrameLabel() || 'Standard' }}</span>
+              </div>
+
+              <div class="summary-item total">
+                <span class="summary-label">Total Price:</span>
+                <span class="summary-value price">{{ currencySymbol }}{{ formatPrice(calculatedPrice) }}</span>
+              </div>
+            </div>
+
+            <div class="readonly-instructions">
+              <p>🔄 Rotate the 3D model to inspect all angles</p>
+              <p>🔍 Use mouse wheel to zoom in/out</p>
+            </div>
+          </div>
+
+          <!-- NORMAL MODE: Default Overview -->
+          <div v-else-if="!selectedPart" class="overview-section">
             <div class="quick-overview">
               <h3>✨ How to Customize</h3>
               <p>Click directly on the model parts to customize them</p>
             </div>
           </div>
 
-          <!-- Main Customization Menu After Mesh Selection -->
+          <!-- NORMAL MODE: Main Customization Menu After Mesh Selection -->
           <div v-else class="customization-menu">
             <div class="back-button" @click="clearSelection()">
               ← Back to Overview
@@ -190,8 +236,8 @@
 
         </div>
 
-        <!-- Add to Cart Button -->
-        <div class="cart-section">
+        <!-- Add to Cart Button (hidden in readonly mode) -->
+        <div v-if="!isReadOnlyMode" class="cart-section">
           <!-- Try-On Button (only shown when enabled) -->
           <button
             v-if="tryOnEnabled"
@@ -1572,7 +1618,62 @@ const getShopifyContext = () => {
     price: urlParams.get('price') ? parseFloat(urlParams.get('price').replace(/[^0-9.]/g, '')) : null,
     // New: Support for dynamic model URLs from Shopify product media
     modelUrl: urlParams.get('modelUrl'),
-    modelFile: urlParams.get('modelFile')
+    modelFile: urlParams.get('modelFile'),
+    // Read-only mode for merchant viewing
+    readonly: urlParams.get('readonly') === 'true',
+    configId: urlParams.get('configId')
+  }
+}
+
+// Check if in read-only mode (for merchant viewing)
+const isReadOnlyMode = computed(() => {
+  const context = getShopifyContext()
+  return context.readonly === true
+})
+
+// Load saved configuration from API (for readonly mode)
+const loadSavedConfiguration = async () => {
+  const context = getShopifyContext()
+  if (!context.configId) return
+
+  console.log('📥 Loading saved configuration:', context.configId)
+
+  try {
+    const response = await fetch(`https://iani-configurator-1.onrender.com/api/get-configuration/${context.configId}`)
+    const data = await response.json()
+
+    if (data.success && data.configuration) {
+      const config = data.configuration
+
+      console.log('✅ Configuration loaded:', config)
+
+      // Apply color if saved
+      if (config.colorHex) {
+        configuration.cushionColor = 'custom'
+        configuration.cushionColorHex = config.colorHex
+        configuration.isCustomColor = true
+        customColor.value = config.colorHex
+
+        // Apply color to model after it loads
+        setTimeout(() => {
+          if (model) {
+            applyColorToAllCushions(config.colorHex)
+          }
+        }, 500)
+      }
+
+      // Apply material if saved
+      if (config.materialName) {
+        configuration.frameMaterial = config.materialName
+      }
+
+      // Update product name if available
+      if (config.productName) {
+        productName.value = config.productName
+      }
+    }
+  } catch (error) {
+    console.error('❌ Failed to load configuration:', error)
   }
 }
 
@@ -1840,6 +1941,12 @@ onMounted(async () => {
   // Load product configuration from merchant's settings
   await loadProductConfig()
 
+  // If in readonly mode with a configId, load the saved configuration
+  if (isReadOnlyMode.value) {
+    console.log('👁️ Read-only mode detected, loading saved configuration...')
+    await loadSavedConfiguration()
+  }
+
   setTimeout(() => {
     initThreeJS()
   }, 100)
@@ -1917,6 +2024,118 @@ onUnmounted(() => {
 @keyframes pulse-instruction {
   0%, 70%, 100% { opacity: 0.9; }
   35% { opacity: 0.7; }
+}
+
+/* Read-only Mode Styles */
+.readonly-banner {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 15;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+
+.readonly-subtitle {
+  color: #059669 !important;
+  font-weight: 600 !important;
+}
+
+.config-section.readonly-mode {
+  background: linear-gradient(to bottom, #f0fdf4, #ffffff);
+}
+
+.readonly-summary {
+  padding: 8px 0;
+}
+
+.readonly-summary h3 {
+  font-size: 16px;
+  margin: 0 0 16px 0;
+  color: #374151;
+}
+
+.summary-section {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.summary-item:last-child {
+  border-bottom: none;
+}
+
+.summary-item.total {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 2px solid #e5e7eb;
+  border-bottom: none;
+}
+
+.summary-label {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.summary-value {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-value.color-code {
+  font-family: monospace;
+  background: #f3f4f6;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.summary-value.price {
+  font-size: 18px;
+  color: #059669;
+}
+
+.color-preview-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.readonly-instructions {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.readonly-instructions p {
+  margin: 4px 0;
+  font-size: 13px;
+  color: #0369a1;
 }
 
 /* Debug Panel */

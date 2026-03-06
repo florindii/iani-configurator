@@ -1,30 +1,51 @@
 (function(){'use strict';if(window.__ianiConfiguratorLoaded)return;window.__ianiConfiguratorLoaded=true;
 var containers=document.querySelectorAll('[id^="iani-3d-configurator-"]');if(!containers.length)return;
 var API_BASE='https://iani-configurator-1.onrender.com';
-containers.forEach(function(w){var c={blockId:w.dataset.blockId,productId:w.dataset.productId,productHandle:w.dataset.productHandle,variantId:w.dataset.variantId,productTitle:w.dataset.productTitle,productPrice:w.dataset.productPrice,shop:w.dataset.shop,currency:w.dataset.currency,moneyFormat:w.dataset.moneyFormat,configuratorUrl:w.dataset.configuratorUrl||'https://iani-configurator.vercel.app',displayMode:w.dataset.displayMode,autoLoad:w.dataset.autoLoad==='true',modelUrl:w.dataset.modelUrl||''};
+var CONFIGURATOR_BASE='https://iani-configurator.vercel.app';
+containers.forEach(function(w){var c={blockId:w.dataset.blockId,productId:w.dataset.productId,productHandle:w.dataset.productHandle,variantId:w.dataset.variantId,productTitle:w.dataset.productTitle,productPrice:w.dataset.productPrice,shop:w.dataset.shop,currency:w.dataset.currency,moneyFormat:w.dataset.moneyFormat,configuratorUrl:w.dataset.configuratorUrl||CONFIGURATOR_BASE,displayMode:w.dataset.displayMode,autoLoad:w.dataset.autoLoad==='true',modelUrl:w.dataset.modelUrl||''};
 var container=w.querySelector('.iani-configurator-container'),modalOverlay=w.querySelector('.iani-modal-overlay'),modalTrigger=w.querySelector('.iani-modal-trigger'),modalClose=w.querySelector('.iani-modal-close'),fullscreenTrigger=w.querySelector('.iani-fullscreen-trigger'),iframe=null;
 function buildUrl(){var u=new URL(c.configuratorUrl);u.searchParams.set('product',c.productId);u.searchParams.set('variant',c.variantId);u.searchParams.set('shop',c.shop);u.searchParams.set('handle',c.productHandle);u.searchParams.set('currency',c.currency);u.searchParams.set('embedded','true');if(c.productPrice)u.searchParams.set('price',c.productPrice);if(c.modelUrl)u.searchParams.set('modelUrl',c.modelUrl);return u.toString()}
 function createIframe(t){if(iframe)return iframe;iframe=document.createElement('iframe');iframe.className='iani-configurator-iframe';iframe.src=buildUrl();iframe.style.cssText='width:100%;height:100%;border:none;display:block;min-height:500px';iframe.allow='accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;fullscreen;camera;microphone';iframe.setAttribute('loading','eager');iframe.setAttribute('title','3D Configurator');iframe.onload=function(){var l=t.querySelector('.iani-loading');if(l)l.style.display='none'};t.appendChild(iframe);return iframe}
-function uploadPreviewImage(imageData,configId){
-return fetch(API_BASE+'/api/upload-preview',{
+function saveConfiguration(configId,configData){
+return fetch(API_BASE+'/api/save-configuration',{
 method:'POST',
 headers:{'Content-Type':'application/json'},
-body:JSON.stringify({image:imageData,configurationId:configId,shop:c.shop})
+body:JSON.stringify({
+configurationId:configId,
+shop:c.shop,
+productId:c.productId,
+variantId:c.variantId,
+productHandle:c.productHandle,
+modelUrl:c.modelUrl,
+colorName:configData.colorName||null,
+colorHex:configData.colorHex||null,
+materialName:configData.materialName||null,
+totalPrice:configData.price||null,
+configuration:configData.configuration||{}
+})
 }).then(function(r){return r.json()}).then(function(result){
-if(result.success&&result.imageUrl)return result.imageUrl;
+if(result.success)return result.configurationId;
 return null;
-}).catch(function(err){console.warn('Failed to upload preview:',err);return null;});
+}).catch(function(err){console.warn('Failed to save configuration:',err);return configId;});
 }
-function addToCart(p,previewImageUrl){
-var props=p.configuration||p.properties||{},configId=p.configurationId||('config_'+Date.now()+'_'+Math.random().toString(36).substr(2,9)),variantId=p.variantId||c.variantId;
+function buildViewConfigUrl(configId){
+var u=new URL(CONFIGURATOR_BASE);
+u.searchParams.set('configId',configId);
+u.searchParams.set('readonly','true');
+u.searchParams.set('product',c.productId);
+u.searchParams.set('shop',c.shop);
+if(c.modelUrl)u.searchParams.set('modelUrl',c.modelUrl);
+return u.toString();
+}
+function addToCart(p,configId){
+var props=p.configuration||p.properties||{},variantId=p.variantId||c.variantId;
 props['_Configuration ID']=configId;
 if(p.colorName||props.color)props['Color']=p.colorName||props.color;
 if(p.colorHex||props.colorHex)props['Color Code']=p.colorHex||props.colorHex;
 if(p.materialName||props.material)props['Material']=p.materialName||props.material;
 if(p.price){props['Configured Price']='$'+Number(p.price).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});try{var prices=JSON.parse(localStorage.getItem('iani_cart_prices')||'{}');prices[configId]=Number(p.price);localStorage.setItem('iani_cart_prices',JSON.stringify(prices))}catch(x){}}
-if(previewImageUrl){props['Preview Image']=previewImageUrl;}
-if(p.previewImage){try{var previews=JSON.parse(localStorage.getItem('iani_cart_previews')||'{}');previews[configId]=p.previewImage;localStorage.setItem('iani_cart_previews',JSON.stringify(previews))}catch(x){}}
-try{var items=JSON.parse(localStorage.getItem('iani_cart_items')||'{}');items[configId]={variantId:variantId,configuredPrice:p.price?Number(p.price):null,configuration:p.configuration||{},productId:p.productId||c.productId,previewImageUrl:previewImageUrl};localStorage.setItem('iani_cart_items',JSON.stringify(items))}catch(x){}
+props['View 3D Configuration']=buildViewConfigUrl(configId);
+try{var items=JSON.parse(localStorage.getItem('iani_cart_items')||'{}');items[configId]={variantId:variantId,configuredPrice:p.price?Number(p.price):null,configuration:p.configuration||{},productId:p.productId||c.productId,viewUrl:buildViewConfigUrl(configId)};localStorage.setItem('iani_cart_items',JSON.stringify(items))}catch(x){}
 fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:variantId,quantity:p.quantity||1,properties:props})}).then(function(r){return r.json()}).then(function(item){if(iframe&&iframe.contentWindow)iframe.contentWindow.postMessage({type:'IANI_CART_SUCCESS',payload:item},c.configuratorUrl);fetch('/cart.js').then(function(r){return r.json()}).then(function(cart){['.cart-count','.cart-count-bubble','[data-cart-count]'].forEach(function(s){var el=document.querySelector(s);if(el)el.textContent=cart.item_count})});if(p.redirectToCart!==false)setTimeout(function(){location.href='/cart'},500)}).catch(function(err){if(iframe&&iframe.contentWindow)iframe.contentWindow.postMessage({type:'IANI_CART_ERROR',payload:{message:err.message}},c.configuratorUrl);alert('Failed to add to cart.')});
 }
 function handleMsg(e){try{if(e.origin!==(new URL(c.configuratorUrl)).origin)return;var d=e.data;if(!d||typeof d!=='object')return;
@@ -35,11 +56,9 @@ if(d.type==='IANI_ADD_TO_CART'||d.type==='ADD_TO_CART'){
 var p=d.payload||d;
 var configId='config_'+Date.now()+'_'+Math.random().toString(36).substr(2,9);
 p.configurationId=configId;
-if(p.previewImage){
-uploadPreviewImage(p.previewImage,configId).then(function(imageUrl){addToCart(p,imageUrl);});
-}else{
-addToCart(p,null);
-}
+saveConfiguration(configId,p).then(function(savedId){
+addToCart(p,savedId||configId);
+});
 }
 if(d.type==='IANI_CLOSE')closeModal()}catch(err){}}
 function openModal(){if(!modalOverlay)return;if(modalOverlay.parentElement!==document.body)document.body.appendChild(modalOverlay);modalOverlay.style.display='flex';modalOverlay.classList.add('active');document.body.style.overflow='hidden';var mc=modalOverlay.querySelector('.iani-configurator-container');if(mc)createIframe(mc)}
