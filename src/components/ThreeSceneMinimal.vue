@@ -1597,7 +1597,7 @@ const capturePreviewImage = () => {
     clickedMesh.value = null
 
     // Calculate model bounding box to zoom in properly
-    let modelToCapture = currentModel
+    let modelToCapture = model
     if (modelToCapture) {
       const box = new THREE.Box3().setFromObject(modelToCapture)
       const center = box.getCenter(new THREE.Vector3())
