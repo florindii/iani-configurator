@@ -504,28 +504,46 @@ const basePrice = computed(() => {
 })
 
 // Total extra costs (for showing what's being added)
+// Now calculates based on ALL mesh customizations - each customized part adds its price
 const totalExtraCost = computed(() => {
   let extras = 0
 
-  // Only add color extra cost if user explicitly selected a color
-  if (hasUserSelectedColor.value) {
-    const selectedColor = colorOptions.value.find(c => c.value === configuration.value.cushionColor)
-    if (selectedColor && selectedColor.price) {
-      extras += selectedColor.price
+  // Calculate extras from all mesh customizations
+  // Each customized mesh part adds its color/material price
+  const customizations = Object.values(meshCustomizations.value)
+
+  if (customizations.length > 0) {
+    customizations.forEach((customization) => {
+      // Use the stored price directly (set when customization was made)
+      const price = customization.price || 0
+      const colorName = customization.colorName || 'Unknown'
+      if (price > 0) {
+        extras += price
+        console.log(`💰 Adding ${price} for ${colorName}`)
+      }
+    })
+    console.log(`💵 Total extra cost from ${customizations.length} customizations: ${extras}`)
+  } else {
+    // Fallback to legacy single-color calculation if no mesh customizations
+    if (hasUserSelectedColor.value) {
+      const selectedColor = colorOptions.value.find(c => c.value === configuration.value.cushionColor)
+      if (selectedColor && selectedColor.price) {
+        extras += selectedColor.price
+      }
     }
+
+    // Add extra costs from selected frame material
+    const selectedFrame = frameOptions.value.find(f => f.value === configuration.value.frameMaterial)
+    if (selectedFrame) extras += selectedFrame.extraCost
+
+    // Add extra costs from selected pillow style
+    const selectedPillow = pillowOptions.value.find(p => p.value === configuration.value.pillowStyle)
+    if (selectedPillow) extras += selectedPillow.extraCost
+
+    // Add extra costs from selected leg style
+    const selectedLeg = legOptions.value.find(l => l.value === configuration.value.legStyle)
+    if (selectedLeg) extras += selectedLeg.extraCost
   }
-
-  // Add extra costs from selected frame material
-  const selectedFrame = frameOptions.value.find(f => f.value === configuration.value.frameMaterial)
-  if (selectedFrame) extras += selectedFrame.extraCost
-
-  // Add extra costs from selected pillow style
-  const selectedPillow = pillowOptions.value.find(p => p.value === configuration.value.pillowStyle)
-  if (selectedPillow) extras += selectedPillow.extraCost
-
-  // Add extra costs from selected leg style
-  const selectedLeg = legOptions.value.find(l => l.value === configuration.value.legStyle)
-  if (selectedLeg) extras += selectedLeg.extraCost
 
   return extras
 })
@@ -924,12 +942,17 @@ const updateCushionColors = () => {
 
     console.log('🟦 Applying color to clicked mesh:', clickedMesh.value.name, 'Hex:', newColorHex.toString(16))
 
-    // Track this customization
+    // Get the price for this color
+    const colorOption = colorOptions.value.find(c => c.label === colorName || c.value === configuration.value.cushionColor)
+    const colorPrice = colorOption ? (colorOption.price || 0) : 0
+
+    // Track this customization with price
     meshCustomizations.value[clickedMesh.value.name] = {
       colorHex: colorHexString.toUpperCase(),
       colorName: colorName,
       type: 'color',
-      partType: clickedMesh.value.userData.partType || 'cushion'
+      partType: clickedMesh.value.userData.partType || 'cushion',
+      price: colorPrice
     }
     console.log('📝 Tracked customization:', clickedMesh.value.name, meshCustomizations.value[clickedMesh.value.name])
 
@@ -994,16 +1017,18 @@ const updateFrameMaterials = () => {
     console.log('🔲 Applying frame material to clicked mesh:', clickedMesh.value.name)
     console.log('🎨 Color hex:', frameColor.toString(16), 'Roughness:', materialProps.roughness)
 
-    // Find the material name from options
+    // Find the material name and price from options
     const frameOption = frameOptions.value.find(f => f.value === configuration.value.frameMaterial)
     const materialName = frameOption ? frameOption.label : configuration.value.frameMaterial
+    const materialPrice = frameOption ? (frameOption.extraCost || 0) : 0
 
-    // Track this customization
+    // Track this customization with price
     meshCustomizations.value[clickedMesh.value.name] = {
       colorHex: '#' + frameColor.toString(16).padStart(6, '0').toUpperCase(),
       colorName: materialName,
       type: 'material',
-      partType: clickedMesh.value.userData.partType || 'frame'
+      partType: clickedMesh.value.userData.partType || 'frame',
+      price: materialPrice
     }
     console.log('📝 Tracked customization:', clickedMesh.value.name, meshCustomizations.value[clickedMesh.value.name])
 
