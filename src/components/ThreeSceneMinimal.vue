@@ -533,7 +533,10 @@ const totalExtraCost = computed(() => {
 // Computed price - uses saved config price in readonly mode, otherwise calculates from base + extras
 const calculatedPrice = computed(() => {
   // In readonly mode with a saved configuration, use the saved price
-  if (isReadonlyMode.value && savedConfigPrice.value) {
+  // Check readonly from URL params directly since isReadOnlyMode is defined later
+  const urlParams = new URLSearchParams(window.location.search)
+  const isReadonly = urlParams.get('readonly') === 'true'
+  if (isReadonly && savedConfigPrice.value) {
     return savedConfigPrice.value
   }
   return basePrice.value + totalExtraCost.value
