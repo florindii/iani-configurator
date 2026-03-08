@@ -48,6 +48,10 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
       );
     }
 
+    // Extract meshCustomizations from configurationData if present
+    const configData = configuration.configurationData as any || {};
+    const meshCustomizations = configData.meshCustomizations || {};
+
     return json(
       {
         success: true,
@@ -58,6 +62,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
           materialName: configuration.materialName,
           totalPrice: configuration.totalPrice,
           configurationData: configuration.configurationData,
+          meshCustomizations: meshCustomizations,
           productName: configuration.product3D?.name,
           modelUrl: configuration.product3D?.baseModelUrl,
           productId: configuration.product3D?.shopifyProductId,

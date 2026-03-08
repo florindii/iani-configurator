@@ -331,6 +331,10 @@ const customColor = ref('#4A90E2')
 // Track if user has explicitly selected a color (vs initial default)
 const hasUserSelectedColor = ref(false)
 
+// Track ALL mesh customizations - stores color/material per mesh name
+// Format: { "meshName": { colorHex: "#FFFFFF", colorName: "Ocean Blue", type: "color" } }
+const meshCustomizations = ref({})
+
 // Configuration state
 const configuration = ref({
   cushionColor: 'blue',
@@ -365,6 +369,9 @@ const productName = ref('Customize Your Product')
 // Shopify price context (from URL params)
 const shopifyBasePrice = ref(null)
 const shopifyCurrency = ref('USD')
+
+// Saved configuration price (for readonly view)
+const savedConfigPrice = ref(null)
 
 // Virtual Try-On state
 const tryOnEnabled = ref(false)
@@ -523,8 +530,12 @@ const totalExtraCost = computed(() => {
   return extras
 })
 
-// Computed price - uses Shopify product price as base when available
+// Computed price - uses saved config price in readonly mode, otherwise calculates from base + extras
 const calculatedPrice = computed(() => {
+  // In readonly mode with a saved configuration, use the saved price
+  if (isReadonlyMode.value && savedConfigPrice.value) {
+    return savedConfigPrice.value
+  }
   return basePrice.value + totalExtraCost.value
 })
 
@@ -886,22 +897,39 @@ const updateLegStyle = (style) => {
 const updateCushionColors = () => {
   console.log('🟦 updateCushionColors called')
   console.log('clickedMesh:', clickedMesh.value ? clickedMesh.value.name : 'none')
-  
+
   // If we have a specific clicked mesh, ALWAYS update it regardless of type
   if (clickedMesh.value && clickedMesh.value.material) {
     // Support custom colors
     let newColorHex = 0x4A90E2 // default blue
-    
+    let colorHexString = '#4A90E2'
+    let colorName = 'Ocean Blue'
+
     if (configuration.value.isCustomColor && configuration.value.customHex) {
       newColorHex = parseInt(configuration.value.customHex.replace('#', '0x'))
+      colorHexString = configuration.value.customHex
+      colorName = 'Custom'
       console.log('🎨 Using custom color:', configuration.value.customHex)
     } else {
       newColorHex = getColorHex(configuration.value.cushionColor)
+      colorHexString = '#' + newColorHex.toString(16).padStart(6, '0')
+      // Find the color name from options
+      const colorOption = colorOptions.value.find(c => c.value === configuration.value.cushionColor)
+      colorName = colorOption ? colorOption.label : configuration.value.cushionColor
       console.log('🎨 Using preset color:', configuration.value.cushionColor)
     }
-    
+
     console.log('🟦 Applying color to clicked mesh:', clickedMesh.value.name, 'Hex:', newColorHex.toString(16))
-    
+
+    // Track this customization
+    meshCustomizations.value[clickedMesh.value.name] = {
+      colorHex: colorHexString.toUpperCase(),
+      colorName: colorName,
+      type: 'color',
+      partType: clickedMesh.value.userData.partType || 'cushion'
+    }
+    console.log('📝 Tracked customization:', clickedMesh.value.name, meshCustomizations.value[clickedMesh.value.name])
+
     // Handle material arrays
     if (Array.isArray(clickedMesh.value.material)) {
       clickedMesh.value.material.forEach((mat, index) => {
@@ -920,21 +948,62 @@ const updateCushionColors = () => {
     }
     return
   }
-  
+
   console.log('⚠️ No clicked mesh available')
+}
+
+// Apply a color to all cushion parts (for legacy single-color support)
+const applyColorToAllCushions = (colorHex) => {
+  if (!model) {
+    console.warn('⚠️ Cannot apply color - no model loaded')
+    return
+  }
+
+  const hexValue = typeof colorHex === 'string'
+    ? parseInt(colorHex.replace('#', '0x'))
+    : colorHex
+
+  console.log('🎨 Applying color to all cushions:', colorHex)
+
+  model.traverse((child) => {
+    if (child.isMesh && child.userData.partType === 'cushion') {
+      if (Array.isArray(child.material)) {
+        child.material.forEach((mat) => {
+          mat.color.setHex(hexValue)
+          mat.needsUpdate = true
+        })
+      } else if (child.material) {
+        child.material.color.setHex(hexValue)
+        child.material.needsUpdate = true
+      }
+    }
+  })
 }
 
 const updateFrameMaterials = () => {
   console.log('🔲 updateFrameMaterials called')
   console.log('clickedMesh:', clickedMesh.value ? clickedMesh.value.name : 'none')
-  
+
   // If we have a specific clicked mesh, ALWAYS update it regardless of type
   if (clickedMesh.value && clickedMesh.value.material) {
     const frameColor = getFrameColor(configuration.value.frameMaterial)
     const materialProps = getFrameMaterialProperties(configuration.value.frameMaterial)
     console.log('🔲 Applying frame material to clicked mesh:', clickedMesh.value.name)
     console.log('🎨 Color hex:', frameColor.toString(16), 'Roughness:', materialProps.roughness)
-    
+
+    // Find the material name from options
+    const frameOption = frameOptions.value.find(f => f.value === configuration.value.frameMaterial)
+    const materialName = frameOption ? frameOption.label : configuration.value.frameMaterial
+
+    // Track this customization
+    meshCustomizations.value[clickedMesh.value.name] = {
+      colorHex: '#' + frameColor.toString(16).padStart(6, '0').toUpperCase(),
+      colorName: materialName,
+      type: 'material',
+      partType: clickedMesh.value.userData.partType || 'frame'
+    }
+    console.log('📝 Tracked customization:', clickedMesh.value.name, meshCustomizations.value[clickedMesh.value.name])
+
     // Handle material arrays
     if (Array.isArray(clickedMesh.value.material)) {
       clickedMesh.value.material.forEach((mat, index) => {
@@ -953,7 +1022,7 @@ const updateFrameMaterials = () => {
     }
     return
   }
-  
+
   console.log('⚠️ No clicked mesh available')
 }
 
@@ -1647,14 +1716,55 @@ const loadSavedConfiguration = async () => {
 
       console.log('✅ Configuration loaded:', config)
 
-      // Apply color if saved
-      if (config.colorHex) {
-        configuration.cushionColor = 'custom'
-        configuration.cushionColorHex = config.colorHex
-        configuration.isCustomColor = true
+      // Store the saved mesh customizations for later application
+      const savedMeshCustomizations = config.meshCustomizations || {}
+      console.log('📝 Mesh customizations to apply:', savedMeshCustomizations)
+
+      // Restore mesh customizations ref
+      meshCustomizations.value = savedMeshCustomizations
+
+      // Apply mesh customizations to model after it loads
+      const applyMeshCustomizations = () => {
+        if (!model) return
+
+        const meshEntries = Object.entries(savedMeshCustomizations)
+        if (meshEntries.length > 0) {
+          console.log('🎨 Applying saved mesh customizations to model...')
+
+          model.traverse((child) => {
+            if (child.isMesh && savedMeshCustomizations[child.name]) {
+              const customization = savedMeshCustomizations[child.name]
+              const colorHex = parseInt(customization.colorHex.replace('#', '0x'))
+
+              console.log(`   🔧 Applying ${customization.colorName} to ${child.name}`)
+
+              if (Array.isArray(child.material)) {
+                child.material.forEach((mat) => {
+                  mat.color.setHex(colorHex)
+                  mat.needsUpdate = true
+                })
+              } else if (child.material) {
+                child.material.color.setHex(colorHex)
+                child.material.needsUpdate = true
+              }
+            }
+          })
+
+          console.log('✅ Mesh customizations applied successfully')
+        }
+      }
+
+      // Apply colors after a delay to ensure model is loaded
+      setTimeout(applyMeshCustomizations, 500)
+      // Also try again after longer delay in case model loads slowly
+      setTimeout(applyMeshCustomizations, 1500)
+
+      // Legacy fallback: Apply single color if no mesh customizations
+      if (Object.keys(savedMeshCustomizations).length === 0 && config.colorHex) {
+        configuration.value.cushionColor = 'custom'
+        configuration.value.isCustomColor = true
         customColor.value = config.colorHex
 
-        // Apply color to model after it loads
         setTimeout(() => {
           if (model) {
             applyColorToAllCushions(config.colorHex)
@@ -1664,12 +1774,19 @@ const loadSavedConfiguration = async () => {
 
       // Apply material if saved
       if (config.materialName) {
-        configuration.frameMaterial = config.materialName
+        configuration.value.frameMaterial = config.materialName
       }
 
       // Update product name if available
       if (config.productName) {
         productName.value = config.productName
+      }
+
+      // Update price display if available
+      if (config.totalPrice) {
+        console.log('💰 Configured price from saved config:', config.totalPrice)
+        // Store this price for display
+        savedConfigPrice.value = config.totalPrice
       }
     }
   } catch (error) {
@@ -1780,7 +1897,7 @@ const capturePreviewImage = () => {
 
 // Add to cart function
 const addToCart = async () => {
-  console.log('🛒 Adding configured sofa to cart...')
+  console.log('🛒 Adding configured product to cart...')
 
   try {
     isAddingToCart.value = true
@@ -1788,14 +1905,18 @@ const addToCart = async () => {
     // Capture preview image before adding to cart
     const previewImage = capturePreviewImage()
 
-    // Build list of extra colors selected (colors that differ from default)
-    const extraColors = []
+    // Build list of all customized parts with their colors
+    const partCustomizations = Object.entries(meshCustomizations.value).map(([meshName, config]) => ({
+      part: meshName,
+      colorName: config.colorName,
+      colorHex: config.colorHex,
+      type: config.type
+    }))
 
-    // Get selected color label
-    const selectedColor = colorOptions.value.find(c => c.value === configuration.value.cushionColor)
-    if (selectedColor) {
-      extraColors.push(selectedColor.label)
-    }
+    // Build a summary of unique color names used
+    const uniqueColors = [...new Set(partCustomizations.map(p => p.colorName))]
+    console.log('📝 Part customizations:', partCustomizations)
+    console.log('🎨 Unique colors:', uniqueColors)
 
     // Build clean configuration for cart display (visible to customer)
     // Properties starting with _ are hidden in Shopify cart
@@ -1806,27 +1927,43 @@ const addToCart = async () => {
       _pillowStyle: configuration.value.pillowStyle,
       _legStyle: configuration.value.legStyle,
       _size: configuration.value.size,
-      _model: selectedModel.value
+      _model: selectedModel.value,
+      // Store all mesh customizations for restoration
+      _meshCustomizations: JSON.stringify(meshCustomizations.value)
     }
 
-    // Only add "Extra Colors" if there are colors selected
-    if (extraColors.length > 0) {
-      fullConfiguration['Extra Colors'] = extraColors.join(', ')
+    // Add visible customization info - show each part's color
+    if (partCustomizations.length > 0) {
+      // Group by part name for cleaner display
+      partCustomizations.forEach((customization, index) => {
+        // Create readable part name from mesh name
+        const partLabel = customization.part
+          .replace(/_/g, ' ')
+          .replace(/([a-z])([A-Z])/g, '$1 $2')
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ')
+        fullConfiguration[`Part ${index + 1}: ${partLabel}`] = customization.colorName
+      })
     }
 
     const shopifyContext = getShopifyContext()
 
-    // Only include price info if there are actual extra costs from configuration
-    const hasExtraCosts = totalExtraCost.value > 0
+    // Always include price from Shopify context or calculated price
+    const finalPrice = shopifyContext.price || calculatedPrice.value
 
     const cartData = {
       type: 'IANI_ADD_TO_CART',
       payload: {
-        productId: shopifyContext.productId || 'customizable-sofa',
+        productId: shopifyContext.productId || 'customizable-product',
         variantId: shopifyContext.variantId,
         configuration: fullConfiguration,
-        // Only include price if there are extra costs - otherwise Shopify base price is used
-        ...(hasExtraCosts && { price: Number(calculatedPrice.value) }),
+        // Include the price from Shopify context for proper display
+        price: Number(finalPrice),
+        // Include all color names for order display
+        colorName: uniqueColors.join(', '),
+        // Include mesh customizations for restoration
+        meshCustomizations: meshCustomizations.value,
         quantity: 1,
         timestamp: new Date().toISOString(),
         configurationId: `config_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,

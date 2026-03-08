@@ -40,6 +40,7 @@ export async function action({ request }: ActionFunctionArgs) {
       materialName,
       totalPrice,
       configuration,
+      meshCustomizations,
     } = body;
 
     if (!configurationId || !shop) {
@@ -80,13 +81,19 @@ export async function action({ request }: ActionFunctionArgs) {
       product3DId = newProduct3D.id;
     }
 
+    // Merge meshCustomizations into configurationData for complete storage
+    const fullConfigData = {
+      ...(configuration || {}),
+      meshCustomizations: meshCustomizations || {},
+    };
+
     // Save the configuration
     const savedConfig = await db.productConfiguration.create({
       data: {
         id: configurationId,
         product3DId: product3DId,
         shop: shop,
-        configurationData: configuration || {},
+        configurationData: fullConfigData,
         colorName: colorName || null,
         colorHex: colorHex || null,
         materialName: materialName || null,
