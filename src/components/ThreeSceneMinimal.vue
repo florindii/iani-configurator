@@ -1990,8 +1990,8 @@ const addToCart = async () => {
         price: Number(finalPrice),
         // Include all color names for order display
         colorName: uniqueColors.join(', '),
-        // Include mesh customizations for restoration
-        meshCustomizations: meshCustomizations.value,
+        // Include mesh customizations for restoration (deep clone to avoid Proxy)
+        meshCustomizations: JSON.parse(JSON.stringify(meshCustomizations.value)),
         quantity: 1,
         timestamp: new Date().toISOString(),
         configurationId: `config_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
