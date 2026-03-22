@@ -186,7 +186,7 @@
                       :style="{ backgroundColor: color.hex }"
                     ></div>
                     <span class="color-name">{{ color.label }}</span>
-                    <span class="color-price">+${{ color.price.toFixed(0) }}</span>
+                    <span class="color-price">+{{ currencySymbol }}{{ color.price.toFixed(0) }}</span>
                   </div>
                 </div>
               </div>
@@ -226,7 +226,7 @@
                 >
                   <span class="material-name">{{ frame.label }}</span>
                   <span class="material-description">{{ frame.description }}</span>
-                  <span class="material-price">+${{ frame.extraCost }}</span>
+                  <span class="material-price">+{{ currencySymbol }}{{ frame.extraCost }}</span>
                 </div>
               </div>
             </div>
@@ -1977,8 +1977,8 @@ const addToCart = async () => {
 
     const shopifyContext = getShopifyContext()
 
-    // Always include price from Shopify context or calculated price
-    const finalPrice = shopifyContext.price || calculatedPrice.value
+    // Use calculatedPrice which already includes base price + all extra costs from customizations
+    const finalPrice = calculatedPrice.value
 
     const cartData = {
       type: 'IANI_ADD_TO_CART',
@@ -1986,7 +1986,7 @@ const addToCart = async () => {
         productId: shopifyContext.productId || 'customizable-product',
         variantId: shopifyContext.variantId,
         configuration: fullConfiguration,
-        // Include the price from Shopify context for proper display
+        // Include calculated price (base + all customization extras)
         price: Number(finalPrice),
         // Include all color names for order display
         colorName: uniqueColors.join(', '),
