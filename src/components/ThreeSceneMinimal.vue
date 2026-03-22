@@ -96,27 +96,34 @@
           <!-- READ-ONLY: Configuration Summary for Merchants -->
           <div v-if="isReadOnlyMode" class="readonly-summary">
             <div class="summary-section">
-              <h3>🎨 Selected Options</h3>
+              <h3>🎨 Customized Parts</h3>
+              <p class="readonly-hint">Click a part below to highlight it on the model</p>
 
-              <div class="summary-item">
-                <span class="summary-label">Color:</span>
-                <span class="summary-value">
+              <!-- Show each customized mesh part -->
+              <div
+                v-for="(customization, meshName) in meshCustomizations"
+                :key="meshName"
+                class="summary-item clickable-part"
+                :class="{ 'highlighted-part': highlightedMeshName === meshName }"
+                @click="toggleMeshHighlight(meshName)"
+              >
+                <span class="summary-label">
                   <span
                     class="color-preview-dot"
-                    :style="{ backgroundColor: configuration.cushionColorHex || '#6B7280' }"
+                    :style="{ backgroundColor: customization.colorHex }"
                   ></span>
-                  {{ getSelectedColorLabel() || 'Default' }}
+                  {{ meshName.replace(/_/g, ' ') }}
+                </span>
+                <span class="summary-value">
+                  {{ customization.colorName }}
+                  <span class="color-code-small">{{ customization.colorHex }}</span>
                 </span>
               </div>
 
-              <div class="summary-item">
-                <span class="summary-label">Color Code:</span>
-                <span class="summary-value color-code">{{ configuration.cushionColorHex || '#6B7280' }}</span>
-              </div>
-
-              <div class="summary-item">
-                <span class="summary-label">Material:</span>
-                <span class="summary-value">{{ getFrameLabel() || 'Standard' }}</span>
+              <!-- Fallback if no mesh customizations -->
+              <div v-if="Object.keys(meshCustomizations).length === 0" class="summary-item">
+                <span class="summary-label">Color:</span>
+                <span class="summary-value">{{ getSelectedColorLabel() || 'Default' }}</span>
               </div>
 
               <div class="summary-item total">
@@ -128,6 +135,7 @@
             <div class="readonly-instructions">
               <p>🔄 Rotate the 3D model to inspect all angles</p>
               <p>🔍 Use mouse wheel to zoom in/out</p>
+              <p>👆 Click a part above to highlight it</p>
             </div>
           </div>
 
@@ -791,6 +799,79 @@ const exportModelStructure = () => {
 }
 
 
+
+// Apply saved mesh customizations to the loaded model
+const applySavedMeshCustomizations = () => {
+  if (!model) return
+
+  const customizations = meshCustomizations.value
+  const meshEntries = Object.entries(customizations)
+  if (meshEntries.length === 0) return
+
+  console.log(`🎨 Applying ${meshEntries.length} saved customizations to model...`)
+
+  model.traverse((child) => {
+    if (child.isMesh && customizations[child.name]) {
+      const customization = customizations[child.name]
+      const colorHex = parseInt(customization.colorHex.replace('#', '0x'))
+
+      console.log(`   🔧 Applying ${customization.colorName} (${customization.colorHex}) to ${child.name}`)
+
+      if (Array.isArray(child.material)) {
+        child.material.forEach((mat) => {
+          mat.color.setHex(colorHex)
+          mat.needsUpdate = true
+        })
+      } else if (child.material) {
+        child.material.color.setHex(colorHex)
+        child.material.needsUpdate = true
+      }
+    }
+  })
+
+  console.log('✅ All mesh customizations applied')
+}
+
+// Highlight a specific mesh by name (for readonly click-to-highlight)
+const highlightMeshByName = (meshName) => {
+  if (!model) return
+
+  // First clear all highlights
+  clearSelection()
+
+  // Find and highlight the target mesh
+  model.traverse((child) => {
+    if (child.isMesh && child.name === meshName) {
+      if (child.material) {
+        if (!child.userData.originalEmissive) {
+          child.userData.originalEmissive = child.material.emissive
+            ? child.material.emissive.clone()
+            : new THREE.Color(0x000000)
+        }
+        if (child.material.emissive) {
+          child.material.emissive.setHex(0x444444)
+        }
+        child.userData.isHighlighted = true
+        console.log('✨ Highlighted mesh:', meshName)
+      }
+    }
+  })
+}
+
+// Track which mesh is currently highlighted in readonly mode
+const highlightedMeshName = ref(null)
+
+// Toggle highlight on a mesh (for readonly sidebar clicks)
+const toggleMeshHighlight = (meshName) => {
+  if (highlightedMeshName.value === meshName) {
+    // Un-highlight
+    clearSelection()
+    highlightedMeshName.value = null
+  } else {
+    highlightMeshByName(meshName)
+    highlightedMeshName.value = meshName
+  }
+}
 
 const clearSelection = () => {
   selectedPart.value = null
@@ -1628,7 +1709,13 @@ const loadModel = async () => {
     
     isLoading.value = false
     console.log('✅ Model with clickable parts loaded successfully')
-    
+
+    // Apply saved mesh customizations if we have them (readonly mode)
+    if (Object.keys(meshCustomizations.value).length > 0) {
+      console.log('🎨 Applying saved mesh customizations after model load...')
+      applySavedMeshCustomizations()
+    }
+
   } catch (error) {
     console.error('❌ Failed to load model:', error)
     console.log('🔄 Creating fallback...')
@@ -1748,44 +1835,8 @@ const loadSavedConfiguration = async () => {
       const savedMeshCustomizations = config.meshCustomizations || {}
       console.log('📝 Mesh customizations to apply:', savedMeshCustomizations)
 
-      // Restore mesh customizations ref
+      // Restore mesh customizations ref (will be applied in loadModel after model loads)
       meshCustomizations.value = savedMeshCustomizations
-
-      // Apply mesh customizations to model after it loads
-      const applyMeshCustomizations = () => {
-        if (!model) return
-
-        const meshEntries = Object.entries(savedMeshCustomizations)
-        if (meshEntries.length > 0) {
-          console.log('🎨 Applying saved mesh customizations to model...')
-
-          model.traverse((child) => {
-            if (child.isMesh && savedMeshCustomizations[child.name]) {
-              const customization = savedMeshCustomizations[child.name]
-              const colorHex = parseInt(customization.colorHex.replace('#', '0x'))
-
-              console.log(`   🔧 Applying ${customization.colorName} to ${child.name}`)
-
-              if (Array.isArray(child.material)) {
-                child.material.forEach((mat) => {
-                  mat.color.setHex(colorHex)
-                  mat.needsUpdate = true
-                })
-              } else if (child.material) {
-                child.material.color.setHex(colorHex)
-                child.material.needsUpdate = true
-              }
-            }
-          })
-
-          console.log('✅ Mesh customizations applied successfully')
-        }
-      }
-
-      // Apply colors after a delay to ensure model is loaded
-      setTimeout(applyMeshCustomizations, 500)
-      // Also try again after longer delay in case model loads slowly
-      setTimeout(applyMeshCustomizations, 1500)
 
       // Legacy fallback: Apply single color if no mesh customizations
       if (Object.keys(savedMeshCustomizations).length === 0 && config.colorHex) {
@@ -2288,6 +2339,39 @@ onUnmounted(() => {
   border-radius: 50%;
   border: 2px solid #e5e7eb;
   flex-shrink: 0;
+}
+
+.readonly-hint {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+  font-style: italic;
+}
+
+.clickable-part {
+  cursor: pointer;
+  padding: 8px 10px !important;
+  border-radius: 6px;
+  transition: background-color 0.2s, box-shadow 0.2s;
+  border: 1px solid transparent;
+}
+
+.clickable-part:hover {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+}
+
+.clickable-part.highlighted-part {
+  background: #dbeafe;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.color-code-small {
+  display: block;
+  font-size: 11px;
+  color: #9ca3af;
+  font-family: monospace;
 }
 
 .readonly-instructions {
