@@ -66,6 +66,39 @@
     <!-- Right Side: Configuration Panel -->
     <div class="config-section" :class="{ 'readonly-mode': isReadOnlyMode }">
       <div class="config-content">
+
+        <!-- Skeleton: shown while 3D model is loading -->
+        <template v-if="isLoading">
+          <div class="config-header">
+            <div class="skel skel-title"></div>
+            <div class="skel skel-subtitle"></div>
+          </div>
+          <div class="price-section">
+            <div class="skel skel-price-sm"></div>
+            <div class="skel skel-price-lg"></div>
+          </div>
+          <div class="skel-section-label"></div>
+          <div v-if="isReadOnlyMode" class="skel-rows">
+            <div class="skel-row" v-for="n in 4" :key="n">
+              <div class="skel skel-dot"></div>
+              <div class="skel skel-row-label"></div>
+              <div class="skel skel-row-value"></div>
+            </div>
+            <div class="skel-divider"></div>
+            <div class="skel-row">
+              <div class="skel skel-row-label"></div>
+              <div class="skel skel-row-value-wide"></div>
+            </div>
+          </div>
+          <div v-else class="skel-rows">
+            <div class="skel skel-row-label" style="width:60%;margin-bottom:12px"></div>
+            <div class="skel skel-row-label" style="width:80%"></div>
+          </div>
+        </template>
+
+        <!-- Real content: shown after model loaded -->
+        <template v-else>
+
         <!-- Header -->
         <div class="config-header">
           <h2>{{ productName }}</h2>
@@ -267,6 +300,8 @@
             <span v-else>Add to Cart - {{ currencySymbol }}{{ formatPrice(calculatedPrice) }}</span>
           </button>
         </div>
+
+        </template><!-- end v-else (real content) -->
       </div>
     </div>
 
@@ -2486,6 +2521,35 @@ onUnmounted(() => {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+/* Skeleton loader */
+@keyframes skel-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.skel {
+  background: #e5e7eb;
+  border-radius: 6px;
+  animation: skel-pulse 1.4s ease-in-out infinite;
+}
+.skel-title       { height: 24px; width: 55%; margin-bottom: 10px; }
+.skel-subtitle    { height: 14px; width: 40%; }
+.skel-price-sm    { height: 14px; width: 30%; margin-bottom: 8px; }
+.skel-price-lg    { height: 36px; width: 50%; }
+.skel-section-label {
+  height: 14px; width: 35%;
+  background: #e5e7eb;
+  border-radius: 6px;
+  margin: 24px 0 16px;
+  animation: skel-pulse 1.4s ease-in-out infinite;
+}
+.skel-rows        { display: flex; flex-direction: column; gap: 4px; }
+.skel-row         { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
+.skel-dot         { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+.skel-row-label   { height: 13px; width: 30%; flex-shrink: 0; }
+.skel-row-value   { height: 13px; width: 25%; margin-left: auto; }
+.skel-row-value-wide { height: 13px; width: 35%; margin-left: auto; }
+.skel-divider     { height: 1px; background: #e5e7eb; margin: 8px 0; }
 
 /* Configuration Panel */
 .config-section {
