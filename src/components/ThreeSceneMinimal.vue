@@ -710,27 +710,23 @@ const onMouseClick = (event) => {
 
 
 
-const highlightClickedMesh = (mesh) => {
-  console.log("🚀 ~ highlightClickedMesh ~ mesh:", mesh)
-  // Remove previous highlights from ALL meshes
+const removeEdgeHelpers = () => {
   sofaParts.all.forEach(part => {
-    if (part.userData.isHighlighted) {
-      if (part.userData.originalEmissive) {
-        part.material.emissive.copy(part.userData.originalEmissive)
-      }
-      part.userData.isHighlighted = false
-    }
+    const toRemove = part.children.filter(c => c.userData.isEdgeHelper)
+    toRemove.forEach(c => part.remove(c))
   })
-  
-  // Highlight the newly clicked mesh
-  if (mesh.material) {
-    if (!mesh.userData.originalEmissive) {
-      mesh.userData.originalEmissive = mesh.material.emissive.clone()
-    }
-    mesh.material.emissive.setHex(0x666666)
-    mesh.userData.isHighlighted = true
-    console.log('✨ Highlighted mesh:', mesh.name)
-  }
+}
+
+const addEdgeBorder = (mesh) => {
+  removeEdgeHelpers()
+  const edges = new THREE.EdgesGeometry(mesh.geometry, 15)
+  const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x999999 }))
+  line.userData.isEdgeHelper = true
+  mesh.add(line)
+}
+
+const highlightClickedMesh = (mesh) => {
+  addEdgeBorder(mesh)
 }
 
 // Model changing functionality
@@ -836,24 +832,9 @@ const applySavedMeshCustomizations = () => {
 const highlightMeshByName = (meshName) => {
   if (!model) return
 
-  // First clear all highlights
-  clearSelection()
-
-  // Find and highlight the target mesh
   model.traverse((child) => {
     if (child.isMesh && child.name === meshName) {
-      if (child.material) {
-        if (!child.userData.originalEmissive) {
-          child.userData.originalEmissive = child.material.emissive
-            ? child.material.emissive.clone()
-            : new THREE.Color(0x000000)
-        }
-        if (child.material.emissive) {
-          child.material.emissive.setHex(0x444444)
-        }
-        child.userData.isHighlighted = true
-        console.log('✨ Highlighted mesh:', meshName)
-      }
+      addEdgeBorder(child)
     }
   })
 }
@@ -876,17 +857,7 @@ const toggleMeshHighlight = (meshName) => {
 const clearSelection = () => {
   selectedPart.value = null
   clickedMesh.value = null
-  console.log('🗑️ Cleared mesh selection')
-
-  // Remove highlights from all meshes
-  sofaParts.all.forEach(part => {
-    if (part.userData.isHighlighted) {
-      if (part.userData.originalEmissive) {
-        part.material.emissive.copy(part.userData.originalEmissive)
-      }
-      part.userData.isHighlighted = false
-    }
-  })
+  removeEdgeHelpers()
 }
 
 // ====== VIRTUAL TRY-ON FUNCTIONS ======
