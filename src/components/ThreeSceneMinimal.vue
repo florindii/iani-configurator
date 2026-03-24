@@ -140,13 +140,13 @@
                 :class="{ 'highlighted-part': highlightedMeshName === meshName }"
                 @click="toggleMeshHighlight(meshName)"
               >
-                <span class="summary-label">
-                  <span
+                <div class="summary-label">
+                  <div
                     class="color-preview-dot"
                     :style="{ backgroundColor: customization.colorHex }"
-                  ></span>
+                  ></div>
                   {{ meshName.replace(/_/g, ' ') }}
-                </span>
+                </div>
                 <span class="summary-value">
                   {{ customization.colorName }}
                   <span class="color-code-small">{{ customization.colorHex }}</span>

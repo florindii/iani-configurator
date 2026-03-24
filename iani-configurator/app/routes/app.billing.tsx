@@ -12,7 +12,6 @@ import {
   InlineStack,
   Badge,
   Icon,
-  Box,
   Divider,
   Banner,
 } from "@shopify/polaris";
@@ -233,21 +232,24 @@ export default function BillingPage() {
         </Layout.Section>
 
         <Layout.Section>
-          <InlineStack gap="400" align="center" wrap={false}>
+          <div style={{ display: "flex", gap: "16px", alignItems: "stretch" }}>
             {(Object.keys(plans) as PlanType[]).map((planKey) => {
               const plan = plans[planKey];
               const isCurrentPlan = subscription.plan === planKey;
               const isPopular = planKey === "pro";
 
               return (
-                <Box
+                <div
                   key={planKey}
-                  minWidth="250px"
-                  padding="400"
-                  borderWidth="025"
-                  borderColor={isPopular ? "border-success" : "border"}
-                  borderRadius="200"
-                  background={isCurrentPlan ? "bg-surface-secondary" : "bg-surface"}
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    padding: "16px",
+                    border: `1px solid ${isPopular ? "var(--p-color-border-success)" : "var(--p-color-border)"}`,
+                    borderRadius: "8px",
+                    background: isCurrentPlan ? "var(--p-color-bg-surface-secondary)" : "var(--p-color-bg-surface)",
+                  }}
                 >
                   <BlockStack gap="400">
                     <InlineStack align="space-between">
@@ -290,23 +292,25 @@ export default function BillingPage() {
                         );
                       })}
                     </BlockStack>
-
-                    <Box paddingBlockStart="400">
-                      <Button
-                        variant={isCurrentPlan ? "secondary" : isPopular ? "primary" : "secondary"}
-                        fullWidth
-                        disabled={isCurrentPlan || isLoading}
-                        onClick={() => handleSelectPlan(planKey)}
-                        loading={isLoading}
-                      >
-                        {isCurrentPlan ? "Current Plan" : planKey === "free" ? "Downgrade" : "Select Plan"}
-                      </Button>
-                    </Box>
                   </BlockStack>
-                </Box>
+
+                  <div style={{ flex: 1 }} />
+
+                  <div style={{ paddingTop: "16px" }}>
+                    <Button
+                      variant={isCurrentPlan ? "secondary" : isPopular ? "primary" : "secondary"}
+                      fullWidth
+                      disabled={isCurrentPlan || isLoading}
+                      onClick={() => handleSelectPlan(planKey)}
+                      loading={isLoading}
+                    >
+                      {isCurrentPlan ? "Current Plan" : planKey === "free" ? "Downgrade" : "Select Plan"}
+                    </Button>
+                  </div>
+                </div>
               );
             })}
-          </InlineStack>
+          </div>
         </Layout.Section>
 
         <Layout.Section>
