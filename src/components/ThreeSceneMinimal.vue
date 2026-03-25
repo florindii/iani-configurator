@@ -277,8 +277,8 @@
 
         </div>
 
-        <!-- Add to Cart Button (hidden in readonly mode) -->
-        <div v-if="!isReadOnlyMode" class="cart-section">
+        <!-- Add to Cart Button (hidden in readonly/preview mode) -->
+        <div v-if="!isReadOnlyMode && !isPreviewMode" class="cart-section">
           <!-- Try-On Button (only shown when enabled) -->
           <button
             v-if="tryOnEnabled"
@@ -1811,7 +1811,9 @@ const getShopifyContext = () => {
     modelFile: urlParams.get('modelFile'),
     // Read-only mode for merchant viewing
     readonly: urlParams.get('readonly') === 'true',
-    configId: urlParams.get('configId')
+    configId: urlParams.get('configId'),
+    // Preview mode: admin previewing a product (no cart)
+    preview: urlParams.get('preview') === 'true'
   }
 }
 
@@ -1819,6 +1821,12 @@ const getShopifyContext = () => {
 const isReadOnlyMode = computed(() => {
   const context = getShopifyContext()
   return context.readonly === true
+})
+
+// Check if in preview mode (admin previewing a product — no cart)
+const isPreviewMode = computed(() => {
+  const context = getShopifyContext()
+  return context.preview === true
 })
 
 // Load saved configuration from API (for readonly mode)
