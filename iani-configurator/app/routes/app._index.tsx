@@ -358,7 +358,7 @@ export default function Index() {
 
         {showSpaceArUpsell && (
           <Banner
-            title="Unlock Space AR, Analytics and Priority Support"
+            title="Unlock View in Space AR and Priority Support"
             tone="info"
             action={{
               content: "Upgrade to Business — $99/mo",
@@ -366,7 +366,7 @@ export default function Index() {
             }}
           >
             <p>
-              Business adds View in Space AR (furniture/decor room placement), a full analytics dashboard with conversion tracking, and priority support.
+              Business adds View in Space AR (furniture/decor room placement via WebXR) and priority support.
             </p>
           </Banner>
         )}
@@ -453,8 +453,8 @@ export default function Index() {
                     <Button onClick={() => navigate("/app/products/new")}>
                       Add another product
                     </Button>
-                    <Button onClick={() => navigate("/app/analytics")}>
-                      View analytics
+                    <Button onClick={() => navigate("/app/products")}>
+                      View all products
                     </Button>
                   </InlineStack>
                 </BlockStack>
@@ -508,11 +508,6 @@ export default function Index() {
                   <Button onClick={() => navigate("/app/products")}>
                     View All Products
                   </Button>
-                  {subscription.features.analytics && (
-                    <Button onClick={() => navigate("/app/analytics")}>
-                      View Analytics
-                    </Button>
-                  )}
                   <Button onClick={() => navigate("/app/billing")}>
                     {subscription.plan === "free" ? "Upgrade Plan" : "Manage Subscription"}
                   </Button>

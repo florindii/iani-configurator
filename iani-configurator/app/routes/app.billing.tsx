@@ -138,7 +138,6 @@ export default function BillingPage() {
     { key: "tryOnEnabled", label: "Virtual Try-On (Face AR)" },
     { key: "spaceArEnabled", label: "View in Space AR" },
     { key: "watermark", label: "No Watermark", inverted: true },
-    { key: "analytics", label: "Analytics Dashboard" },
     { key: "prioritySupport", label: "Priority Support" },
   ];
 

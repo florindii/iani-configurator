@@ -46,7 +46,7 @@ export const PLANS = {
       tryOnEnabled: true,
       spaceArEnabled: true,
       watermark: false,
-      analytics: true,
+      analytics: false,
       prioritySupport: true,
     },
   },
