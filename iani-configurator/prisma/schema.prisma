@@ -43,6 +43,10 @@ model Shop {
   productLimit          Int       @default(1) // Number of products allowed
   installedAt           DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+
+  // Onboarding state
+  hasAddedAppBlock      Boolean   @default(false)
+  hasPreviewedStore     Boolean   @default(false)
 }
 
 // NEW MODELS FOR 3D CONFIGURATOR

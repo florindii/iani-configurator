@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { useLoaderData, useNavigate } from "@remix-run/react";
 import {
   Page,
@@ -18,16 +18,27 @@ import {
 import { ProductIcon, ViewIcon, SettingsIcon } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
 import { db } from "../db.server";
-import { hasFeatureAccess } from "../billing.server";
+import { hasFeatureAccess, getShopSubscription, PLANS, type PlanType } from "../billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
 
-  // Gate behind analytics feature (Business plan only)
   const hasAccess = await hasFeatureAccess(shop, "analytics");
+
+  // Return early with lock state — no redirect, show upsell instead
   if (!hasAccess) {
-    return redirect("/app/billing");
+    const subscription = await getShopSubscription(shop);
+    const planDetails = PLANS[subscription.plan as PlanType] || PLANS.free;
+    return json({
+      hasAccess: false,
+      currentPlanName: planDetails.name,
+      stats: null,
+      topColors: [],
+      topMaterials: [],
+      productStats: [],
+      recentOrders: [],
+    });
   }
 
   // Overall stats
@@ -103,6 +114,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
 
   return json({
+    hasAccess: true,
+    currentPlanName: null,
     stats: {
       totalConfigurations,
       orderedConfigurations,
@@ -135,9 +148,77 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function AnalyticsPage() {
-  const { stats, topColors, topMaterials, productStats, recentOrders } =
+  const { hasAccess, currentPlanName, stats, topColors, topMaterials, productStats, recentOrders } =
     useLoaderData<typeof loader>();
   const navigate = useNavigate();
+
+  // Lock screen for Free / Starter plans
+  if (!hasAccess) {
+    return (
+      <Page title="Analytics" subtitle="Overview of customer configurations and orders">
+        <Card>
+          <Box padding="800">
+            <BlockStack gap="400" inlineAlign="center">
+              <Text as="h2" variant="headingLg">
+                Analytics is available on the Business plan
+              </Text>
+              <Text as="p" variant="bodyMd" tone="subdued">
+                You're currently on the <strong>{currentPlanName}</strong> plan. Upgrade to Business to unlock real-time
+                insights: conversion rates, top colors, revenue per product, and more.
+              </Text>
+              <InlineStack gap="300">
+                <Button variant="primary" onClick={() => navigate("/app/billing")}>
+                  Upgrade to Business — $99/mo
+                </Button>
+                <Button onClick={() => navigate("/app")}>
+                  Back to dashboard
+                </Button>
+              </InlineStack>
+
+              {/* Blurred preview of what they'd see */}
+              <div style={{ width: "100%", marginTop: "16px", position: "relative" }}>
+                <div style={{ filter: "blur(6px)", pointerEvents: "none", userSelect: "none", opacity: 0.5 }}>
+                  <div style={{ display: "flex", gap: "16px", marginBottom: "16px" }}>
+                    {["Total Configurations", "Orders", "Conversion Rate", "Revenue"].map((label) => (
+                      <div key={label} style={{ flex: 1, background: "var(--p-color-bg-surface-secondary)", borderRadius: "8px", padding: "16px" }}>
+                        <Text as="p" variant="headingSm" tone="subdued">{label}</Text>
+                        <Text as="p" variant="headingXl">—</Text>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: "16px" }}>
+                    {["Top Colors", "Top Materials"].map((label) => (
+                      <div key={label} style={{ flex: 1, background: "var(--p-color-bg-surface-secondary)", borderRadius: "8px", padding: "16px", height: "120px" }}>
+                        <Text as="p" variant="headingSm" tone="subdued">{label}</Text>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}>
+                  <div style={{
+                    background: "var(--p-color-bg-surface)",
+                    border: "1px solid var(--p-color-border)",
+                    borderRadius: "8px",
+                    padding: "12px 20px",
+                  }}>
+                    <Text as="p" variant="bodyMd" fontWeight="semibold">
+                      Upgrade to unlock analytics
+                    </Text>
+                  </div>
+                </div>
+              </div>
+            </BlockStack>
+          </Box>
+        </Card>
+      </Page>
+    );
+  }
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);

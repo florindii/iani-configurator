@@ -8,9 +8,9 @@
 
 **Project**: Iani 3D Configurator
 **Type**: Shopify App for 3D product customization (Glasses + Furniture)
-**Current State**: 92% complete
-**Stack**: Vue.js 3 + Three.js + TypeScript + Vite + Shopify Remix
+**Stack**: Vue.js 3 + Three.js + TypeScript + Vite | Shopify Remix + Polaris + Prisma
 **Deployment**: Vercel (Frontend) + Shopify (Theme Extension + Admin App)
+**Last updated**: March 2025
 
 ---
 
@@ -21,185 +21,261 @@
 npm install
 npm run dev          # localhost:5173
 npm run build        # Production build
+npx vercel --prod --yes  # Deploy to Vercel
 
-# Shopify Admin App (from iani-configurator/)
+# Shopify Admin App
 cd iani-configurator
 npm install
 npm run dev          # Starts with Cloudflare tunnel
-shopify app deploy   # Deploy to Shopify
+shopify app deploy   # Deploy app + extension
+
+# Database
+cd iani-configurator
+npx prisma studio          # View/edit data
+npx prisma migrate dev     # Run new migrations
 ```
 
 ---
 
-## Architecture
+## Full File Structure
 
 ```
-iani-configurator/
-├── src/                              # Vue.js Frontend
+iani-configurator/                      # Root = Vue frontend
+├── src/
+│   ├── App.vue                         # Root component, routing logic
+│   ├── main.ts                         # Entry point
+│   ├── utils/
+│   │   └── logger.ts                   # Logging utility
 │   ├── components/
-│   │   ├── ThreeSceneMinimal.vue     # Main 3D configurator
-│   │   └── VirtualTryOn.vue          # AR face try-on
-│   ├── services/
-│   │   ├── shopifyService.ts         # Cart integration
-│   │   └── faceTrackingService.ts    # MediaPipe face detection
-│   └── App.vue
+│   │   ├── ThreeSceneMinimal.vue       # Main 3D configurator (color, material, pricing, WebXR)
+│   │   ├── ThreeSceneModal.vue         # Modal-mode wrapper for ThreeSceneMinimal
+│   │   ├── VirtualTryOn.vue            # Face AR overlay (MediaPipe + OrthographicCamera)
+│   │   ├── AdminTryOnPreview.vue       # Preview try-on result in admin
+│   │   ├── AdminTryOnTest.vue          # Test try-on with live camera in admin
+│   │   └── AdminCalibrateTryOn.vue     # Calibrate offsetY + scale for try-on per product
+│   └── services/
+│       ├── shopifyService.ts           # PostMessage cart integration
+│       └── faceTrackingService.ts      # MediaPipe Face Mesh wrapper
 │
-├── iani-configurator/                 # Shopify Remix Admin App
-│   ├── app/routes/
-│   │   ├── app._index.tsx            # Dashboard
-│   │   ├── app.products._index.tsx   # Product list
-│   │   ├── app.products.new.tsx      # Add new 3D product
-│   │   ├── app.products.$id.tsx      # Edit product (colors, materials, try-on)
-│   │   ├── app.configurator.tsx      # Configurator preview
-│   │   ├── api.gdpr.tsx              # GDPR compliance ✅
-│   │   ├── api.product-config.$productId.tsx
-│   │   └── privacy.tsx               # Privacy policy page
-│   │
-│   ├── prisma/schema.prisma          # PostgreSQL database schema
-│   │
-│   └── extensions/theme-extension/   # Shopify Theme App Extension ✅
+├── public/models/                      # 3D GLB models (served statically)
+├── dist/                               # Production build (deployed to Vercel)
+├── vercel.json                         # Vercel deployment config
+├── vite.config.ts
+└── package.json                        # Vue 3 + Three.js 0.176 + Vite 6
+
+iani-configurator/                      # Shopify Admin App (Remix)
+├── app/
+│   ├── shopify.server.ts               # Shopify app auth config
+│   ├── db.server.ts                    # Prisma client singleton
+│   ├── billing.server.ts               # PLANS config + billing helpers
+│   └── routes/
+│       ├── app.tsx                     # Layout: NavMenu (Home, 3D Products, Preview, Analytics, Subscription)
+│       ├── app._index.tsx              # Dashboard: stats, recent products, quick actions
+│       ├── app.products._index.tsx     # Product list with plan limit indicator
+│       ├── app.products.new.tsx        # Add new 3D product (pick from Shopify catalog)
+│       ├── app.products.$id.tsx        # Edit product: colors, materials, try-on toggle, calibration
+│       ├── app.configurator.tsx        # Iframe preview of the 3D configurator
+│       ├── app.billing.tsx             # Subscription plans UI (Free/Starter/Pro/Business)
+│       ├── app.analytics.tsx           # Analytics dashboard (Business plan only)
+│       ├── app.additional.tsx          # Additional settings page
+│       ├── auth.$.tsx                  # OAuth callback handler
+│       ├── privacy.tsx                 # GDPR privacy policy page
+│       │
+│       ├── api.gdpr.tsx                # GDPR webhooks (data_request, redact, shop redact)
+│       ├── api.product-config.$productId.tsx     # Public: get product config for iframe
+│       ├── api.products.$productId.configuration.tsx  # Get product + color/material options
+│       ├── api.save-configuration.tsx            # Save customer configuration to DB
+│       ├── api.get-configuration.$id.tsx         # Get saved configuration by ID
+│       ├── api.configurations.$configId.tsx      # Get configuration (alternate endpoint)
+│       ├── api.upload-preview.tsx                # Upload base64 preview image to DB
+│       ├── api.preview-image.$id.tsx             # Serve preview image by ID
+│       ├── api.cart.add.tsx                      # Shopify cart add (server-side)
+│       ├── api.draft-order.tsx                   # Create Shopify draft order
+│       ├── api.test-db.tsx                       # DB health check endpoint
+│       │
+│       ├── webhooks.app.uninstalled.tsx           # App uninstall webhook
+│       ├── webhooks.app.scopes_update.tsx         # Scopes update webhook
+│       └── webhooks.app.subscriptions-update.tsx  # Billing subscription update webhook
+│
+├── prisma/
+│   └── schema.prisma                   # PostgreSQL schema (see below)
+│
+├── extensions/
+│   └── theme-extension/
+│       ├── shopify.extension.toml
+│       ├── locales/en.default.json
 │       ├── blocks/
-│       │   ├── 3d-configurator.liquid  # Main App Block
-│       │   └── cart-preview.liquid     # Cart preview block
-│       ├── assets/
-│       │   ├── configurator-loader.js  # Iframe loader + messaging
-│       │   └── configurator.css
-│       └── shopify.extension.toml
+│       │   ├── 3d-configurator.liquid  # Main App Block (modal or inline mode)
+│       │   └── cart-preview.liquid     # Cart block: shows customized preview image
+│       └── assets/
+│           ├── configurator-loader.js  # Iframe loader + PostMessage handler
+│           └── configurator.css
 │
-├── public/models/                    # 3D GLB models
-└── dist/                             # Production build
+└── package.json                        # Remix 2.16 + Polaris 12 + Prisma 6
 ```
 
 ---
 
-## Development Progress: 92%
+## Database Schema (PostgreSQL via Neon)
 
-### ✅ FULLY COMPLETED
-
-| Component | Status | Location |
-|-----------|--------|----------|
-| **3D CONFIGURATOR** | | |
-| 3D Model Rendering (Three.js) | ✅ | `ThreeSceneMinimal.vue` |
-| 360° Rotation (OrbitControls) | ✅ | `ThreeSceneMinimal.vue` |
-| Color Customization (6 presets + custom) | ✅ | `ThreeSceneMinimal.vue` |
-| Material Selection with pricing | ✅ | `ThreeSceneMinimal.vue` |
-| Dynamic Pricing (real-time) | ✅ | `ThreeSceneMinimal.vue` |
-| **AR - VIRTUAL TRY-ON (Face)** | | |
-| MediaPipe Face Tracking | ✅ | `faceTrackingService.ts` |
-| Glasses Overlay on Face | ✅ | `VirtualTryOn.vue` |
-| Head Rotation Following | ✅ | `VirtualTryOn.vue` |
-| Color Change in AR Mode | ✅ | `VirtualTryOn.vue` |
-| Photo Capture & Download | ✅ | `VirtualTryOn.vue` |
-| **AR - VIEW IN ROOM (Space)** | | |
-| Place in Environment (WebXR) | ✅ | `ThreeSceneMinimal.vue` |
-| Furniture Support | ✅ | Sofas, chairs, tables |
-| **SHOPIFY THEME EXTENSION** | | |
-| App Block (3d-configurator.liquid) | ✅ | `extensions/theme-extension/blocks/` |
-| Modal & Inline Display Modes | ✅ | `3d-configurator.liquid` |
-| Iframe Loader with PostMessage | ✅ | `configurator-loader.js` |
-| Cart Preview Block | ✅ | `cart-preview.liquid` |
-| Mobile Responsive | ✅ | CSS in liquid |
-| **SHOPIFY ADMIN APP** | | |
-| OAuth Authentication | ✅ | Remix + Shopify CLI |
-| Product List Page | ✅ | `app.products._index.tsx` |
-| Add New 3D Product | ✅ | `app.products.new.tsx` |
-| Edit Product (colors, materials) | ✅ | `app.products.$id.tsx` |
-| Try-On Enable/Disable per product | ✅ | `app.products.$id.tsx` |
-| Configurator Preview | ✅ | `app.configurator.tsx` |
-| **DATABASE (PostgreSQL)** | | |
-| Session Management | ✅ | `prisma/schema.prisma` |
-| Product3D Model | ✅ | Links to Shopify product |
-| ColorOption Model | ✅ | Hex codes, pricing, sort order |
-| MaterialOption Model | ✅ | Extra cost, descriptions |
-| ProductConfiguration Model | ✅ | Customer configs, preview images |
-| **GDPR COMPLIANCE** | | |
-| customers/data_request webhook | ✅ | `api.gdpr.tsx` |
-| customers/redact webhook | ✅ | `api.gdpr.tsx` |
-| shop/redact webhook | ✅ | `api.gdpr.tsx` |
-| Privacy Policy Page | ✅ | `privacy.tsx` |
-| **E-COMMERCE INTEGRATION** | | |
-| Add to Cart via PostMessage | ✅ | `configurator-loader.js` |
-| Configuration in Cart Properties | ✅ | Saves color, material |
-| Preview Image in localStorage | ✅ | For cart display |
-| **DEPLOYMENT** | | |
-| Vercel Auto-Deploy | ✅ | `vercel.json` |
-| Shopify App Deploy | ✅ | `shopify.app.toml` |
-
-### 🔄 REMAINING (8%)
-
-| Task | Priority | Effort | Notes |
-|------|----------|--------|-------|
-| Remove debug green dots | LOW | 5 min | Set `DEBUG_SHOW_EYE_MARKERS = false` |
-| Fix temple length in try-on | LOW | 1 hour | Camera near plane issue |
-| App Store Submission | MEDIUM | 2-3 days | Screenshots, description, review |
-| Beta Testing with merchants | HIGH | 1 week | Real-world feedback |
-
----
-
-## Key Technical Details
-
-### Database Schema (PostgreSQL via Neon)
 ```prisma
-Product3D {
-  shopifyProductId    # Links to Shopify
-  shop                # Multi-tenant
-  baseModelUrl        # Custom GLB URL
-  useShopifyModel     # Or use Shopify media
-  tryOnEnabled        # Enable face AR
-  tryOnType           # "glasses", "hat", etc.
-  colorOptions[]      # Hex, price, sortOrder
-  materialOptions[]   # Name, extraCost
-}
+Session          # Shopify OAuth sessions
+
+Shop             # Per-shop billing state
+  shopDomain     # "mystore.myshopify.com"
+  plan           # "free" | "starter" | "pro" | "business"
+  subscriptionId # Shopify subscription ID
+  subscriptionStatus  # "none" | "active" | "cancelled" | "frozen"
+  trialEndsAt    # Trial expiry
+  productLimit   # 1 / 3 / -1 (unlimited)
+
+Product3D        # A Shopify product with 3D config
+  shopifyProductId
+  shop
+  name
+  baseModelUrl   # Custom GLB URL (optional)
+  useShopifyModel  # Use Shopify product media instead
+  isActive
+  tryOnEnabled   # Enable face AR for this product
+  tryOnType      # "glasses" | "hat" | "earrings" | "necklace"
+  tryOnOffsetY   # Vertical offset (-50 to 50)
+  tryOnScale     # Scale multiplier (0.5 to 2.0)
+  colorOptions[]
+  materialOptions[]
+  configurations[]
+
+ColorOption      # A color choice for a product
+  name, hexCode, price, sortOrder, isDefault
+
+MaterialOption   # A material choice for a product
+  name, description, extraCost, sortOrder, isDefault
+
+ProductConfiguration   # A customer's saved config
+  product3DId, shop
+  customerEmail, shopifyCustomerId
+  shopifyOrderId, shopifyOrderName
+  configurationData  # JSON blob
+  previewImageUrl    # base64 or URL
+  colorName, colorHex, materialName
+  totalPrice
+  status         # "draft" | "saved" | "ordered"
+
+ConfigurationPreview   # Base64 preview images
+  id (= configurationId), shop, imageData
 ```
 
-### Theme Extension Communication
+---
+
+## Billing Plans
+
+| Plan     | Price   | Products  | Face AR | Space AR | Watermark | Analytics | Priority Support |
+|----------|---------|-----------|---------|----------|-----------|-----------|-----------------|
+| Free     | $0      | 1         | No      | No       | Yes       | No        | No              |
+| Starter  | $19/mo  | 3         | No      | No       | Yes       | No        | No              |
+| Pro      | $49/mo  | Unlimited | Yes     | No       | No        | No        | No              |
+| Business | $99/mo  | Unlimited | Yes     | Yes      | No        | Yes       | Yes             |
+
+All paid plans include a 14-day free trial. Billing uses Shopify's native Billing API (`appSubscriptionCreate`). Custom apps fall back to a dev mode manual plan switch.
+
+Feature access is gated server-side via `hasFeatureAccess(shop, feature)` in `billing.server.ts`. The analytics route redirects to `/app/billing` if the shop is not on Business plan.
+
+---
+
+## Key Technical Patterns
+
+### PostMessage Communication (iframe to Shopify storefront)
+
 ```javascript
-// Configurator → Shopify (add to cart)
+// Add to cart
 window.parent.postMessage({
   type: 'IANI_ADD_TO_CART',
   payload: { variantId, configuration, previewImage }
 }, '*')
 
-// Try-On state (hide/show Shopify close button)
+// Try-On lifecycle (hide/show Shopify close button)
 window.parent.postMessage({ type: 'IANI_TRYON_OPENED' }, '*')
 window.parent.postMessage({ type: 'IANI_TRYON_CLOSED' }, '*')
 ```
 
 ### AR Implementation
-- **Face AR**: MediaPipe Face Mesh + OrthographicCamera
-- **Space AR**: WebXR Device API for room placement
+- **Face AR**: MediaPipe Face Mesh (`@mediapipe/face_mesh`) + Three.js `OrthographicCamera` (no distortion)
+- **Space AR**: WebXR Device API (`renderer.xr`) for room placement
+
+### Feature Gating (server-side)
+```typescript
+// billing.server.ts
+const hasAccess = await hasFeatureAccess(shop, "analytics");
+// feature keys: "tryOnEnabled" | "spaceArEnabled" | "watermark" | "analytics" | "prioritySupport"
+if (!hasAccess) return redirect("/app/billing");
+```
 
 ---
 
-## File Quick Reference
+## Completed Features
 
-| Purpose | Location |
-|---------|----------|
-| 3D Configurator | `src/components/ThreeSceneMinimal.vue` |
-| Virtual Try-On | `src/components/VirtualTryOn.vue` |
-| Face Tracking | `src/services/faceTrackingService.ts` |
-| Theme App Block | `iani-configurator/extensions/theme-extension/blocks/3d-configurator.liquid` |
-| Iframe Loader | `iani-configurator/extensions/theme-extension/assets/configurator-loader.js` |
-| Admin Product Edit | `iani-configurator/app/routes/app.products.$id.tsx` |
-| GDPR Webhooks | `iani-configurator/app/routes/api.gdpr.tsx` |
-| Database Schema | `iani-configurator/prisma/schema.prisma` |
+### Frontend (Vue)
+- 3D model rendering with OrbitControls (360 rotate, zoom)
+- Color customization (preset swatches + custom hex)
+- Material selection with extra cost pricing
+- Real-time dynamic pricing display
+- Virtual Try-On: MediaPipe face mesh, glasses overlay, head rotation, color sync
+- Photo capture and download in try-on mode
+- Space AR via WebXR (furniture/decor placement)
+- Admin Try-On calibration UI (offsetY, scale sliders with live preview)
+- PostMessage cart integration
+
+### Shopify Admin App
+- OAuth install flow
+- Dashboard with product stats and plan usage bar
+- Product list with plan limit progress indicator
+- Add/edit products: colors, materials, pricing, try-on toggle, offsetY/scale calibration
+- Configurator live preview iframe
+- Full billing page: 4 plans, equal-height comparison cards, trial status, dev mode fallback
+- Analytics dashboard (Business plan only): total configs, orders, conversion rate, revenue, top colors, top materials, per-product breakdown table, recent orders
+- GDPR webhook handlers (data_request, customer redact, shop redact)
+- App uninstall + subscription update webhooks
+
+### Theme Extension
+- App Block in modal or inline display mode
+- Auto-load or click-to-load option
+- Cart preview block (shows customization image in cart)
+- Mobile responsive
+
+### API Endpoints
+- Product config serving for iframe (`/api/product-config/:productId`)
+- Save/get configurations
+- Preview image upload and serving
+- Cart add (server-side proxy)
+- Draft order creation
+
+---
+
+## Remaining / Known Issues
+
+| Item | Priority | Notes |
+|------|----------|-------|
+| Remove debug green eye-marker dots | Low | Set `DEBUG_SHOW_EYE_MARKERS = false` in `ThreeSceneMinimal.vue` |
+| Fix temple length edge case in try-on | Low | Camera near plane issue on certain face angles |
+| App Store submission | Medium | Screenshots, description, review process |
+| Beta testing with merchants | High | Real-world feedback needed |
 
 ---
 
 ## Commands Reference
 
 ```bash
-# Frontend Development
-npm run dev                    # Start dev server
-npm run build                  # Production build
+# Frontend
+npm run dev                    # Vite dev server (localhost:5173)
+npm run build                  # Type-check + production build
 npx vercel --prod --yes        # Deploy to Vercel
 
 # Shopify Admin App
 cd iani-configurator
-npm run dev                    # Start with tunnel
-shopify app deploy             # Deploy app + extension
-npx prisma studio              # View database
-npx prisma migrate dev         # Run migrations
+npm run dev                    # Shopify CLI dev with tunnel
+shopify app deploy             # Deploy app + theme extension
+npx prisma studio              # DB GUI
+npx prisma migrate dev         # Create + run migration
+npx prisma generate            # Regenerate Prisma client
 
 # Git
 git add . && git commit -m "message" && git push
@@ -207,129 +283,28 @@ git add . && git commit -m "message" && git push
 
 ---
 
-## Recent Changes (January 2025)
+# PART 2: BUSINESS & PRODUCT KNOWLEDGE
 
-- Fixed glasses temple orientation in Virtual Try-On
-- Switched to OrthographicCamera for AR (no distortion)
-- Added PostMessage communication for try-on state
-- Theme extension hides close button during try-on
+## Unique Selling Point
 
----
+**Only Shopify app with BOTH Face AR (Virtual Try-On) and Space AR (View in Room)** plus a full 3D configurator.
 
-# PART 2: BUSINESS & PRODUCT KNOWLEDGE BASE
-
-## Product Vision
-
-**Iani 3D Configurator** is a Shopify app with **Dual AR capabilities**:
-
-1. **Face AR (Virtual Try-On)** - Glasses, sunglasses, jewelry overlay on face
-2. **Space AR (View in Room)** - Furniture, decor placement in environment
-3. **3D Configurator** - Real-time color/material customization with pricing
-
-### Unique Selling Point
-**Only Shopify app with BOTH Face AR and Space AR** - Competitors offer one or the other.
-
----
-
-## What's Actually Built (Verified)
-
-### For Merchants (Admin App)
-- ✅ OAuth install from Shopify Partner dashboard
-- ✅ Dashboard showing 3D-enabled products
-- ✅ Add product → Select from Shopify catalog → Configure colors/materials
-- ✅ Edit product → Change colors, hex codes, prices, materials
-- ✅ Enable/disable Virtual Try-On per product
-- ✅ Choose try-on type (glasses, hat, earrings, necklace)
-- ✅ Use Shopify's 3D media OR custom GLB URL
-
-### For Storefront (Theme Extension)
-- ✅ App Block merchants add via theme editor
-- ✅ Modal mode (popup) or Inline mode (embedded)
-- ✅ Auto-load or click-to-load options
-- ✅ Customizable colors, height, border radius
-- ✅ Cart preview block for showing customized images
-
-### For Customers (Frontend)
-- ✅ Interactive 3D viewer (rotate, zoom)
-- ✅ Color selection with visual preview
-- ✅ Material selection with pricing
-- ✅ Virtual Try-On with camera
-- ✅ Photo capture and download
-- ✅ Add to cart with configuration saved
-
----
+| Competitor  | Type           | Price      | Our Advantage                          |
+|-------------|----------------|------------|----------------------------------------|
+| Fittingbox  | Face AR only   | $500+/mo   | We have Space AR too, fraction of cost |
+| Threekit    | Space AR only  | $1000+/mo  | We have Face AR too, simpler setup     |
+| Zakeke      | 3D Config only | $50/mo     | We have both AR types                  |
+| Shopify AR  | Basic Space AR | Free       | More features, customization, try-on   |
 
 ## Target Markets
 
-### Face AR (Virtual Try-On)
-| Industry | Products | Market Size |
-|----------|----------|-------------|
-| Eyewear | Glasses, sunglasses | $180B globally |
-| Jewelry | Earrings, necklaces | $350B globally |
-| Fashion | Hats, headwear | $25B globally |
+- **Face AR**: Eyewear ($180B), Jewelry ($350B), Fashion accessories ($25B)
+- **Space AR**: Furniture ($250B e-commerce), Home Decor ($130B), Outdoor ($45B)
 
-### Space AR (View in Room)
-| Industry | Products | Market Size |
-|----------|----------|-------------|
-| Furniture | Sofas, chairs, tables | $250B e-commerce |
-| Home Decor | Lamps, rugs, art | $130B globally |
-| Outdoor | Patio, garden | $45B globally |
+## Beta Readiness
 
----
-
-## Competitive Analysis
-
-| Competitor | Type | Price | Our Advantage |
-|------------|------|-------|---------------|
-| Fittingbox | Face AR only | $500+/mo | We have Space AR too, $29/mo |
-| Threekit | Space AR only | $1000+/mo | We have Face AR too, simpler |
-| Zakeke | 3D Config only | $50/mo | We have both AR types |
-| Shopify AR | Basic Space AR | Free | More features, customization |
-| **Iani** | **BOTH + 3D** | $29/mo | **Only dual-AR solution** |
-
----
-
-## Pricing Strategy (Proposed)
-
-| Plan | Price | Features |
-|------|-------|----------|
-| **Free** | $0/mo | 1 product, 3D viewer only, watermark |
-| **Pro** | $29/mo | Unlimited products, Face AR + Space AR, no watermark |
-| **Business** | $79/mo | + Analytics, priority support, custom branding |
-| **Enterprise** | Custom | White-label, API access, dedicated support |
-
----
-
-## Beta Testing Readiness
-
-### ✅ Ready for Beta
-- Merchants can install app
-- Merchants can configure products (colors, materials, pricing)
-- Merchants can add App Block to theme
-- Customers can use 3D configurator
-- Customers can use Virtual Try-On
-- Cart saves configuration
-- GDPR compliant
-
-### 🔄 Nice-to-Have for Beta
-- Remove debug markers (green dots)
-- Fix temple rendering edge case
-- Better loading states
-
-### ❌ Not Needed for Beta
-- App Store listing (beta is private)
-- Analytics dashboard
-- Multi-language support
-
----
-
-## Next Steps Priority
-
-1. **Fix minor UI issues** (green dots, temple length) - 1 day
-2. **Internal testing** on development store - 2 days
-3. **Recruit 3-5 beta merchants** (eyewear + furniture) - 1 week
-4. **Collect feedback & iterate** - 2 weeks
-5. **App Store submission** - After beta validation
+Ready now: install, configure products, add App Block, 3D viewer, Virtual Try-On, cart save, analytics, GDPR.
+Nice to have before launch: remove debug markers, fix temple edge case, App Store submission.
 
 ---
 
@@ -337,16 +312,12 @@ git add . && git commit -m "message" && git push
 
 | Term | Definition |
 |------|------------|
-| **App Block** | Shopify theme component merchants add via editor |
-| **Theme Extension** | Shopify-approved way to inject code into storefront |
-| **PostMessage** | Browser API for iframe ↔ parent communication |
-| **MediaPipe** | Google's ML framework for face detection |
-| **OrthographicCamera** | Three.js camera without perspective distortion |
-| **WebXR** | Web API for AR/VR experiences |
-| **GLB/GLTF** | 3D model file formats |
-| **Neon** | Serverless PostgreSQL provider |
-
----
-
-*Last updated: January 2025*
-*Actual progress verified from codebase*
+| App Block | Shopify theme component merchants add via theme editor |
+| Theme Extension | Shopify-approved way to inject code into storefront |
+| PostMessage | Browser API for iframe to parent page communication |
+| MediaPipe | Google ML framework for face landmark detection |
+| OrthographicCamera | Three.js camera without perspective distortion (used for Face AR) |
+| WebXR | Web API for AR/VR experiences (used for Space AR) |
+| GLB/GLTF | 3D model file formats |
+| Neon | Serverless PostgreSQL provider used for the database |
+| Polaris | Shopify's React UI component library (v12) |
