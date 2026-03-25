@@ -408,6 +408,7 @@ const frameOptions = ref([
 // Track if config was loaded from API
 const configLoaded = ref(false)
 const productName = ref('Customize Your Product')
+const productModelUrl = ref('') // Model URL from product config API
 
 // Shopify price context (from URL params)
 const shopifyBasePrice = ref(null)
@@ -468,6 +469,11 @@ const loadProductConfig = async () => {
           // Update product name
           if (data.config.name) {
             productName.value = data.config.name
+          }
+
+          // Update model URL
+          if (data.config.baseModelUrl) {
+            productModelUrl.value = data.config.baseModelUrl
           }
 
           // Update color options
@@ -1615,8 +1621,11 @@ const loadModel = async () => {
   const shopifyContext = getShopifyContext()
   let modelPath = `/models/${selectedModel.value}`
 
-  // Priority: 1. Full URL from modelUrl param, 2. modelFile param, 3. selected model
-  if (shopifyContext.modelUrl) {
+  // Priority: 1. API product config model URL, 2. Full URL from modelUrl param, 3. modelFile param, 4. selected model
+  if (productModelUrl.value) {
+    modelPath = productModelUrl.value
+    console.log(`📦 Loading model from product config: ${modelPath}`)
+  } else if (shopifyContext.modelUrl) {
     modelPath = shopifyContext.modelUrl
     console.log(`📦 Loading model from Shopify media URL: ${modelPath}`)
   } else if (shopifyContext.modelFile) {

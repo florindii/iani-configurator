@@ -209,6 +209,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   // Update product
   const name = formData.get("name") as string;
   const basePrice = parseFloat(formData.get("basePrice") as string) || 0;
+  const baseModelUrl = (formData.get("baseModelUrl") as string) || null;
   const colorsJson = formData.get("colors") as string;
   const materialsJson = formData.get("materials") as string;
 
@@ -224,6 +225,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     data: {
       name,
       basePrice,
+      baseModelUrl,
       colorOptions: {
         create: colors.map((color: any, index: number) => ({
           name: color.name,
@@ -256,6 +258,7 @@ export default function EditProduct() {
 
   const [name, setName] = useState(product3D.name);
   const [basePrice, setBasePrice] = useState(product3D.basePrice.toString());
+  const [baseModelUrl, setBaseModelUrl] = useState(product3D.baseModelUrl || "");
   const [colors, setColors] = useState(
     product3D.colorOptions.map((c) => ({
       name: c.name,
@@ -363,6 +366,7 @@ export default function EditProduct() {
     const formData = new FormData();
     formData.set("name", name);
     formData.set("basePrice", basePrice);
+    formData.set("baseModelUrl", baseModelUrl);
     formData.set("colors", JSON.stringify(colors));
     formData.set("materials", JSON.stringify(materials));
     submit(formData, { method: "post" });
@@ -452,6 +456,14 @@ export default function EditProduct() {
                   prefix="$"
                   autoComplete="off"
                   helpText="Starting price before customizations"
+                />
+                <TextField
+                  label="3D Model URL"
+                  value={baseModelUrl}
+                  onChange={setBaseModelUrl}
+                  autoComplete="off"
+                  placeholder="https://example.com/model.glb"
+                  helpText="URL to the GLB/GLTF file for this product. Leave blank to use the model from Shopify product media."
                 />
               </BlockStack>
             </Card>
