@@ -25,6 +25,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   try {
     // Check if shop has access to Try-On feature based on their plan
     const canUseTryOn = await hasFeatureAccess(shop, "tryOnEnabled");
+    const canUseSpaceAr = await hasFeatureAccess(shop, "spaceArEnabled");
 
     // Find the 3D product configuration
     const product3D = await db.product3D.findFirst({
@@ -59,6 +60,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
             tryOnType: null,
             tryOnOffsetY: 0,
             tryOnScale: 1,
+            spaceArEnabled: false,
             colorOptions: [
               { name: "Ocean Blue", hexCode: "#1E90FF", price: 299.99, isDefault: true },
               { name: "Crimson Red", hexCode: "#DC143C", price: 319.99, isDefault: false },
@@ -99,6 +101,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
           tryOnType: effectiveTryOnEnabled ? product3D.tryOnType : null,
           tryOnOffsetY: product3D.tryOnOffsetY,
           tryOnScale: product3D.tryOnScale,
+          spaceArEnabled: canUseSpaceAr,
           colorOptions: product3D.colorOptions.map((c) => ({
             id: c.id,
             name: c.name,

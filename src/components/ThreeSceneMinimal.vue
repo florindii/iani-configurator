@@ -292,6 +292,20 @@
             <span>Try On</span>
           </button>
 
+          <!-- Space AR Button (only shown when enabled and device supports WebXR) -->
+          <button
+            v-if="spaceArEnabled && spaceArSupported && !isInArSession"
+            @click="startArSession"
+            class="space-ar-btn"
+            title="View this product in your room using AR">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+              <path d="M2 17l10 5 10-5"></path>
+              <path d="M2 12l10 5 10-5"></path>
+            </svg>
+            <span>View in Your Space</span>
+          </button>
+
           <button
             @click="addToCart"
             :disabled="!model || isAddingToCart"
@@ -302,6 +316,22 @@
         </div>
 
         </template><!-- end v-else (real content) -->
+      </div>
+    </div>
+
+    <!-- AR Overlay Controls (DOM overlay for WebXR session) -->
+    <div id="ar-overlay" class="ar-overlay" :class="{ 'ar-overlay--active': isInArSession }">
+      <button @click="exitArSession" class="ar-exit-btn">
+        Exit AR
+      </button>
+      <div v-if="arModelContainer && !arModelContainer.visible" class="ar-instructions">
+        Point your camera at the floor and tap to place
+      </div>
+      <div class="ar-controls">
+        <button @click="rotateArModel(-45)" class="ar-control-btn">&#8634; Rotate</button>
+        <button @click="scaleArModel(1.2)" class="ar-control-btn">+ Bigger</button>
+        <button @click="scaleArModel(0.8)" class="ar-control-btn">- Smaller</button>
+        <button @click="rotateArModel(45)" class="ar-control-btn">Rotate &#8635;</button>
       </div>
     </div>
 
@@ -426,6 +456,16 @@ const showTryOnModal = ref(false)
 const tryOnModelUrl = ref('')
 const tryOnPreviewImage = ref(null) // Captured try-on image for cart
 
+// Space AR (WebXR) state
+const spaceArEnabled = ref(false)
+const spaceArSupported = ref(false)
+const isInArSession = ref(false)
+let hitTestSource = null
+let hitTestSourceRequested = false
+let reticle = null
+let arModelContainer = null
+let savedBackground = null
+
 // Load configuration from merchant's settings
 const loadProductConfig = async () => {
   const context = getShopifyContext()
@@ -514,6 +554,12 @@ const loadProductConfig = async () => {
             tryOnOffsetY.value = data.config.tryOnOffsetY || 0
             tryOnScale.value = data.config.tryOnScale || 1
             console.log('👓 Try-On enabled:', tryOnType.value, 'offset:', tryOnOffsetY.value, 'scale:', tryOnScale.value)
+          }
+
+          // Load Space AR settings
+          if (data.config.spaceArEnabled) {
+            spaceArEnabled.value = true
+            console.log('🔲 Space AR enabled for this product')
           }
 
           configLoaded.value = true
@@ -1525,7 +1571,8 @@ const initThreeJS = async () => {
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.2
-    
+    renderer.xr.enabled = true
+
     canvasContainer.value.appendChild(renderer.domElement)
     
     // Enhanced lighting setup - Multi-directional for complete coverage
@@ -1592,7 +1639,9 @@ const initThreeJS = async () => {
     canvasContainer.value.addEventListener('click', onMouseClick)
     
     await loadModel()
-    animate()
+
+    // Use setAnimationLoop for WebXR compatibility (works for both normal and AR modes)
+    renderer.setAnimationLoop(animate)
     
     const handleResize = () => {
       if (!canvasContainer.value || !camera || !renderer) return
@@ -1785,18 +1834,191 @@ const createFallbackModel = () => {
   console.log('✅ Created fallback clickable sofa model (no extra parts)')
 }
 
-// Animation loop
-const animate = () => {
+// Animation loop (dual-mode: normal 3D + WebXR AR)
+const animate = (timestamp, frame) => {
   if (!renderer || !scene || !camera) return
-  
-  requestAnimationFrame(animate)
-  
-  if (controls) {
+
+  // AR mode: handle hit-test for surface detection
+  if (isInArSession.value && frame) {
+    const referenceSpace = renderer.xr.getReferenceSpace()
+
+    if (!hitTestSourceRequested) {
+      const session = renderer.xr.getSession()
+      session.requestReferenceSpace('viewer').then((viewerSpace) => {
+        session.requestHitTestSource({ space: viewerSpace }).then((source) => {
+          hitTestSource = source
+        })
+      })
+      hitTestSourceRequested = true
+    }
+
+    if (hitTestSource && reticle) {
+      const hitTestResults = frame.getHitTestResults(hitTestSource)
+      if (hitTestResults.length > 0) {
+        const hit = hitTestResults[0]
+        const pose = hit.getPose(referenceSpace)
+        if (pose) {
+          reticle.visible = true
+          reticle.matrix.fromArray(pose.transform.matrix)
+        }
+      } else {
+        reticle.visible = false
+      }
+    }
+  }
+
+  // Normal mode: update orbit controls
+  if (!isInArSession.value && controls) {
     controls.update()
   }
-  
+
   renderer.render(scene, camera)
 }
+
+// ==================== SPACE AR (WebXR) ====================
+
+const createReticle = () => {
+  const ringGeo = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2)
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.75
+  })
+  reticle = new THREE.Mesh(ringGeo, ringMat)
+  reticle.matrixAutoUpdate = false
+  reticle.visible = false
+  scene.add(reticle)
+}
+
+const onArSelect = () => {
+  if (!reticle || !reticle.visible || !arModelContainer) return
+  // Place model at the reticle position
+  arModelContainer.position.setFromMatrixPosition(reticle.matrix)
+  arModelContainer.visible = true
+  console.log('🔲 Model placed at:', arModelContainer.position.toArray())
+}
+
+const onArSessionEnd = () => {
+  console.log('🔲 AR session ended')
+  isInArSession.value = false
+  hitTestSource = null
+  hitTestSourceRequested = false
+
+  // Restore scene
+  if (savedBackground !== null) {
+    scene.background = savedBackground
+    savedBackground = null
+  }
+  if (controls) controls.enabled = true
+  if (model) model.visible = true
+
+  // Clean up AR objects
+  if (arModelContainer) {
+    scene.remove(arModelContainer)
+    arModelContainer = null
+  }
+  if (reticle) reticle.visible = false
+}
+
+const startArSession = async () => {
+  if (!renderer || !navigator.xr) return
+
+  try {
+    // Save current state
+    savedBackground = scene.background
+    scene.background = null // Transparent for camera passthrough
+
+    if (controls) controls.enabled = false
+    if (model) model.visible = false
+
+    // Create AR container with cloned customized model
+    arModelContainer = new THREE.Group()
+    arModelContainer.visible = false
+    scene.add(arModelContainer)
+
+    const arModel = model.clone(true)
+    arModel.visible = true
+
+    // Auto-scale: normalize largest dimension to ~1 meter for real-world proportions
+    const box = new THREE.Box3().setFromObject(arModel)
+    const size = box.getSize(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z)
+    if (maxDim > 0) {
+      const scaleFactor = 1.0 / maxDim
+      arModel.scale.multiplyScalar(scaleFactor)
+    }
+
+    // Center and ground the model
+    const centeredBox = new THREE.Box3().setFromObject(arModel)
+    const center = centeredBox.getCenter(new THREE.Vector3())
+    arModel.position.sub(center)
+    arModel.position.y -= centeredBox.min.y
+    arModelContainer.add(arModel)
+
+    // Create reticle
+    if (!reticle) createReticle()
+    reticle.visible = false
+
+    // Build AR overlay element reference
+    const overlayRoot = document.getElementById('ar-overlay')
+
+    // Request immersive-ar session
+    const sessionInit = { requiredFeatures: ['hit-test'] }
+    if (overlayRoot) {
+      sessionInit.optionalFeatures = ['dom-overlay']
+      sessionInit.domOverlay = { root: overlayRoot }
+    }
+
+    const session = await navigator.xr.requestSession('immersive-ar', sessionInit)
+
+    session.addEventListener('select', onArSelect)
+    session.addEventListener('end', onArSessionEnd)
+
+    renderer.xr.setReferenceSpaceType('local')
+    await renderer.xr.setSession(session)
+
+    isInArSession.value = true
+    hitTestSourceRequested = false
+    hitTestSource = null
+
+    console.log('🔲 AR session started')
+  } catch (error) {
+    console.error('🔲 Failed to start AR:', error)
+    // Restore on failure
+    if (savedBackground !== null) {
+      scene.background = savedBackground
+      savedBackground = null
+    }
+    if (controls) controls.enabled = true
+    if (model) model.visible = true
+    if (arModelContainer) {
+      scene.remove(arModelContainer)
+      arModelContainer = null
+    }
+  }
+}
+
+const exitArSession = async () => {
+  const session = renderer?.xr?.getSession()
+  if (session) await session.end()
+}
+
+const rotateArModel = (degrees) => {
+  if (arModelContainer) {
+    arModelContainer.rotation.y += THREE.MathUtils.degToRad(degrees)
+  }
+}
+
+const scaleArModel = (factor) => {
+  if (arModelContainer) {
+    const newScale = arModelContainer.scale.x * factor
+    const clamped = Math.max(0.25, Math.min(4, newScale))
+    arModelContainer.scale.setScalar(clamped)
+  }
+}
+
+// ==================== END SPACE AR ====================
 
 // Check if embedded in Shopify iframe
 const isEmbeddedInShopify = () => {
@@ -2186,8 +2408,20 @@ onMounted(async () => {
     await loadSavedConfiguration()
   }
 
-  setTimeout(() => {
-    initThreeJS()
+  setTimeout(async () => {
+    await initThreeJS()
+
+    // Check WebXR AR support after renderer is ready
+    if (spaceArEnabled.value && navigator.xr) {
+      try {
+        const supported = await navigator.xr.isSessionSupported('immersive-ar')
+        spaceArSupported.value = supported
+        console.log('🔲 WebXR immersive-ar supported:', supported)
+      } catch (e) {
+        console.warn('🔲 WebXR check failed:', e)
+        spaceArSupported.value = false
+      }
+    }
   }, 100)
 
   // Force layout recalculation on mobile to fix button visibility issue
@@ -2212,7 +2446,12 @@ onUnmounted(() => {
     canvasContainer.value.removeEventListener('click', onMouseClick)
   }
 
+  // End any active AR session
+  if (renderer?.xr?.getSession()) {
+    renderer.xr.getSession().end()
+  }
   if (renderer) {
+    renderer.setAnimationLoop(null)
     renderer.dispose()
   }
   if (scene) {
@@ -3143,5 +3382,104 @@ onUnmounted(() => {
   color: #333;
   letter-spacing: 1px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Space AR Styles */
+.space-ar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  margin-bottom: 8px;
+}
+
+.space-ar-btn:hover {
+  opacity: 0.9;
+}
+
+.ar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.ar-overlay--active {
+  display: block;
+}
+
+.ar-controls {
+  position: absolute;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.ar-control-btn {
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
+}
+
+.ar-control-btn:active {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.ar-instructions {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 16px 24px;
+  border-radius: 12px;
+  font-size: 16px;
+  text-align: center;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+}
+
+.ar-exit-btn {
+  position: absolute;
+  top: 40px;
+  right: 20px;
+  padding: 10px 20px;
+  background: rgba(220, 38, 38, 0.8);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
+}
+
+.ar-exit-btn:active {
+  background: rgba(220, 38, 38, 1);
 }
 </style>
