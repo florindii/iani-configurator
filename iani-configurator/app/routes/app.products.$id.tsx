@@ -209,7 +209,9 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   // Update product
   const name = formData.get("name") as string;
   const basePrice = parseFloat(formData.get("basePrice") as string) || 0;
-  const baseModelUrl = (formData.get("baseModelUrl") as string) || null;
+  const customModelUrl = (formData.get("baseModelUrl") as string) || "";
+  const shopifyModelUrl = (formData.get("shopifyModelUrl") as string) || "";
+  const baseModelUrl = customModelUrl || shopifyModelUrl || null;
   const colorsJson = formData.get("colors") as string;
   const materialsJson = formData.get("materials") as string;
 
@@ -367,6 +369,7 @@ export default function EditProduct() {
     formData.set("name", name);
     formData.set("basePrice", basePrice);
     formData.set("baseModelUrl", baseModelUrl);
+    formData.set("shopifyModelUrl", shopifyProduct?.modelUrl || "");
     formData.set("colors", JSON.stringify(colors));
     formData.set("materials", JSON.stringify(materials));
     submit(formData, { method: "post" });
@@ -456,14 +459,6 @@ export default function EditProduct() {
                   prefix="$"
                   autoComplete="off"
                   helpText="Starting price before customizations"
-                />
-                <TextField
-                  label="3D Model URL"
-                  value={baseModelUrl}
-                  onChange={setBaseModelUrl}
-                  autoComplete="off"
-                  placeholder="https://example.com/model.glb"
-                  helpText="URL to the GLB/GLTF file for this product. Leave blank to use the model from Shopify product media."
                 />
               </BlockStack>
             </Card>
