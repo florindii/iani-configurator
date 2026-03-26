@@ -324,14 +324,14 @@
       <button @click="exitArSession" class="ar-exit-btn">
         Exit AR
       </button>
-      <div v-if="arModelContainer && !arModelContainer.visible" class="ar-instructions">
+      <div v-if="!arModelPlaced" class="ar-instructions">
         Point your camera at the floor and tap to place
       </div>
-      <div class="ar-controls">
-        <button @click="rotateArModel(-45)" class="ar-control-btn">&#8634; Rotate</button>
-        <button @click="scaleArModel(1.2)" class="ar-control-btn">+ Bigger</button>
-        <button @click="scaleArModel(0.8)" class="ar-control-btn">- Smaller</button>
-        <button @click="rotateArModel(45)" class="ar-control-btn">Rotate &#8635;</button>
+      <div v-if="arModelPlaced" class="ar-controls">
+        <button @click="rotateArModel(-10)" class="ar-control-btn">&#8634; Rotate</button>
+        <button @click="scaleArModel(1.05)" class="ar-control-btn">+ Bigger</button>
+        <button @click="scaleArModel(0.95)" class="ar-control-btn">- Smaller</button>
+        <button @click="rotateArModel(10)" class="ar-control-btn">Rotate &#8635;</button>
       </div>
     </div>
 
@@ -460,6 +460,7 @@ const tryOnPreviewImage = ref(null) // Captured try-on image for cart
 const spaceArEnabled = ref(false)
 const spaceArSupported = ref(false)
 const isInArSession = ref(false)
+const arModelPlaced = ref(false)
 let hitTestSource = null
 let hitTestSourceRequested = false
 let reticle = null
@@ -1896,12 +1897,14 @@ const onArSelect = () => {
   // Place model at the reticle position
   arModelContainer.position.setFromMatrixPosition(reticle.matrix)
   arModelContainer.visible = true
+  arModelPlaced.value = true
   console.log('🔲 Model placed at:', arModelContainer.position.toArray())
 }
 
 const onArSessionEnd = () => {
   console.log('🔲 AR session ended')
   isInArSession.value = false
+  arModelPlaced.value = false
   hitTestSource = null
   hitTestSourceRequested = false
 
