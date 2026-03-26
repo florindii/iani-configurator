@@ -1839,8 +1839,8 @@ const createFallbackModel = () => {
 const animate = (timestamp, frame) => {
   if (!renderer || !scene || !camera) return
 
-  // AR mode: handle hit-test for surface detection
-  if (isInArSession.value && frame) {
+  // AR mode: handle hit-test for surface detection (only before placement)
+  if (isInArSession.value && frame && !arModelPlaced.value) {
     const referenceSpace = renderer.xr.getReferenceSpace()
 
     if (!hitTestSourceRequested) {
@@ -1893,11 +1893,18 @@ const createReticle = () => {
 }
 
 const onArSelect = () => {
+  // Only handle tap for initial placement, not after model is placed
+  if (arModelPlaced.value) return
   if (!reticle || !reticle.visible || !arModelContainer) return
+
   // Place model at the reticle position
   arModelContainer.position.setFromMatrixPosition(reticle.matrix)
   arModelContainer.visible = true
   arModelPlaced.value = true
+
+  // Hide reticle and stop hit-testing
+  reticle.visible = false
+
   console.log('🔲 Model placed at:', arModelContainer.position.toArray())
 }
 
