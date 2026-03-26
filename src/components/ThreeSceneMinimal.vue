@@ -327,9 +327,13 @@
       <div v-if="!arModelPlaced" class="ar-instructions">
         Point your camera at the floor and tap to place
       </div>
+      <div v-if="arMoveMode" class="ar-instructions ar-instructions--move">
+        Tap to confirm position
+      </div>
       <div v-if="arModelPlaced" class="ar-controls">
         <button @click="rotateArModel(-10)" class="ar-control-btn">&#8634; Rotate</button>
         <button @click="scaleArModel(1.05)" class="ar-control-btn">+ Bigger</button>
+        <button @click="toggleArMoveMode" class="ar-control-btn" :class="{ 'ar-control-btn--active': arMoveMode }">&#10021; Move</button>
         <button @click="scaleArModel(0.95)" class="ar-control-btn">- Smaller</button>
         <button @click="rotateArModel(10)" class="ar-control-btn">Rotate &#8635;</button>
       </div>
@@ -461,11 +465,14 @@ const spaceArEnabled = ref(false)
 const spaceArSupported = ref(false)
 const isInArSession = ref(false)
 const arModelPlaced = ref(false)
+const arMoveMode = ref(false) // When true, tapping moves the model
 let hitTestSource = null
 let hitTestSourceRequested = false
 let reticle = null
+let moveIndicator = null // Ring under the model showing it can be moved
 let arModelContainer = null
 let savedBackground = null
+let arMoveTimeout = null // Auto-hide move indicator after 5s
 
 // Load configuration from merchant's settings
 const loadProductConfig = async () => {
@@ -1839,8 +1846,9 @@ const createFallbackModel = () => {
 const animate = (timestamp, frame) => {
   if (!renderer || !scene || !camera) return
 
-  // AR mode: handle hit-test for surface detection (only before placement)
-  if (isInArSession.value && frame && !arModelPlaced.value) {
+  // AR mode: handle hit-test for surface detection
+  // Active when: not yet placed OR in move mode (repositioning)
+  if (isInArSession.value && frame && (!arModelPlaced.value || arMoveMode.value)) {
     const referenceSpace = renderer.xr.getReferenceSpace()
 
     if (!hitTestSourceRequested) {
@@ -1853,16 +1861,24 @@ const animate = (timestamp, frame) => {
       hitTestSourceRequested = true
     }
 
-    if (hitTestSource && reticle) {
+    if (hitTestSource) {
       const hitTestResults = frame.getHitTestResults(hitTestSource)
       if (hitTestResults.length > 0) {
         const hit = hitTestResults[0]
         const pose = hit.getPose(referenceSpace)
         if (pose) {
-          reticle.visible = true
-          reticle.matrix.fromArray(pose.transform.matrix)
+          if (!arModelPlaced.value && reticle) {
+            // Before placement: show reticle on surface
+            reticle.visible = true
+            reticle.matrix.fromArray(pose.transform.matrix)
+          } else if (arMoveMode.value && arModelContainer) {
+            // Move mode: model follows the surface in real-time
+            const position = new THREE.Vector3()
+            position.setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix))
+            arModelContainer.position.copy(position)
+          }
         }
-      } else {
+      } else if (!arModelPlaced.value && reticle) {
         reticle.visible = false
       }
     }
@@ -1892,28 +1908,109 @@ const createReticle = () => {
   scene.add(reticle)
 }
 
+const createMoveIndicator = () => {
+  // Move indicator: a dashed ring + arrows under the model (like Shopify's AR)
+  const group = new THREE.Group()
+
+  // Outer ring
+  const ringGeo = new THREE.RingGeometry(0.18, 0.22, 48).rotateX(-Math.PI / 2)
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.6
+  })
+  group.add(new THREE.Mesh(ringGeo, ringMat))
+
+  // Four arrow indicators (N, S, E, W)
+  const arrowShape = new THREE.Shape()
+  arrowShape.moveTo(0, 0)
+  arrowShape.lineTo(-0.03, -0.06)
+  arrowShape.lineTo(0.03, -0.06)
+  arrowShape.closePath()
+  const arrowGeo = new THREE.ShapeGeometry(arrowShape)
+  const arrowMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.8
+  })
+
+  const directions = [
+    { pos: [0, 0, -0.28], rot: 0 },      // North
+    { pos: [0, 0, 0.28], rot: Math.PI },   // South
+    { pos: [0.28, 0, 0], rot: -Math.PI / 2 }, // East
+    { pos: [-0.28, 0, 0], rot: Math.PI / 2 }  // West
+  ]
+  directions.forEach(d => {
+    const arrow = new THREE.Mesh(arrowGeo, arrowMat)
+    arrow.position.set(d.pos[0], 0.005, d.pos[2])
+    arrow.rotation.x = -Math.PI / 2
+    arrow.rotation.z = d.rot
+    group.add(arrow)
+  })
+
+  moveIndicator = group
+  moveIndicator.visible = false
+  // Add to arModelContainer so it moves with the model
+  if (arModelContainer) arModelContainer.add(moveIndicator)
+}
+
+const showMoveIndicator = () => {
+  if (moveIndicator) moveIndicator.visible = true
+  // Auto-hide after 5 seconds
+  clearTimeout(arMoveTimeout)
+  arMoveTimeout = setTimeout(() => {
+    if (moveIndicator) moveIndicator.visible = false
+    arMoveMode.value = false
+  }, 5000)
+}
+
+const hideMoveIndicator = () => {
+  if (moveIndicator) moveIndicator.visible = false
+  clearTimeout(arMoveTimeout)
+}
+
 const onArSelect = () => {
-  // Only handle tap for initial placement, not after model is placed
-  if (arModelPlaced.value) return
-  if (!reticle || !reticle.visible || !arModelContainer) return
+  if (!arModelContainer) return
 
-  // Place model at the reticle position
-  arModelContainer.position.setFromMatrixPosition(reticle.matrix)
-  arModelContainer.visible = true
-  arModelPlaced.value = true
+  // INITIAL PLACEMENT: place model at reticle
+  if (!arModelPlaced.value) {
+    if (!reticle || !reticle.visible) return
+    arModelContainer.position.setFromMatrixPosition(reticle.matrix)
+    arModelContainer.visible = true
+    arModelPlaced.value = true
+    reticle.visible = false
 
-  // Hide reticle and stop hit-testing
-  reticle.visible = false
+    // Create move indicator and show it briefly
+    createMoveIndicator()
+    showMoveIndicator()
+    console.log('🔲 Model placed at:', arModelContainer.position.toArray())
+    return
+  }
 
-  console.log('🔲 Model placed at:', arModelContainer.position.toArray())
+  // AFTER PLACEMENT: toggle move mode on tap
+  if (arMoveMode.value) {
+    // Was in move mode -> confirm new position, exit move mode
+    arMoveMode.value = false
+    hideMoveIndicator()
+    console.log('🔲 Model repositioned to:', arModelContainer.position.toArray())
+  } else {
+    // Enter move mode: model will follow surface
+    arMoveMode.value = true
+    showMoveIndicator()
+    console.log('🔲 Move mode activated')
+  }
 }
 
 const onArSessionEnd = () => {
   console.log('🔲 AR session ended')
   isInArSession.value = false
   arModelPlaced.value = false
+  arMoveMode.value = false
   hitTestSource = null
   hitTestSourceRequested = false
+  clearTimeout(arMoveTimeout)
 
   // Restore scene
   if (savedBackground !== null) {
@@ -1928,6 +2025,7 @@ const onArSessionEnd = () => {
     scene.remove(arModelContainer)
     arModelContainer = null
   }
+  moveIndicator = null
   if (reticle) reticle.visible = false
 }
 
@@ -2006,6 +2104,16 @@ const startArSession = async () => {
       scene.remove(arModelContainer)
       arModelContainer = null
     }
+  }
+}
+
+const toggleArMoveMode = () => {
+  if (arMoveMode.value) {
+    arMoveMode.value = false
+    hideMoveIndicator()
+  } else {
+    arMoveMode.value = true
+    showMoveIndicator()
   }
 }
 
@@ -3458,6 +3566,11 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.8);
 }
 
+.ar-control-btn--active {
+  background: rgba(99, 102, 241, 0.7);
+  border-color: rgba(165, 180, 252, 0.6);
+}
+
 .ar-instructions {
   position: absolute;
   top: 50%;
@@ -3471,6 +3584,13 @@ onUnmounted(() => {
   text-align: center;
   pointer-events: none;
   backdrop-filter: blur(4px);
+}
+
+.ar-instructions--move {
+  top: auto;
+  bottom: 160px;
+  font-size: 14px;
+  padding: 10px 20px;
 }
 
 .ar-exit-btn {
