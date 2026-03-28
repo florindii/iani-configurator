@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import { db } from "../db.server";
+import { checkRateLimit, rateLimitResponse } from "../utils/api-security.server";
 
 // Add CORS headers
 const corsHeaders = {
@@ -12,6 +13,10 @@ const corsHeaders = {
 };
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
+  if (!checkRateLimit(request, "product-configs", 60)) {
+    return rateLimitResponse(corsHeaders);
+  }
+
   try {
     const { productId } = params;
     
@@ -41,6 +46,10 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   // Handle preflight requests
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
+  }
+
+  if (!checkRateLimit(request, "product-configs-write", 20)) {
+    return rateLimitResponse(corsHeaders);
   }
 
   try {

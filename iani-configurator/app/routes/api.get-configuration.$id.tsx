@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { db } from "../db.server";
+import { checkRateLimit, rateLimitResponse } from "../utils/api-security.server";
 
 // CORS headers for cross-origin requests
 const corsHeaders = {
@@ -12,10 +13,11 @@ const corsHeaders = {
 export async function loader({ params, request }: LoaderFunctionArgs) {
   // Handle CORS preflight
   if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
+  if (!checkRateLimit(request, "get-config", 100)) {
+    return rateLimitResponse(corsHeaders);
   }
 
   const { id } = params;

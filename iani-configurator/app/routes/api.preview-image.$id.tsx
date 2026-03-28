@@ -1,7 +1,12 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { db } from "../db.server";
+import { checkRateLimit, rateLimitResponse } from "../utils/api-security.server";
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function loader({ params, request }: LoaderFunctionArgs) {
+  if (!checkRateLimit(request, "preview-image", 120)) {
+    return new Response("Too many requests", { status: 429, headers: { "Retry-After": "60" } });
+  }
+
   const { id } = params;
 
   if (!id) {

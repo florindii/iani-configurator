@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { db } from "../db.server";
+import { checkRateLimit, rateLimitResponse, validateShop, forbiddenResponse } from "../utils/api-security.server";
 
 // CORS headers for cross-origin requests from storefront
 const corsHeaders = {
@@ -20,10 +21,11 @@ export async function loader() {
 export async function action({ request }: ActionFunctionArgs) {
   // Handle CORS preflight
   if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
+  if (!checkRateLimit(request, "upload-preview", 10)) {
+    return rateLimitResponse(corsHeaders);
   }
 
   try {
@@ -35,6 +37,10 @@ export async function action({ request }: ActionFunctionArgs) {
         { error: "Missing required fields: image and configurationId" },
         { status: 400, headers: corsHeaders }
       );
+    }
+
+    if (shop && !(await validateShop(shop))) {
+      return forbiddenResponse("Shop not registered", corsHeaders);
     }
 
     // For now, we'll store the base64 image in the database
@@ -52,7 +58,8 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     // Return a URL that can be used to view the image
-    const imageUrl = `https://iani-configurator-1.onrender.com/api/preview-image/${configurationId}`;
+    const appUrl = process.env.SHOPIFY_APP_URL || 'https://iani-configurator-1.onrender.com';
+    const imageUrl = `${appUrl}/api/preview-image/${configurationId}`;
 
     return json(
       {

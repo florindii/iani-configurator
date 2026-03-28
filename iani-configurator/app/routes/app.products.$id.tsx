@@ -312,7 +312,8 @@ export default function EditProduct() {
 
   // Open calibration tool in new window
   const openCalibrationTool = () => {
-    const calibrationUrl = `https://iani-configurator.vercel.app?admin-calibrate=true&productId=${product3D.id}&modelUrl=${encodeURIComponent(modelUrlForPreview)}&currentOffsetY=${tryOnOffsetY}&currentScale=${tryOnScale}&tryOnType=${tryOnType}`;
+    const frontendUrl = process.env.FRONTEND_URL || 'https://iani-configurator.vercel.app';
+    const calibrationUrl = `${frontendUrl}?admin-calibrate=true&productId=${product3D.id}&modelUrl=${encodeURIComponent(modelUrlForPreview)}&currentOffsetY=${tryOnOffsetY}&currentScale=${tryOnScale}&tryOnType=${tryOnType}`;
 
     calibrationWindowRef.current = window.open(
       calibrationUrl,

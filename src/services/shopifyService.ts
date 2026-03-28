@@ -64,8 +64,8 @@ class MultiClientShopifyService {
                        window.location.hostname.includes('shopify');
     
     if (this.isProduction) {
-      this.bridgeServerUrl = 'https://iani-configurator.vercel.app';
-      this.baseUrl = 'https://iani-configurator.vercel.app';
+      this.bridgeServerUrl = import.meta.env.VITE_CONFIGURATOR_URL || 'https://iani-configurator.vercel.app';
+      this.baseUrl = import.meta.env.VITE_CONFIGURATOR_URL || 'https://iani-configurator.vercel.app';
       if (import.meta.env.DEV) console.log('🚀 Production mode: Multi-client system active');
     } else {
       this.bridgeServerUrl = import.meta.env.VITE_BRIDGE_URL || 'http://localhost:3001';

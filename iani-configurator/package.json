@@ -17,7 +17,9 @@
     "shopify": "shopify",
     "prisma": "prisma",
     "graphql-codegen": "graphql-codegen",
-    "vite": "vite"
+    "vite": "vite",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "type": "module",
   "engines": {
@@ -46,6 +48,8 @@
     "express": "^4.19.2"
   },
   "devDependencies": {
+    "vitest": "^2.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
     "@remix-run/eslint-config": "^2.16.1",
     "@remix-run/route-config": "^2.16.1",
     "@shopify/api-codegen-preset": "^1.1.1",

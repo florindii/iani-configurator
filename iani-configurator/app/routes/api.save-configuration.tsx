@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { db } from "../db.server";
+import { checkRateLimit, rateLimitResponse, validateShop, forbiddenResponse } from "../utils/api-security.server";
 
 // CORS headers for cross-origin requests from storefront
 const corsHeaders = {
@@ -20,10 +21,11 @@ export async function loader() {
 export async function action({ request }: ActionFunctionArgs) {
   // Handle CORS preflight
   if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
+  if (!checkRateLimit(request, "save-config", 20)) {
+    return rateLimitResponse(corsHeaders);
   }
 
   try {
@@ -48,6 +50,10 @@ export async function action({ request }: ActionFunctionArgs) {
         { error: "Missing required fields: configurationId and shop" },
         { status: 400, headers: corsHeaders }
       );
+    }
+
+    if (!(await validateShop(shop))) {
+      return forbiddenResponse("Shop not registered", corsHeaders);
     }
 
     // Find the Product3D record for this product

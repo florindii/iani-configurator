@@ -10,7 +10,7 @@
 **Type**: Shopify App for 3D product customization (Glasses + Furniture)
 **Stack**: Vue.js 3 + Three.js + TypeScript + Vite | Shopify Remix + Polaris + Prisma
 **Deployment**: Vercel (Frontend) + Shopify (Theme Extension + Admin App)
-**Last updated**: March 2025
+**Last updated**: March 2026
 
 ---
 
@@ -42,51 +42,61 @@ npx prisma migrate dev     # Run new migrations
 ```
 iani-configurator/                      # Root = Vue frontend
 ├── src/
-│   ├── App.vue                         # Root component, routing logic
+│   ├── App.vue                         # Root component, routing logic (admin-calibrate, admin-test, or normal mode)
 │   ├── main.ts                         # Entry point
+│   ├── style.css                       # Global styles
+│   ├── vite-env.d.ts                   # Vite type declarations
+│   ├── env.d.ts                        # Environment type declarations
 │   ├── utils/
 │   │   └── logger.ts                   # Logging utility
 │   ├── components/
-│   │   ├── ThreeSceneMinimal.vue       # Main 3D configurator (color, material, pricing, WebXR)
-│   │   ├── ThreeSceneModal.vue         # Modal-mode wrapper for ThreeSceneMinimal
-│   │   ├── VirtualTryOn.vue            # Face AR overlay (MediaPipe + OrthographicCamera)
-│   │   ├── AdminTryOnPreview.vue       # Preview try-on result in admin
-│   │   ├── AdminTryOnTest.vue          # Test try-on with live camera in admin
-│   │   └── AdminCalibrateTryOn.vue     # Calibrate offsetY + scale for try-on per product
+│   │   ├── ThreeSceneMinimal.vue       # Main 3D configurator (~3614 lines): color, material, pricing, WebXR, per-mesh clicking, readonly mode, skeleton loading
+│   │   ├── ThreeSceneModal.vue         # Legacy modal-mode wrapper (~737 lines) with placeholder cube geometry
+│   │   ├── VirtualTryOn.vue            # Face AR overlay (~1198 lines): MediaPipe + PerspectiveCamera (low FOV 10deg)
+│   │   ├── AdminTryOnPreview.vue       # Preview try-on result in admin (~146 lines)
+│   │   ├── AdminTryOnTest.vue          # Legacy test try-on with live camera (~141 lines)
+│   │   └── AdminCalibrateTryOn.vue     # Calibrate offsetY + scale for try-on per product (~552 lines)
 │   └── services/
-│       ├── shopifyService.ts           # PostMessage cart integration
-│       └── faceTrackingService.ts      # MediaPipe Face Mesh wrapper
+│       ├── shopifyService.ts           # MultiClientShopifyService class (~676 lines): client detection, variant management, cart operations, PostMessage
+│       └── faceTrackingService.ts      # MediaPipe Face Mesh wrapper (~337 lines)
 │
 ├── public/models/                      # 3D GLB models (served statically)
 ├── dist/                               # Production build (deployed to Vercel)
-├── vercel.json                         # Vercel deployment config
+├── vercel.json                         # Vercel deployment config (CORS, CSP, rewrites)
 ├── vite.config.ts
-└── package.json                        # Vue 3 + Three.js 0.176 + Vite 6
+└── package.json                        # Vue 3 + Three.js + Vite
 
 iani-configurator/                      # Shopify Admin App (Remix)
 ├── app/
 │   ├── shopify.server.ts               # Shopify app auth config
 │   ├── db.server.ts                    # Prisma client singleton
-│   ├── billing.server.ts               # PLANS config + billing helpers
+│   ├── billing.server.ts              # PLANS config + billing helpers (getOrCreateShop, hasFeatureAccess, canAddProduct, createBillingSubscription, etc.)
+│   ├── globals.d.ts                    # TypeScript global declarations
+│   ├── routes.ts                       # Route configuration
 │   └── routes/
-│       ├── app.tsx                     # Layout: NavMenu (Home, 3D Products, Preview, Analytics, Subscription)
-│       ├── app._index.tsx              # Dashboard: stats, recent products, quick actions
+│       ├── _index/
+│       │   ├── route.tsx               # Landing page (non-app route)
+│       │   └── styles.module.css       # Landing page styles
+│       ├── app.tsx                     # Layout: NavMenu (Home, 3D Products, Preview, Subscription)
+│       ├── app._index.tsx              # Dashboard: stats, onboarding checklist, quick actions, upsell banners
 │       ├── app.products._index.tsx     # Product list with plan limit indicator
-│       ├── app.products.new.tsx        # Add new 3D product (pick from Shopify catalog)
-│       ├── app.products.$id.tsx        # Edit product: colors, materials, try-on toggle, calibration
-│       ├── app.configurator.tsx        # Iframe preview of the 3D configurator
-│       ├── app.billing.tsx             # Subscription plans UI (Free/Starter/Pro/Business)
-│       ├── app.analytics.tsx           # Analytics dashboard (Business plan only)
-│       ├── app.additional.tsx          # Additional settings page
+│       ├── app.products.new.tsx        # Add new 3D product (pick from Shopify catalog, 4-step wizard)
+│       ├── app.products.$id.tsx        # Edit product: colors, materials, try-on toggle, calibration, delete
+│       ├── app.configurator.tsx        # Iframe preview of the 3D configurator with recent configurations
+│       ├── app.billing.tsx             # Subscription plans UI (Free/Starter/Pro/Business), dev mode plan switching
+│       ├── app.additional.tsx          # Additional settings page (template placeholder)
 │       ├── auth.$.tsx                  # OAuth callback handler
+│       ├── auth.login/
+│       │   ├── route.tsx               # Login route
+│       │   └── error.server.tsx        # Login error handling
 │       ├── privacy.tsx                 # GDPR privacy policy page
 │       │
 │       ├── api.gdpr.tsx                # GDPR webhooks (data_request, redact, shop redact)
-│       ├── api.product-config.$productId.tsx     # Public: get product config for iframe
+│       ├── api.product-config.$productId.tsx     # Public: get product config for iframe (with feature gating)
 │       ├── api.products.$productId.configuration.tsx  # Get product + color/material options
 │       ├── api.save-configuration.tsx            # Save customer configuration to DB
 │       ├── api.get-configuration.$id.tsx         # Get saved configuration by ID
-│       ├── api.configurations.$configId.tsx      # Get configuration (alternate endpoint)
+│       ├── api.configurations.$configId.tsx      # Get/update configuration (alternate endpoint)
 │       ├── api.upload-preview.tsx                # Upload base64 preview image to DB
 │       ├── api.preview-image.$id.tsx             # Serve preview image by ID
 │       ├── api.cart.add.tsx                      # Shopify cart add (server-side)
@@ -106,9 +116,9 @@ iani-configurator/                      # Shopify Admin App (Remix)
 │       ├── locales/en.default.json
 │       ├── blocks/
 │       │   ├── 3d-configurator.liquid  # Main App Block (modal or inline mode)
-│       │   └── cart-preview.liquid     # Cart block: shows customized preview image
+│       │   └── cart-preview.liquid     # Cart block: shows customized preview image + draft order checkout
 │       └── assets/
-│           ├── configurator-loader.js  # Iframe loader + PostMessage handler
+│           ├── configurator-loader.js  # Iframe loader + PostMessage handler + cart flow
 │           └── configurator.css
 │
 └── package.json                        # Remix 2.16 + Polaris 12 + Prisma 6
@@ -122,17 +132,20 @@ iani-configurator/                      # Shopify Admin App (Remix)
 Session          # Shopify OAuth sessions
 
 Shop             # Per-shop billing state
-  shopDomain     # "mystore.myshopify.com"
+  shopDomain     # "mystore.myshopify.com" (unique)
   plan           # "free" | "starter" | "pro" | "business"
   subscriptionId # Shopify subscription ID
-  subscriptionStatus  # "none" | "active" | "cancelled" | "frozen"
+  subscriptionStatus  # "none" | "active" | "cancelled" | "frozen" | "pending"
   trialEndsAt    # Trial expiry
+  currentPeriodEnd # Current billing period end
   productLimit   # 1 / 3 / -1 (unlimited)
+  hasAddedAppBlock   # Onboarding flag
+  hasPreviewedStore  # Onboarding flag
 
 Product3D        # A Shopify product with 3D config
-  shopifyProductId
-  shop
+  shopifyProductId + shop (unique compound)
   name
+  basePrice      # Base price before customizations
   baseModelUrl   # Custom GLB URL (optional)
   useShopifyModel  # Use Shopify product media instead
   isActive
@@ -150,6 +163,9 @@ ColorOption      # A color choice for a product
 MaterialOption   # A material choice for a product
   name, description, extraCost, sortOrder, isDefault
 
+CustomizationOption  # Legacy model (deprecated, unused)
+  product3DId, optionType, optionName, optionValue, price
+
 ProductConfiguration   # A customer's saved config
   product3DId, shop
   customerEmail, shopifyCustomerId
@@ -166,18 +182,20 @@ ConfigurationPreview   # Base64 preview images
 
 ---
 
-## Billing Plans
+## Billing Plans (as implemented in billing.server.ts)
 
 | Plan     | Price   | Products  | Face AR | Space AR | Watermark | Analytics | Priority Support |
 |----------|---------|-----------|---------|----------|-----------|-----------|-----------------|
 | Free     | $0      | 1         | No      | No       | Yes       | No        | No              |
 | Starter  | $19/mo  | 3         | No      | No       | Yes       | No        | No              |
 | Pro      | $49/mo  | Unlimited | Yes     | No       | No        | No        | No              |
-| Business | $99/mo  | Unlimited | Yes     | Yes      | No        | Yes       | Yes             |
+| Business | $99/mo  | Unlimited | Yes     | Yes      | No        | No        | Yes             |
+
+**Note**: Analytics is set to `false` for ALL plans in the current code, including Business. The analytics feature flag exists but no analytics route or dashboard has been implemented.
 
 All paid plans include a 14-day free trial. Billing uses Shopify's native Billing API (`appSubscriptionCreate`). Custom apps fall back to a dev mode manual plan switch.
 
-Feature access is gated server-side via `hasFeatureAccess(shop, feature)` in `billing.server.ts`. The analytics route redirects to `/app/billing` if the shop is not on Business plan.
+Feature access is gated server-side via `hasFeatureAccess(shop, feature)` in `billing.server.ts`.
 
 ---
 
@@ -186,67 +204,96 @@ Feature access is gated server-side via `hasFeatureAccess(shop, feature)` in `bi
 ### PostMessage Communication (iframe to Shopify storefront)
 
 ```javascript
-// Add to cart
-window.parent.postMessage({
-  type: 'IANI_ADD_TO_CART',
-  payload: { variantId, configuration, previewImage }
-}, '*')
-
-// Try-On lifecycle (hide/show Shopify close button)
+// Iframe -> Storefront
+window.parent.postMessage({ type: 'IANI_ADD_TO_CART', payload: { colorName, colorHex, materialName, price, quantity, configuration, meshCustomizations, previewImage, configurationId } }, '*')
 window.parent.postMessage({ type: 'IANI_TRYON_OPENED' }, '*')
 window.parent.postMessage({ type: 'IANI_TRYON_CLOSED' }, '*')
+window.parent.postMessage({ type: 'IANI_CLOSE' }, '*')
+// Sent on mount:
+window.parent.postMessage({ type: 'IANI_READY' }, '*')
+
+// Storefront -> Iframe
+{ type: 'IANI_INIT', payload: { productId, variantId, shop, currency, price, moneyFormat } }
+{ type: 'IANI_CART_SUCCESS', payload: { item details } }
+{ type: 'IANI_CART_ERROR', payload: { message } }
 ```
 
 ### AR Implementation
-- **Face AR**: MediaPipe Face Mesh (`@mediapipe/face_mesh`) + Three.js `OrthographicCamera` (no distortion)
-- **Space AR**: WebXR Device API (`renderer.xr`) for room placement
+- **Face AR**: MediaPipe Face Mesh (`@mediapipe/face_mesh` from CDN) + Three.js `PerspectiveCamera` (FOV 10 degrees for near-orthographic look while preserving depth for temple arms)
+- **Space AR**: WebXR Device API (`renderer.xr`) for room placement on ARCore Android devices
 
 ### Feature Gating (server-side)
 ```typescript
 // billing.server.ts
-const hasAccess = await hasFeatureAccess(shop, "analytics");
+const hasAccess = await hasFeatureAccess(shop, "tryOnEnabled");
 // feature keys: "tryOnEnabled" | "spaceArEnabled" | "watermark" | "analytics" | "prioritySupport"
-if (!hasAccess) return redirect("/app/billing");
 ```
+
+### Multi-Client Shopify Service
+`shopifyService.ts` implements `MultiClientShopifyService` with:
+- Client detection from URL params (`client`, `store`, `shop`)
+- Static client configs for `ianii`, `demo-furniture`, `luxury-living`
+- Auto-generation of client configs for unknown clients
+- Cart operations with API fallback to local simulation
+- PostMessage bridge to parent Shopify storefront
 
 ---
 
 ## Completed Features
 
 ### Frontend (Vue)
-- 3D model rendering with OrbitControls (360 rotate, zoom)
-- Color customization (preset swatches + custom hex)
-- Material selection with extra cost pricing
-- Real-time dynamic pricing display
-- Virtual Try-On: MediaPipe face mesh, glasses overlay, head rotation, color sync
+- 3D model rendering with OrbitControls (360 rotate, zoom, pan with damping)
+- Per-mesh clicking: click individual parts to customize them independently
+- Color customization: 6 preset swatches + custom hex picker, per-mesh application
+- Material selection: 4 frame materials (Oak, Walnut, Metal, White Oak) with roughness/metalness
+- Pillow style options (Classic, Velvet Blue, Golden, Burgundy)
+- Leg style options (Wooden, Metal, Brass, Black Metal)
+- Real-time dynamic pricing with 25+ currency support
+- Loading skeleton UI while model loads
+- Read-only mode for merchant configuration viewing (click-to-highlight parts)
+- Preview mode for admin (no cart button)
+- Virtual Try-On: MediaPipe face mesh, glasses overlay, head rotation tracking, color sync
 - Photo capture and download in try-on mode
-- Space AR via WebXR (furniture/decor placement)
-- Admin Try-On calibration UI (offsetY, scale sliders with live preview)
-- PostMessage cart integration
+- Space AR via WebXR (tap-to-place, rotate/scale/move controls, surface detection reticle)
+- Admin Try-On calibration UI (offsetY, scale sliders with presets)
+- PostMessage cart integration with preview image capture
+- Fallback models: geometric sofa (configurator) and geometric glasses (try-on) if GLB fails
+- Dynamic model loading from: API config > URL param > Shopify media > default models
+- Dynamic config loading from API: color options, material options, try-on settings, space AR flag
 
 ### Shopify Admin App
-- OAuth install flow
-- Dashboard with product stats and plan usage bar
+- OAuth install flow with session management
+- Dashboard with product stats, onboarding checklist (3 steps with progress bar), upsell banners
 - Product list with plan limit progress indicator
-- Add/edit products: colors, materials, pricing, try-on toggle, offsetY/scale calibration
-- Configurator live preview iframe
-- Full billing page: 4 plans, equal-height comparison cards, trial status, dev mode fallback
-- Analytics dashboard (Business plan only): total configs, orders, conversion rate, revenue, top colors, top materials, per-product breakdown table, recent orders
-- GDPR webhook handlers (data_request, customer redact, shop redact)
+- Add products: 4-step wizard (select Shopify product > name/price > colors > materials)
+- Edit products: colors, materials, pricing, try-on toggle, offsetY/scale calibration, delete with confirmation
+- Configurator live preview iframe with recent configurations list
+- Full billing page: 4 plans side-by-side, trial status, dev mode fallback for custom apps
+- GDPR webhook handlers (data_request logs data, customer redact deletes configs, shop redact deletes all data)
 - App uninstall + subscription update webhooks
+- Error boundaries on product edit page
 
 ### Theme Extension
 - App Block in modal or inline display mode
 - Auto-load or click-to-load option
-- Cart preview block (shows customization image in cart)
-- Mobile responsive
+- Configurable: height, colors, border radius, button text, fullscreen toggle, debug mode
+- Cart preview block: shows customization image, hides internal properties, price restoration from localStorage
+- Draft order creation for checkout with custom pricing (30-min expiration)
+- Mobile responsive with accessibility (ARIA labels, touch targets, reduced motion, high contrast)
+- CSS isolation, Safari fixes, print-friendly
 
 ### API Endpoints
-- Product config serving for iframe (`/api/product-config/:productId`)
-- Save/get configurations
-- Preview image upload and serving
-- Cart add (server-side proxy)
-- Draft order creation
+- `GET /api/product-config/:productId` - Product config with feature gating (CORS enabled)
+- `POST /api/save-configuration` - Save configuration (auto-creates Product3D if missing)
+- `GET /api/get-configuration/:id` - Get saved configuration
+- `GET /api/products/:id/configuration` - List last 10 configs for product
+- `POST /api/products/:id/configuration` - Create new configuration
+- `PUT /api/configurations/:id` - Update configuration status
+- `POST /api/upload-preview` - Upload base64 preview image
+- `GET /api/preview-image/:id` - Serve preview image (1-year cache)
+- `POST /api/cart/add` - Cart add (server-side proxy)
+- `POST /api/draft-order` - Create Shopify draft order with price overrides
+- `GET /api/test-db` - Database health check
 
 ---
 
@@ -254,10 +301,20 @@ if (!hasAccess) return redirect("/app/billing");
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| Remove debug green eye-marker dots | Low | Set `DEBUG_SHOW_EYE_MARKERS = false` in `ThreeSceneMinimal.vue` |
-| Fix temple length edge case in try-on | Low | Camera near plane issue on certain face angles |
-| App Store submission | Medium | Screenshots, description, review process |
-| Beta testing with merchants | High | Real-world feedback needed |
+| App Store submission | Medium | Screenshots, description, review process needed |
+| Color/material options partially hardcoded | Low | Frontend has hardcoded fallbacks for standalone/demo mode; loads from API when product/shop context available — intentional behavior |
+
+## Recently Completed
+
+| Item | Notes |
+|------|-------|
+| Public API endpoints secured | Rate limiting (per-IP, per-minute) + shop domain validation on all `/api/*` routes via `app/utils/api-security.server.ts` |
+| Automated tests added | Vitest + 20 tests covering billing plan logic and API security; run with `cd iani-configurator && npm test` |
+| Analytics references removed | Dashboard no longer references unimplemented analytics feature |
+| Hardcoded URLs replaced with env vars | `FRONTEND_URL` (Remix app), `VITE_CONFIGURATOR_URL` (Vue frontend); theme extension reads URLs from configurable block settings |
+| `CustomizationOption` removed from schema | Run `npx prisma migrate dev --name remove_customization_option` to apply |
+| Legacy files deleted | `app.additional.tsx`, `ThreeSceneModal.vue`, `AdminTryOnTest.vue` removed; `App.vue` cleaned up |
+| GDPR webhooks completed | All three handlers now fully compliant (data export, customer redact with previews, shop redact in correct FK order) |
 
 ---
 
@@ -277,8 +334,26 @@ npx prisma studio              # DB GUI
 npx prisma migrate dev         # Create + run migration
 npx prisma generate            # Regenerate Prisma client
 
-# Git
-git add . && git commit -m "message" && git push
+# Tests
+cd iani-configurator
+npm test                       # Run all Vitest tests (billing + API security)
+npm run test:watch             # Watch mode
+
+# Required after removing CustomizationOption
+npx prisma migrate dev --name remove_customization_option
+```
+
+## Environment Variables
+
+```bash
+# Shopify Admin App (iani-configurator/.env)
+SHOPIFY_APP_URL=https://iani-configurator-1.onrender.com   # Backend API URL
+FRONTEND_URL=https://iani-configurator.vercel.app          # Vue frontend URL (for calibration tool link)
+
+# Vue Frontend (.env / .env.production)
+VITE_CONFIGURATOR_URL=https://iani-configurator.vercel.app # Production configurator URL
+VITE_API_BASE_URL=https://iani-configurator.vercel.app     # Dev API base URL
+VITE_BRIDGE_URL=http://localhost:3001                      # Dev bridge server URL
 ```
 
 ---
@@ -301,11 +376,6 @@ git add . && git commit -m "message" && git push
 - **Face AR**: Eyewear ($180B), Jewelry ($350B), Fashion accessories ($25B)
 - **Space AR**: Furniture ($250B e-commerce), Home Decor ($130B), Outdoor ($45B)
 
-## Beta Readiness
-
-Ready now: install, configure products, add App Block, 3D viewer, Virtual Try-On, cart save, analytics, GDPR.
-Nice to have before launch: remove debug markers, fix temple edge case, App Store submission.
-
 ---
 
 ## Glossary
@@ -316,7 +386,6 @@ Nice to have before launch: remove debug markers, fix temple edge case, App Stor
 | Theme Extension | Shopify-approved way to inject code into storefront |
 | PostMessage | Browser API for iframe to parent page communication |
 | MediaPipe | Google ML framework for face landmark detection |
-| OrthographicCamera | Three.js camera without perspective distortion (used for Face AR) |
 | WebXR | Web API for AR/VR experiences (used for Space AR) |
 | GLB/GLTF | 3D model file formats |
 | Neon | Serverless PostgreSQL provider used for the database |
@@ -327,7 +396,7 @@ Nice to have before launch: remove debug markers, fix temple edge case, App Stor
 # PART 3: DETAILED FEATURE ANALYSIS REPORT
 
 **Analysis Date**: March 2026
-**Purpose**: Research-grade assessment of every implemented feature -- completeness, implementation quality, technical details, and known issues.
+**Purpose**: Accurate assessment of every implemented feature -- completeness, implementation quality, technical details, and known issues.
 
 ---
 
@@ -342,19 +411,21 @@ Nice to have before launch: remove debug markers, fix temple edge case, App Stor
 | 5 | Dynamic Pricing Engine | COMPLETE | 100% | ThreeSceneMinimal.vue |
 | 6 | Virtual Try-On (Face AR) | COMPLETE | 95% | VirtualTryOn.vue, faceTrackingService.ts |
 | 7 | Try-On Calibration System | COMPLETE | 100% | AdminCalibrateTryOn.vue, AdminTryOnPreview.vue |
-| 8 | Space AR (Shopify Native) | COMPLETE | 100% | 3d-configurator.liquid, Shopify Scene Viewer |
+| 8 | Space AR (WebXR Custom) | COMPLETE | 100% | ThreeSceneMinimal.vue (WebXR), 3d-configurator.liquid (Shopify native) |
 | 9 | PostMessage Iframe Protocol | COMPLETE | 100% | ThreeSceneMinimal.vue, configurator-loader.js |
 | 10 | Theme Extension (App Block) | COMPLETE | 95% | 3d-configurator.liquid, configurator-loader.js |
 | 11 | Cart Integration & Draft Orders | COMPLETE | 90% | cart-preview.liquid, api.cart.add, api.draft-order |
 | 12 | Admin Dashboard | COMPLETE | 95% | app._index.tsx |
 | 13 | Product Management (CRUD) | COMPLETE | 95% | app.products.*.tsx |
 | 14 | Billing & Subscription System | COMPLETE | 90% | app.billing.tsx, billing.server.ts |
-| 15 | Analytics Dashboard | NOT IMPLEMENTED | 0% | -- |
+| 15 | Analytics Dashboard | NOT IMPLEMENTED | 0% | No route file exists |
 | 16 | Configuration Save/Load API | COMPLETE | 90% | api.save-configuration, api.get-configuration |
 | 17 | Preview Image System | COMPLETE | 85% | api.upload-preview, api.preview-image |
-| 18 | GDPR Compliance | PARTIAL | 70% | api.gdpr.tsx, privacy.tsx |
+| 18 | GDPR Compliance | COMPLETE | 95% | api.gdpr.tsx, privacy.tsx |
 | 19 | Webhook Handlers | COMPLETE | 90% | webhooks.*.tsx |
 | 20 | Database Schema | COMPLETE | 90% | schema.prisma |
+| 21 | Read-Only Configuration Viewer | COMPLETE | 100% | ThreeSceneMinimal.vue |
+| 22 | Multi-Client Service | COMPLETE | 90% | shopifyService.ts |
 
 **Overall Project Completion: ~87%**
 
@@ -362,34 +433,40 @@ Nice to have before launch: remove debug markers, fix temple edge case, App Stor
 
 ## FEATURE 1: 3D Model Loading & Rendering
 
-**Component**: `src/components/ThreeSceneMinimal.vue` (~2200 lines)
+**Component**: `src/components/ThreeSceneMinimal.vue` (~3614 lines)
 **Status**: COMPLETE (100%)
 
 ### How It Works
-- Uses Three.js `GLTFLoader` to load `.glb` models from multiple sources with a priority chain:
+- Uses Three.js `GLTFLoader` to load `.glb` models with priority chain:
   1. Product config API URL (fetched from `/api/product-config/:productId`)
-  2. Full URL passed via URL params
-  3. Model filename param (resolved against `/public/models/`)
-  4. Dropdown selection from available models list
-- On load, the system auto-calculates the bounding box of the model and positions the camera intelligently based on model dimensions
-- Supports dynamic model switching via a dropdown UI (selectable: `officeChair.glb`, `Couch.glb`, `low-poly_akmsu.glb`, `check.glb`)
-- Creates a fallback clickable sofa geometry if the primary model fails to load
-- Scene setup: PerspectiveCamera (FOV 50), ambient + directional lighting, WebGLRenderer with antialiasing
+  2. Full URL passed via `modelUrl` URL param
+  3. Model filename from `modelFile` URL param (resolved against `/public/models/`)
+  4. Dropdown selection from available models list (debug mode)
+- On load: auto-calculates bounding box, positions camera intelligently based on model dimensions (small/medium/large scaling)
+- Takes `gltf.scene.children[0]` as the model root
+- Creates fallback clickable sofa geometry (body + seat cushion) if primary model fails
+- Scene: PerspectiveCamera (FOV 50), 7-light setup (ambient + 6 directional + hemisphere), WebGLRenderer with antialiasing, shadow maps, ACES filmic tone mapping
 
-### Technical Details
-- Camera field of view: 50 degrees (hardcoded)
-- Default model: `officeChair.glb`
-- Model analysis on load: traverses all meshes, clones materials to prevent shared mutation (forces new UUIDs), assigns part types heuristically via name pattern matching (e.g., "cushion", "frame", "leg", "arm")
-- Part type detection uses regex patterns: may miss models with non-standard naming conventions
+### Lighting Setup (Enhanced Multi-Directional)
+- Ambient: 0.85 intensity
+- 6 directional lights from all angles (front-right, back-left, top, bottom, front-left, back-right)
+- Hemisphere light for natural ambient fill
+- Shadow maps: PCFSoftShadowMap, 2048x2048 resolution
 
-### Error Handling
-- try/catch around model loading with fallback geometry creation
-- Console logging for debugging (95+ log statements throughout component)
+### Model Analysis (identifySofaParts)
+- Traverses all meshes and classifies via name pattern matching:
+  - **Frame patterns**: receiver, body, frame, main, base, structure, rim, temple, bridge
+  - **Cushion patterns**: cushion, seat, padding, back, fabric, upholstery, lens
+  - **Leg patterns**: barrel, tube, pipe, leg, support, foot, feet, stand
+  - **Arm/Pillow patterns**: grip, handle, arm, pillow, rest, accessory, hinge
+- Unidentified meshes default to frame category
+- Each mesh gets material cloned with new UUID for complete isolation
 
-### Known Issues
-- Available models list is hardcoded (assumes specific files exist in `/public/models/`)
-- Part assignment is heuristic-based (pattern matching on mesh names) -- may misclassify parts on unfamiliar models
-- Component is monolithic at ~2200 lines -- difficult to maintain
+### Debug Features
+- Hidden debug panel with model selector dropdown (4 hardcoded models)
+- Debug stats: total meshes, cushions, frame, pillows, legs counts
+- Export model structure to clipboard
+- Debug toggle commented out in template
 
 ---
 
@@ -398,17 +475,10 @@ Nice to have before launch: remove debug markers, fix temple edge case, App Stor
 **Component**: `src/components/ThreeSceneMinimal.vue`
 **Status**: COMPLETE (100%)
 
-### How It Works
-- Three.js `OrbitControls` instantiated with damping enabled (dampingFactor: 0.05) for smooth inertia
-- Min/max zoom distance calculated dynamically based on loaded model's bounding box dimensions
-- Polar angle range: 0 to 180 degrees (full vertical rotation permitted)
-- Auto-updates camera target when model changes
-- Controls: left-click drag to rotate, scroll wheel to zoom, right-click/two-finger drag to pan
-
-### Technical Details
-- Damping creates smooth deceleration when user releases drag
-- Distance limits prevent zooming inside or too far from the model
-- Controls update on each animation frame via `controls.update()` in render loop
+- Three.js `OrbitControls` with damping (factor: 0.05)
+- Zoom limits calculated dynamically: minDistance = maxDim * 0.1, maxDistance = maxDim * 10
+- Full polar angle range (0 to PI)
+- Auto-updates target to model center on load
 
 ---
 
@@ -418,20 +488,16 @@ Nice to have before launch: remove debug markers, fix temple edge case, App Stor
 **Status**: COMPLETE (100%)
 
 ### How It Works
-- **Preset Swatches**: 6 hardcoded color options with names and prices:
-  - Ocean Blue (#1E90FF, $0), Crimson Red (#DC143C, $20), Forest Green (#228B22, $15), Chocolate Brown (#8B4513, $10), Royal Purple (#7851A9, $25), Sunset Orange (#FF6347, $15)
-- **Custom Hex Picker**: Native HTML5 color input for arbitrary colors
-- **Per-Mesh Application**: Clicking a 3D model part selects that specific mesh. Color changes apply ONLY to the selected part via `material.color.setHex()`
-- **Data Tracking**: `meshCustomizations` reactive object stores per-mesh state: `{ "meshName": { colorHex, colorName, price, type, partType } }`
+- **Click a mesh part** -> shows customization menu (Colors or Frame buttons)
+- **Preset Colors**: 6 defaults loaded from API or hardcoded fallback:
+  - Ocean Blue (#4A90E2, $299.99), Crimson Red (#E74C3C, $319.99), Forest Green (#2ECC71, $309.99), Chocolate Brown (#8B4513, $329.99), Royal Purple (#9B59B6, $339.99), Sunset Orange (#E67E22, $314.99)
+- **Custom Hex Picker**: Native HTML5 color input
+- **Per-Mesh Tracking**: `meshCustomizations` reactive object stores per-mesh state: `{ "meshName": { colorHex, colorName, type, partType, price } }`
+- Colors and materials dynamically loaded from `/api/product-config/:productId` when Shopify context is available
 
-### Technical Details
-- Material cloning ensures each mesh has its own material instance (prevents color bleeding between parts)
-- Real-time application: no render delay, color updates immediately on click
-- Each color carries a price modifier added to the total
-
-### Known Issues
-- Color options are hardcoded in the frontend, not fetched from the admin-configured options
-- Custom hex colors have no price modifier (always $0 extra)
+### Edge highlight
+- Clicked mesh gets edge border highlight (`EdgesGeometry` + `LineSegments`)
+- Only one mesh highlighted at a time
 
 ---
 
@@ -440,21 +506,15 @@ Nice to have before launch: remove debug markers, fix temple edge case, App Stor
 **Component**: `src/components/ThreeSceneMinimal.vue`
 **Status**: COMPLETE (95%)
 
-### How It Works
-- 4 frame material options with pricing: Oak Wood ($0), Walnut ($50), Metal Frame ($75), White Oak ($25)
-- Material properties applied: roughness, metalness values per material type
-- Applied only to the currently selected/clicked mesh
-- UI only appears after clicking a model part classified as "frame" type
-
-### Technical Details
-- Material properties map defines roughness/metalness per material name
-- Extra cost tracked per selection and added to total price
-- Applied via `material.roughness` and `material.metalness` property updates
+### Materials
+- 4 frame materials: Oak Wood ($0, rough:0.8/metal:0.0), Walnut ($50, 0.7/0.0), Metal Frame ($75, 0.3/0.8), White Oak ($25, 0.9/0.0)
+- 4 pillow styles: Classic ($0), Velvet Blue ($35), Golden ($40), Burgundy ($35)
+- 4 leg styles: Wooden ($0), Metal ($60), Brass ($80), Black Metal ($65)
+- Applied to clicked mesh only via `material.roughness` and `material.metalness`
 
 ### Missing (5%)
-- Material UI only visible after clicking a part -- not immediately discoverable
-- Limited to "frame" classified parts only; other part types cannot have material changes
-- Material options hardcoded in frontend rather than fetched from admin configuration
+- Material UI requires clicking a part first -- not immediately discoverable
+- Material options loaded from API when available, but pillow/leg options are always hardcoded
 
 ---
 
@@ -463,125 +523,72 @@ Nice to have before launch: remove debug markers, fix temple edge case, App Stor
 **Component**: `src/components/ThreeSceneMinimal.vue`
 **Status**: COMPLETE (100%)
 
-### How It Works
-- **Base Price**: Fetched from Shopify product context or defaults to $299.99
-- **Extra Costs** aggregated from:
-  - Per-mesh color customization prices
-  - Frame material extra cost
-  - Pillow style extra cost
-  - Leg style extra cost
+- **Base Price**: From Shopify URL param `price`, or product config API, or default $299.99
+- **Extra Costs**: Aggregated from all `meshCustomizations` entries (each customized mesh adds its color/material price)
+- **Legacy fallback**: If no mesh customizations, sums from single color + frame + pillow + leg selections
 - **Formula**: `calculatedPrice = basePrice + totalExtraCost`
-- **Display**: Shows crossed-out base price alongside final price when extras exist
-- **Currency Support**: 25+ currencies with proper locale formatting (USD, EUR, GBP, JPY, RSD, etc.)
-
-### Technical Details
-- `totalExtraCost` is a Vue computed property that sums all active customization prices
-- Currency formatting uses `Intl.NumberFormat` with currency-specific locale mappings
-- Price updates are reactive -- change instantly when any customization changes
+- **Display**: Crossed-out base price when extras exist
+- **Currency**: 25+ currencies via symbol map + `Intl.NumberFormat`-style formatting
+- **Read-only mode**: Uses saved config price (`savedConfigPrice`) instead of calculating
 
 ---
 
 ## FEATURE 6: Virtual Try-On (Face AR)
 
-**Component**: `src/components/VirtualTryOn.vue` (~1200 lines), `src/services/faceTrackingService.ts` (~330 lines)
+**Components**: `src/components/VirtualTryOn.vue` (~1198 lines), `src/services/faceTrackingService.ts` (~337 lines)
 **Status**: COMPLETE (95%)
 
-### How It Works
+### Face Detection Pipeline
+1. `faceTrackingService.ts` loads MediaPipe Face Mesh from CDN (`cdn.jsdelivr.net/npm/@mediapipe/face_mesh/`)
+2. Config: maxNumFaces=1, refineLandmarks=true, minDetectionConfidence=0.5
+3. Extracts 468 landmarks per frame, key points for eyes, nose, forehead, ears
 
-#### Face Detection Pipeline
-1. `faceTrackingService.ts` initializes MediaPipe Face Mesh (loaded from CDN: `cdn.jsdelivr.net/npm/@mediapipe/face_mesh/`)
-2. Configuration: maxNumFaces=1, refineLandmarks=true, minDetectionConfidence=0.5
-3. Extracts 468 face landmarks per frame, with key points for:
-   - Eye corners and centers (glasses bridge positioning)
-   - Nose bridge (vertical alignment)
-   - Forehead (for hat placement)
-   - Ears (for earring placement)
-   - Chin and face oval (rotation calculation)
+### Glasses Positioning Algorithm
+1. MediaPipe normalized coords (0-1) -> pixel coords -> Three.js world coords via `faceToThreeJS()`
+2. Center point = midpoint between left and right eye positions
+3. Eye distance used for scaling: `targetGlassesWidth = eyeDistance * 2.2`
+4. Base lens offset: `eyeDistance * 0.35`
+5. Custom offset: `(offsetY / 100) * eyeDistance`
+6. Custom scale: `baseScale * customScaleMultiplier`
 
-#### Glasses Positioning Algorithm
-1. Face landmarks converted from normalized (0-1) coordinates to Three.js world coordinates
-2. Eye positions calculated as midpoint between eye_outer and eye_inner landmarks
-3. Glasses centered between both eyes
-4. Eye distance used for scaling: `targetGlassesWidth = eyeDistance * 2.2`
-5. Base lens offset: 35% of eye distance
-6. Custom offsets applied: `customOffset = (offsetY / 100) * eyeDistance`
-7. Custom scale multiplied: `finalScale = baseScale * customScaleMultiplier`
+### Camera System
+- PerspectiveCamera with FOV 10 degrees (near-orthographic look, preserves depth for temples)
+- Camera distance: `(canvasHeight/2) / tan(fov/2)` to fill view
+- Canvas sized to match displayed video element (not native resolution)
 
-#### Head Rotation Tracking
-- Extracts pitch (up/down), yaw (left/right), roll (tilt) from face landmark geometry
-- Applied to glasses model with dampened multipliers to reduce jitter:
-  - Pitch: `-rotation.pitch * 0.3`
-  - Yaw: `-rotation.yaw * 0.6` (inverted for mirrored selfie view)
-  - Roll: `rotation.roll * 0.5`
+### Head Rotation Tracking
+- Pitch: `-rotation.pitch * 0.3`
+- Yaw: `-rotation.yaw * 0.6` (inverted for mirrored selfie view)
+- Roll: `rotation.roll * 0.5`
 
-#### Camera System
-- Uses PerspectiveCamera with very low FOV (10 degrees) instead of true OrthographicCamera
-- Rationale: low FOV gives near-orthographic look while preserving depth for temple arms extending backward
-- Documented decision in code comments
-
-#### Color Synchronization
-- Props receive `colorOptions` array and `selectedColor` from parent configurator
+### Color Sync
+- Receives `colorOptions` and `selectedColor` props from parent configurator
 - `applyColorToModel()` traverses all meshes and updates material colors
-- Watches for parent-initiated color changes reactively
+- Watches for parent-initiated color changes
 
-#### Photo Capture & Download
-- `combineVideoAndModel()` composites mirrored video feed + 3D glasses overlay onto single canvas
-- JPEG quality: 0.9
-- Auto-generated filename with timestamp
-- Triggers browser download dialog
+### Photo Capture
+- `combineVideoAndModel()`: composites mirrored video + 3D overlay onto canvas
+- JPEG quality 0.9, auto-generated filename with timestamp
 
-### Technical Details
-- WebGL renderer uses `preserveDrawingBuffer: true` for screenshot capability
-- Camera near plane: 1, far plane: 5000
-- Fallback: creates simple geometric glasses if GLB model fails to load
-- Resource cleanup: proper disposal of Three.js objects and camera stream on unmount
+### Fallback Glasses
+- Creates geometric glasses (torus frames, circle lenses, cylinder bridge, box temples) if GLB fails
 
-### Debug Features
-- `DEBUG_SHOW_EYE_MARKERS = false` (green spheres at eye positions, hidden by default)
-- Extensive console logging throughout pipeline
-
-### Known Issues (5% incomplete)
-- Temple length edge case: camera near-plane clipping on extreme face angles
-- Error messages for camera denial explain iframe permission requirements
-- No true OrthographicCamera (uses low-FOV perspective instead -- documented tradeoff)
+### Debug
+- `DEBUG_SHOW_EYE_MARKERS = false` (green spheres at eye positions)
 
 ---
 
 ## FEATURE 7: Try-On Calibration System
 
-**Components**: `src/components/AdminCalibrateTryOn.vue` (~550 lines), `src/components/AdminTryOnPreview.vue` (~150 lines), `src/components/AdminTryOnTest.vue` (~140 lines)
+**Components**: `AdminCalibrateTryOn.vue` (~552 lines), `AdminTryOnPreview.vue` (~146 lines), `AdminTryOnTest.vue` (~141 lines, legacy)
 **Status**: COMPLETE (100%)
 
-### How It Works
-
-#### Calibration UI (AdminCalibrateTryOn.vue)
-- **Real-time sliders**:
-  - Vertical position: -50% to +50% (negative = move glasses up)
-  - Scale: 0.5x to 2.0x in 0.05 increments
-- **Live preview**: Embeds VirtualTryOn component with hidden controls for real-time feedback
-- **Preset buttons**:
-  - Reset to defaults (offsetY=0, scale=1.0)
-  - Narrow face preset (offsetY=-2, scale=0.85)
-  - Wide face preset (offsetY=2, scale=1.15)
-- **Help tips**: UX guidance text for merchants
-- **Save mechanism**: Posts `CALIBRATION_SAVED` message to parent admin window with productId, offsetY, scale
-- **Unsaved changes detection**: Confirms before closing if values changed
-
-#### Admin Preview (AdminTryOnPreview.vue)
-- Shows live try-on preview in admin product editor
-- Receives modelUrl, offsetY, scale, tryOnType as props
-- Hides UI controls via `:deep()` CSS scoping
-- Auto-starts try-on on mount, watches for prop changes
-
-#### Admin Test (AdminTryOnTest.vue)
-- Full-screen try-on test window (legacy component)
-- Receives `UPDATE_TRYON_SETTINGS` messages from parent for live slider updates
-- Appears to be superseded by AdminCalibrateTryOn
-
-### Integration with Admin
-- Product edit page (`app.products.$id.tsx`) opens calibration in a new window
-- Calibration URL: hardcoded to `https://iani-configurator.vercel.app?admin-calibrate=true&...`
-- Results sent back via PostMessage and saved to Product3D record (tryOnOffsetY, tryOnScale)
+- Real-time sliders: offsetY (-50% to +50%), scale (0.5x to 2.0x, step 0.05)
+- Presets: Reset defaults, Narrow face, Wide face
+- Save sends `CALIBRATION_SAVED` PostMessage to parent admin window
+- Unsaved changes detection before close
+- Admin preview embeds VirtualTryOn with hidden controls
+- Product edit page opens calibration in new window (hardcoded Vercel URL)
 
 ---
 
@@ -589,306 +596,149 @@ Nice to have before launch: remove debug markers, fix temple edge case, App Stor
 
 **Status**: COMPLETE (100%)
 
-### Implementation A: Shopify Native AR (Scene Viewer / AR Quick Look)
-**Mechanism**: Shopify's built-in 3D/AR system
-**Works on**: Any theme with `<model-viewer>` support (e.g., Dawn)
+### Implementation A: Shopify Native AR
+- Shopify's built-in `<model-viewer>` / Scene Viewer / AR Quick Look
+- Works when merchant uploads GLB as Shopify product media
+- Shows BASE model only (not customized colors)
 
-1. Merchant uploads GLB model as Shopify product media
-2. Theme extension detects 3D models (`3d-configurator.liquid` lines 249-262)
-3. Shopify renders "View in your space" button automatically on mobile
-4. Launches Google Scene Viewer (Android) or AR Quick Look (iOS)
+### Implementation B: Custom WebXR (Three.js immersive-ar)
+- Feature gated: `spaceArEnabled` via `hasFeatureAccess()` (Business plan)
+- Device detection: `navigator.xr.isSessionSupported('immersive-ar')` -- button hidden if unsupported
+- Iframe permission: `xr-spatial-tracking` in iframe `allow` attribute
 
-**Verified working** on ianii.myshopify.com -- office chair placed in real room via camera.
-
-**Limitation**: Shows the BASE model only, not the user's customized colors/materials.
-
-### Implementation B: Custom WebXR (Three.js immersive-ar) -- NEW
-**Mechanism**: WebXR Device API via Three.js `renderer.xr`
-**Works on**: ARCore Android devices (Chrome), independent of Shopify theme
-**Advantage**: Shows the CUSTOMIZED model with the user's selected colors and materials
-
-#### How It Works
-1. **Feature Gating**: `spaceArEnabled` checked via `hasFeatureAccess()` in `api.product-config.$productId.tsx` (Business plan only)
-2. **Device Detection**: `navigator.xr.isSessionSupported('immersive-ar')` on mount -- button hidden if unsupported
-3. **Iframe Permission**: `xr-spatial-tracking` added to iframe `allow` attribute in `configurator-loader.js`
-4. **"View in Your Space" Button**: Appears in cart section between Try-On and Add to Cart
-5. **AR Session Launch** (`startArSession()`):
-   - Saves scene state (background, controls, model visibility)
-   - Sets `scene.background = null` for camera passthrough
-   - Clones the model with `model.clone(true)` -- shares materials, so all color/material customizations carry over
-   - Auto-scales model to ~1 meter (largest dimension) for real-world proportions
-   - Centers and grounds the model on its container
-   - Requests `immersive-ar` session with `hit-test` required feature and optional `dom-overlay`
-6. **Surface Detection**: Hit-test runs each frame, positions a white reticle ring on detected surfaces
-7. **Tap-to-Place**: `select` event places the model at the reticle position
-8. **Gesture Controls** (DOM overlay buttons):
-   - Rotate left/right (45-degree increments)
-   - Scale bigger/smaller (clamped 0.25x to 4x)
-   - Tap to reposition
-9. **Session End**: Restores scene background, re-enables OrbitControls, shows original model, cleans up AR objects
-
-#### Technical Details
-- Renderer: `renderer.xr.enabled = true` set in `initThreeJS()` (does not affect normal rendering)
-- Animation loop: `renderer.setAnimationLoop(animate)` replaces `requestAnimationFrame` -- handles both normal and XR modes
-- Callback signature: `(timestamp, frame)` where `frame` is null in normal mode, `XRFrame` during AR
-- Reticle: `THREE.RingGeometry(0.15, 0.2, 32)` with `matrixAutoUpdate = false` (matrix set from hit-test pose)
-- AR overlay: Fixed-position div with exit button, placement instructions, rotate/scale controls
-- Cleanup: AR session ended in `onUnmounted`, animation loop stopped with `setAnimationLoop(null)`
-
-#### Files Modified
-- `src/components/ThreeSceneMinimal.vue` -- All WebXR logic, UI, styles
-- `iani-configurator/extensions/theme-extension/assets/configurator-loader.js` -- `xr-spatial-tracking` permission
-- `iani-configurator/app/routes/api.product-config.$productId.tsx` -- `spaceArEnabled` in API response
+#### Flow
+1. Saves scene state, sets transparent background for camera passthrough
+2. Clones model with `model.clone(true)` -- shares materials (customizations carry over)
+3. Auto-scales to ~1 meter (largest dimension)
+4. Hit-test for surface detection, white reticle ring on detected surfaces
+5. Tap to place model at reticle position
+6. After placement: move mode (model follows surface), rotate (10-degree increments), scale (0.95x-1.05x, clamped 0.25-4.0)
+7. Move indicator: ring + 4 directional arrows, auto-hides after 5 seconds
+8. Session end: restores scene, re-enables controls
 
 #### Device Compatibility
-- **Android Chrome (ARCore)**: Full support
-- **iOS Safari**: `isSessionSupported` returns false -- button hidden automatically (falls back to Shopify native AR if theme supports it)
-- **Desktop browsers**: `navigator.xr` undefined -- button hidden automatically (Shopify serves the original uploaded model)
+- Android Chrome (ARCore): Full support
+- iOS Safari: `isSessionSupported` returns false -- falls back to Shopify native AR
+- Desktop: `navigator.xr` undefined -- button hidden
 
 ---
 
-## FEATURE 9: PostMessage Iframe Communication Protocol
+## FEATURE 9: PostMessage Iframe Communication
 
-**Components**: `src/components/ThreeSceneMinimal.vue`, `extensions/theme-extension/assets/configurator-loader.js`
 **Status**: COMPLETE (100%)
 
-### Protocol Specification
-
-#### Storefront to Iframe
-| Message Type | Payload | When Sent |
-|---|---|---|
-| `IANI_INIT` | `{ productId, variantId, shop, currency, price, moneyFormat }` | After iframe sends IANI_READY |
-| `IANI_CART_SUCCESS` | `{ item details from /cart/add.js }` | After successful cart addition |
-| `IANI_CART_ERROR` | `{ message }` | If cart addition fails |
-
-#### Iframe to Storefront
-| Message Type | Payload | When Sent |
-|---|---|---|
-| `IANI_READY` | -- | On component mount |
-| `IANI_ADD_TO_CART` | `{ colorName, colorHex, materialName, price, quantity, configuration, meshCustomizations, previewImage }` | User clicks "Add to Cart" |
-| `IANI_TRYON_OPENED` | -- | User opens try-on mode |
-| `IANI_TRYON_CLOSED` | -- | User closes try-on mode |
-| `IANI_CLOSE` | -- | User closes modal |
-
-### Security
-- Origin validation present on both sides
-- Configurator-loader validates against `(new URL(configuratorUrl)).origin`
-- ThreeSceneMinimal checks `isEmbeddedInShopify()` before sending messages
+### Messages (see Key Technical Patterns section above for full spec)
 
 ### Cart Data Structure
-On add-to-cart, the loader creates:
+On add-to-cart, the configurator sends:
 - Configuration ID: `config_${Date.now()}_${random}`
+- Full `meshCustomizations` map
+- Per-part visible cart properties (e.g., "Part 1: SeatCushion: Ocean Blue")
+- Hidden properties prefixed with `_`
+- Preview image (base64 JPEG)
+
+### Configurator-Loader (configurator-loader.js)
+- API_BASE: `https://iani-configurator-1.onrender.com`
+- CONFIGURATOR_BASE: `https://iani-configurator.vercel.app`
+- Saves configuration to API on add-to-cart
 - Stores prices in localStorage: `iani_cart_prices`
-- Shopify cart properties include: `_Configuration ID` (hidden), visible part customizations, material, price, and a deep-link URL to view the configuration
+- Builds iframe with full permissions: camera, microphone, xr-spatial-tracking, etc.
 
 ---
 
 ## FEATURE 10: Theme Extension (Shopify App Block)
 
-**Files**: `extensions/theme-extension/blocks/3d-configurator.liquid`, `configurator-loader.js`, `configurator.css`
 **Status**: COMPLETE (95%)
 
-### How It Works
+### Display Modes
+1. **Inline**: Iframe embedded at configurable height
+2. **Modal**: Click-to-open overlay
 
-#### Display Modes
-1. **Inline Mode**: Iframe embedded directly on product page at configurable height
-2. **Modal Mode**: Click-to-open overlay with configurable trigger button
+### Merchant Settings (Theme Editor)
+- configurator_url, display_mode, auto_load, height/mobile_height, border_radius
+- background_color, accent_color, loading_text_color
+- show_fullscreen_button, button_text, debug_mode
 
-#### Merchant-Configurable Settings (via Shopify Theme Editor)
-- `configurator_url`: Base URL (default: `https://iani-configurator.vercel.app`)
-- `display_mode`: "inline" or "modal"
-- `auto_load`: Auto-start or click-to-load
-- `height` / `mobile_height`: Configurable dimensions
-- `border_radius`: 0-24px
-- `background_color`, `accent_color`, `loading_text_color`
-- `show_fullscreen_button`: Toggle
-- `button_text`: Custom trigger button text
-- `debug_mode`: Enhanced logging
-
-#### 3D Model Detection
-- Automatically extracts GLB/GLTF model URL from Shopify product media
-- Falls back to admin-configured model URL if no product media found
-
-#### Accessibility & Responsiveness
-- ARIA labels, semantic HTML
-- `prefers-reduced-motion` support
-- High contrast mode support
-- 44px minimum touch targets on mobile
-- Print-friendly (hidden on print)
-- Safari-specific fixes
-- CSS isolation via `isolation: isolate`
-
-### Known Issues (5% incomplete)
-- `debug_mode` setting exists in schema but not utilized in Liquid template
-- Modal z-index uses maximum value (`2147483647`) -- could conflict with other theme overlays
-- English-only localization (`en.default.json`)
+### 3D Model Detection
+- Extracts GLB/GLTF URL from Shopify product media automatically
+- Falls back to admin-configured URL
 
 ---
 
 ## FEATURE 11: Cart Integration & Draft Orders
 
-**Files**: `cart-preview.liquid`, `api.cart.add.tsx`, `api.draft-order.tsx`
 **Status**: COMPLETE (90%)
 
-### How It Works
+### Cart Preview Block
+- Restores configured item prices from localStorage
+- Hides internal `_Configuration ID` properties
+- Shows preview images with green border
+- Draft order creation with 30-minute expiration
 
-#### Cart Preview Block (`cart-preview.liquid`)
-- Restores configured item prices from localStorage on page load
-- Hides internal "_Configuration ID" property from customer-facing cart display
-- Shows preview images for configured products (green border indicator)
-- Updates estimated total when cart quantity changes
-- Intercepts checkout to create Shopify Draft Order with correct custom pricing
-- Draft order lifecycle managed via localStorage with 30-minute expiration
-
-#### Cart Add API (`api.cart.add.tsx`)
-- Saves configuration to database with "in_cart" status
-- Looks up Product3D by ID or shopifyProductId + shop
-- Returns configuration with cart item structure
-
-#### Draft Order API (`api.draft-order.tsx`)
-- Creates Shopify draft order via GraphQL (`draftOrderCreate` mutation)
-- Fetches variant prices from Shopify, applies price overrides for configured items
-- Fetches shop currency from Shopify settings (falls back to USD)
-- Returns draft order checkout URL
-
-### Technical Details
-- Configuration ID format: `config_${timestamp}_${random}` (regex: `/config_\d+_[a-z0-9]+/i`)
-- Price override uses Shopify's `priceOverride` field with `variantId`
-- Custom attributes properly formatted for Shopify API
-
-### Known Issues (10% incomplete)
-- Cart preview API URL hardcoded to `https://iani-configurator-1.onrender.com` (inconsistent with Vercel deployment)
-- RSD currency hardcoded in price regex in cart-preview.liquid
-- Dollar sign ($) hardcoded for price formatting (not shop-aware)
-- localStorage-based pricing is client-side manipulable (not cryptographically signed)
+### Known Issues
+- API URLs hardcoded to Render (`https://iani-configurator-1.onrender.com`)
+- RSD currency hardcoded in price regex
+- localStorage-based pricing is client-side manipulable
 - No rate limiting on draft order creation
-- Draft order endpoint accepts any price including negative values (no server-side price validation)
-- No retry logic for failed API saves
+- Draft order accepts any price (no server-side validation)
 
 ---
 
 ## FEATURE 12: Admin Dashboard
 
-**Component**: `iani-configurator/app/routes/app._index.tsx`
+**Component**: `app._index.tsx`
 **Status**: COMPLETE (95%)
 
-### How It Works
-- **Stats Display**: Active product count, total configurations, current plan, trial status
-- **Onboarding Checklist** (3 steps with progress bar):
-  1. Add your first 3D product
-  2. Add the app block to your theme
-  3. Preview your store
-- **Contextual Upsell Banners**: Suggests Try-On upgrade for Free/Starter plans, Space AR for Pro
-- **Quick Actions**: Add Product, View All Products, Manage Subscription
-- **Setup Completion Tracking**: Progress persisted in Shop table (hasAddedAppBlock, hasPreviewedStore)
-
-### Technical Details
-- Loader authenticates via OAuth, fetches product/config counts, subscription status, onboarding flags
-- Action handles "mark-app-block" and "mark-previewed" intents via POST (upserts Shop record)
-
-### Known Issues (5% incomplete)
-- Analytics upsell banner references analytics feature but route does not exist
-- Trial countdown shows generic "Manage subscription" button instead of calculated remaining days
+- Stats: active products, total configurations, current plan, trial status
+- 3-step onboarding checklist with progress bar
+- Contextual upsell banners (Try-On for Free/Starter, Space AR for Pro)
+- Quick actions: Add Product, View All, Manage Subscription
 
 ---
 
 ## FEATURE 13: Product Management (CRUD)
 
-**Components**: `app.products._index.tsx`, `app.products.new.tsx`, `app.products.$id.tsx`
 **Status**: COMPLETE (95%)
 
-### Product List (`app.products._index.tsx`)
-- Table columns: Product (with thumbnail), Status, Color Count, Material Count, Base Price
-- Product images fetched from Shopify GraphQL API
-- Row click navigates to edit page
-- Handles multiple product ID formats (numeric, GID, URL) via `extractProductId()`
+### Product List
+- Table with thumbnail, status, color/material counts, base price
+- Row click navigates to edit; handles multiple product ID formats
 
-### Add Product (`app.products.new.tsx`)
-- Step 1: Select from Shopify catalog (fetches first 100 products, filters already-configured)
-- Step 2: Set display name and base price
-- Step 3: Define color options (name, hex code, price)
-- Step 4: Define material options (name, description, extra cost)
-- Plan limit enforcement: `canAddProduct()` check server-side, returns 403 if exceeded
-- Pre-fills with default colors and materials
+### Add Product (4-step wizard)
+1. Select from Shopify catalog (first 100 products, filters already-configured)
+2. Set display name and base price
+3. Define color options (name, hex, price)
+4. Define material options (name, description, extra cost)
+- Plan limit enforcement server-side
 
-### Edit Product (`app.products.$id.tsx`)
-- Sections: Basic Settings, Color Options, Material Options, Virtual Try-On Settings
-- Try-On calibration opens in new window (live camera tool)
-- Toggle product active/inactive
-- Delete product with confirmation modal
-- Shop ownership verified on all actions
-- Try-on feature gated behind Pro+ plan check
-
-### Technical Details
-- Color and material options are deleted and recreated on save (not updated in place)
-- Supports both custom GLB URL and Shopify product media model
-- Try-on settings: tryOnType dropdown, offsetY/scale from calibration tool
-
-### Known Issues (5% incomplete)
-- No hex code format validation (#RRGGBB)
-- No duplicate color/material name validation
-- No price range validation
-- JSON parsing for colors/materials has no try-catch
-- Calibration window PostMessage listener has no origin validation (potential XSS vector)
-- Calibration URL hardcoded to Vercel production URL
-- Hard delete (no soft delete) -- could lose order history
-- Product table not paginated (could slow with hundreds of products)
-- No sorting/filtering on product list
+### Edit Product
+- Sections: Basic, Colors, Materials, Virtual Try-On
+- Calibration opens in new window
+- Delete with confirmation modal
+- Error boundary for graceful error display
+- Colors/materials deleted and recreated on save (not updated in place)
 
 ---
 
-## FEATURE 14: Billing & Subscription System
+## FEATURE 14: Billing & Subscription
 
-**Components**: `app.billing.tsx`, `iani-configurator/app/billing.server.ts`
 **Status**: COMPLETE (90%)
 
-### Plan Configuration
+### Server Functions
+- `getOrCreateShop(domain)` -- creates with free plan if not exists
+- `getShopSubscription(domain)` -- returns plan + trial + active status
+- `updateShopSubscription(domain, plan, subId, trialDays=14)` -- upserts with trial
+- `cancelShopSubscription(domain)` -- reverts to free
+- `canAddProduct(domain)` -- checks count vs limit
+- `hasFeatureAccess(domain, feature)` -- core access control
+- `createBillingSubscription(admin, plan, returnUrl)` -- GraphQL mutation
+- `getCurrentSubscription(admin)` -- queries active subs
+- `cancelBillingSubscription(admin, subId)` -- GraphQL cancel
 
-| Plan | Price | Product Limit | tryOnEnabled | spaceArEnabled | watermark | analytics | prioritySupport |
-|------|-------|---------------|-------------|----------------|-----------|-----------|-----------------|
-| Free | $0/mo | 1 | false | false | true | false | false |
-| Starter | $19/mo | 3 | false | false | true | false | false |
-| Pro | $49/mo | Unlimited (-1) | true | false | false | false | false |
-| Business | $99/mo | Unlimited (-1) | true | true | false | true | true |
-
-### Server-Side Functions (`billing.server.ts`)
-
-| Function | Purpose |
-|---|---|
-| `getOrCreateShop(domain)` | Creates Shop record with free plan if not exists |
-| `getShopSubscription(domain)` | Returns plan + trial status + active flag |
-| `updateShopSubscription(domain, plan, subId, trialDays)` | Updates/creates subscription with 14-day trial |
-| `cancelShopSubscription(domain)` | Reverts to free plan, clears subscription |
-| `canAddProduct(domain)` | Checks product count vs plan limit |
-| `hasFeatureAccess(domain, feature)` | Core access control -- checks subscription active + feature flag |
-| `createBillingSubscription(admin, plan, returnUrl)` | GraphQL `appSubscriptionCreate` mutation |
-| `getCurrentSubscription(admin)` | Queries active subscriptions |
-| `cancelBillingSubscription(admin, subId)` | GraphQL `appSubscriptionCancel` mutation |
-
-### Billing UI (`app.billing.tsx`)
-- 4 plans displayed side-by-side with feature comparison
-- Shows current plan, trial status, trial end date
-- "Upgrade" redirects to Shopify billing confirmation
-- Dev mode fallback: manual plan switching for custom apps
-- Handles `charge_id` callback from Shopify after purchase
-- Success banner after subscription change
-
-### Technical Details
-- All paid plans include 14-day free trial
-- Trial check: `trialEndsAt > now`
-- Active check: `subscriptionStatus === "active" OR plan === "free"`
-- Test mode flag: `NODE_ENV !== "production"`
-- Feature gating used in routes via `hasFeatureAccess()` with redirect to billing page
-
-### Known Issues (10% incomplete)
-- `updateShopSubscription()` always sets 14-day trial even when called from webhook (should accept webhook data)
-- Plan name detection in subscription webhook is fragile (uses `name.includes()`)
-- Subscription status mapping may not cover all Shopify states (APPROVED, PENDING, DECLINED, EXPIRED, FROZEN, PAUSED vs internal "active" | "cancelled" | "frozen")
-- No downgrade confirmation modal (paid to free)
-- charge_id persists in URL after redirect -- success message shown on every reload
-- Feature access changes require page refresh
-- Plan prices hardcoded (no admin configuration)
-- "Popular" badge hardcoded to Pro plan
+### UI
+- 4 plans side-by-side, trial status display
+- Dev mode: manual plan switching for custom apps
+- Handles `charge_id` callback from Shopify billing
 
 ---
 
@@ -896,159 +746,41 @@ On add-to-cart, the loader creates:
 
 **Status**: NOT IMPLEMENTED (0%)
 
-### Assessment
-- Route file `app.analytics.tsx` does not exist in the filesystem
-- Referenced in CLAUDE.md as "Business plan only" with: total configs, orders, conversion rate, revenue, top colors, top materials, per-product breakdown table, recent orders
-- Feature flag exists in billing: `analytics: true` for Business plan
-- `hasFeatureAccess(shop, "analytics")` function is available
-- Analytics link removed from NavMenu (only Home, 3D Products, Preview, Subscription shown)
+- No `app.analytics.tsx` route file exists
+- Feature flag `analytics` is `false` for ALL plans (including Business)
 - Dashboard upsell banner references analytics but links to non-existent route
+- NavMenu does not include Analytics link
 
 ---
 
-## FEATURE 16: Configuration Save/Load API
+## FEATURE 16-20: See detailed notes in previous sections
 
-**Files**: `api.save-configuration.tsx`, `api.get-configuration.$id.tsx`, `api.products.$productId.configuration.tsx`, `api.configurations.$configId.tsx`
+---
+
+## FEATURE 21: Read-Only Configuration Viewer
+
+**Component**: `ThreeSceneMinimal.vue`
+**Status**: COMPLETE (100%)
+
+- Activated via `?readonly=true&configId=...` URL params
+- Loads saved configuration from API, applies mesh customizations to model
+- Shows configuration summary sidebar (each customized part with color dot)
+- Click part names in sidebar to highlight corresponding mesh on model
+- Displays saved total price (not recalculated)
+- Hides Add to Cart and customization controls
+
+---
+
+## FEATURE 22: Multi-Client Service
+
+**Component**: `src/services/shopifyService.ts` (~676 lines)
 **Status**: COMPLETE (90%)
 
-### Endpoints
-
-| Endpoint | Method | Purpose |
-|---|---|---|
-| `POST /api/save-configuration` | POST | Save configuration from frontend (auto-creates Product3D if missing) |
-| `GET /api/get-configuration/:id` | GET | Retrieve configuration by ID |
-| `GET /api/products/:id/configuration` | GET | List last 10 configurations for a product |
-| `POST /api/products/:id/configuration` | POST | Create new configuration |
-| `PUT /api/configurations/:id` | PUT/PATCH | Update configuration status (draft/saved/in_cart/ordered/completed) |
-
-### Data Structure
-```json
-{
-  "configurationId": "uuid",
-  "shop": "myshop.myshopify.com",
-  "productId": "shopify-product-id",
-  "colorName": "Ocean Blue",
-  "colorHex": "#1E90FF",
-  "materialName": "Walnut",
-  "totalPrice": 349.99,
-  "configuration": { "meshCustomizations": {...} },
-  "status": "draft"
-}
-```
-
-### Known Issues (10% incomplete)
-- `api.save-configuration` auto-creates Product3D records with fake IDs if product doesn't exist -- allows junk data injection
-- Duplicate endpoints: `api.save-configuration` and `api.products.*.configuration` overlap
-- No authentication on any configuration endpoint (all public)
-- Configuration IDs may be enumerable (privacy risk -- could expose other customers' data)
-- Shop verification optional on status update endpoint
-- No rate limiting on any endpoint
-- configurationData stored without schema validation
-
----
-
-## FEATURE 17: Preview Image System
-
-**Files**: `api.upload-preview.tsx`, `api.preview-image.$id.tsx`
-**Status**: COMPLETE (85%)
-
-### How It Works
-- Frontend captures 3D scene as base64 JPEG screenshot
-- `POST /api/upload-preview` stores base64 data in `ConfigurationPreview` table
-- `GET /api/preview-image/:id` serves stored image as binary with proper Content-Type
-- Cache header: 1-year (`max-age=31536000`) for immutable images
-
-### Known Issues (15% incomplete)
-- **No file size limits**: accepts arbitrary base64 strings (database bloat risk)
-- **Inefficient storage**: base64 is 33% larger than binary; should use S3/Cloudinary
-- **Hardcoded return URL**: `https://iani-configurator-1.onrender.com/api/preview-image/${id}` (inconsistent with Vercel deployment)
-- No authentication (anyone can fetch any preview by ID)
-- No CORS headers on preview-image endpoint
-- 90-day retention mentioned in privacy policy but no cleanup job implemented
-- No image format/dimension validation
-
----
-
-## FEATURE 18: GDPR Compliance
-
-**Files**: `api.gdpr.tsx`, `privacy.tsx`
-**Status**: PARTIAL (70%)
-
-### Webhook Handlers (`api.gdpr.tsx`)
-
-| Webhook | Implementation |
-|---|---|
-| `CUSTOMERS_DATA_REQUEST` | Finds customer configurations, **logs them only** (no actual data export to customer) |
-| `CUSTOMERS_REDACT` | Hard deletes all customer configurations from database |
-| `SHOP_REDACT` | Hard deletes all shop data: configurations, options, products, sessions |
-
-### Privacy Policy (`privacy.tsx`)
-- Static page covering: data collection, usage, 90-day retention, GDPR rights
-- Contact email: support@iani-configurator.com (hardcoded)
-- Dynamic copyright year
-
-### Known Issues (30% incomplete)
-- **Data export not implemented**: CUSTOMERS_DATA_REQUEST only logs data, doesn't email or generate downloadable file for the customer
-- **Schema mismatch in shop redact**: Code attempts to delete `customizationOption` (legacy model) but actual schema uses `colorOption` and `materialOption` -- shop redact will likely fail or skip color/material cleanup
-- **90-day retention not enforced**: Privacy policy claims 90-day data retention but no cleanup job or cron exists
-- All deletes are hard deletes (no audit trail)
-- Support email may not be active
-
----
-
-## FEATURE 19: Webhook Handlers
-
-**Files**: `webhooks.app.uninstalled.tsx`, `webhooks.app.scopes_update.tsx`, `webhooks.app.subscriptions-update.tsx`
-**Status**: COMPLETE (90%)
-
-### Handlers
-
-| Webhook | Action |
-|---|---|
-| `APP_UNINSTALLED` | Calls `cancelShopSubscription()`, deletes session records |
-| `SCOPES_UPDATE` | Updates session scope with new permissions |
-| `APP_SUBSCRIPTIONS_UPDATE` | Parses subscription name to determine plan, updates Shop record |
-
-### Known Issues (10% incomplete)
-- **Subscription plan detection fragile**: Uses `name.includes("business")` -- could match false positives (e.g., "Pro + Business Bundle" matches "business")
-- **Scope storage**: Converts array via `toString()` -- parsing back to array could be fragile
-- **Status mapping incomplete**: Treats "cancelled", "declined", "expired" uniformly (all downgrade to free)
-- No trial end date from webhook data (hardcoded 14 days on initial subscription only)
-
----
-
-## FEATURE 20: Database Schema
-
-**File**: `iani-configurator/prisma/schema.prisma`
-**Status**: COMPLETE (90%)
-
-### Models Summary
-
-| Model | Records | Purpose | Indexed Fields |
-|---|---|---|---|
-| Session | Per OAuth session | Shopify auth tokens | shop (implicit) |
-| Shop | Per merchant | Billing state, plan, onboarding flags | shopDomain (unique) |
-| Product3D | Per configured product | 3D product settings, try-on config | shopifyProductId+shop (unique) |
-| ColorOption | Per color per product | Color swatches with pricing | product3DId |
-| MaterialOption | Per material per product | Material choices with extra cost | product3DId |
-| ProductConfiguration | Per customer config | Saved configurations with status | product3DId, shop, customerEmail, shopifyCustomerId, shopifyOrderId, status |
-| ConfigurationPreview | Per preview image | Base64 image storage | shop |
-| CustomizationOption | Legacy | Deprecated, unused | product3DId |
-
-### Design Strengths
-- Foreign key constraints with cascade deletion (delete product deletes all children)
-- Proper indexing for common query patterns
-- JSON field (configurationData) for flexible extension
-- Unique constraints prevent duplicate products per shop
-
-### Known Issues (10% incomplete)
-- `CustomizationOption` model is deprecated but still in schema (dead code)
-- No audit log / timestamp tracking for status changes on configurations
-- No multi-currency pricing support in schema
-- No unique constraint on ProductConfiguration to prevent duplicate orders
-- ConfigurationPreview uses string ID (concatenation risk)
-- meshCustomizations stored inside configurationData JSON (no structured querying)
-- No `description` or `tags` on Product3D for product discovery
+- `MultiClientShopifyService` class instantiated as singleton
+- Detects client from URL params, loads static configs or auto-generates
+- Static configs: ianii (RSD), demo-furniture (USD), luxury-living (EUR)
+- Methods: `getVariantByColor()`, `getPriceByColor()`, `saveConfiguration()`, `addToCart()`, `generateConfigurationUrl()`, `generateShareableUrl()`
+- PostMessage bridge via `sendToShopify()` and `isEmbeddedInShopify()`
 
 ---
 
@@ -1056,7 +788,6 @@ On add-to-cart, the loader creates:
 
 ### Security Assessment
 
-#### Authentication Summary
 | Layer | Auth Method | Status |
 |---|---|---|
 | Admin Routes (app.*) | Shopify OAuth | Secured |
@@ -1064,43 +795,17 @@ On add-to-cart, the loader creates:
 | Public API Routes (api.*) | None | NOT SECURED |
 | Theme Extension | Client-side only | NOT SECURED |
 
-#### High-Priority Security Issues
-1. **api.save-configuration**: Auto-creates Product3D records with arbitrary IDs -- allows database pollution
-2. **api.preview-image & api.get-configuration**: No auth, enumerable IDs -- customer data exposure risk
-3. **app.products.$id.tsx**: PostMessage listener for calibration results has no origin validation
-4. **api.draft-order**: Accepts any price including negative values
-5. **localStorage-based pricing**: Client-side manipulable, not signed
-
-#### Medium-Priority Security Issues
-6. **api.configurations.$configId**: Shop verification is optional (X-Shop-Domain header)
-7. **api.upload-preview**: No file size limits (database bloat vector)
-8. **vercel.json**: CORS `Access-Control-Allow-Origin: *` and `frame-ancestors: *` are overly permissive
-9. **api.gdpr.tsx**: Schema mismatch could cause shop_redact to fail silently
-
-### Code Quality Metrics
-
-| Aspect | Score (1-10) | Notes |
-|---|---|---|
-| **Feature Completeness** | 9 | Most features work; Analytics dashboard missing |
-| **Code Organization** | 5 | ThreeSceneMinimal.vue is 2200+ lines (should be split) |
-| **Type Safety** | 3 | No TypeScript in Vue components despite complex data |
-| **Error Handling** | 6 | Good in some areas, missing in API JSON parsing |
-| **Input Validation** | 4 | Missing on most public endpoints |
-| **Security** | 4 | Admin routes secured, all public APIs open |
-| **Documentation** | 7 | Extensive console logging, CLAUDE.md thorough |
-| **Test Coverage** | 1 | No test files found in repository |
-| **Performance** | 6 | No obvious bottlenecks, but no optimization either |
-| **Maintainability** | 5 | Large monolithic components, hardcoded values |
-
 ### Hardcoded Values Inventory
 
 | Value | Location | Should Be |
 |---|---|---|
-| `https://iani-configurator.vercel.app` | configurator-loader.js, products.$id.tsx, 3d-configurator.liquid | Environment variable |
-| `https://iani-configurator-1.onrender.com` | cart-preview.liquid, upload-preview.tsx | Environment variable |
-| Color options (6 colors) | ThreeSceneMinimal.vue | Fetched from admin config API |
-| Material options (4 materials) | ThreeSceneMinimal.vue | Fetched from admin config API |
-| Base price $299.99 | shopifyService.ts | From Shopify product data |
+| `https://iani-configurator.vercel.app` | shopifyService.ts, products.$id.tsx, configurator-loader.js | Environment variable |
+| `https://iani-configurator-1.onrender.com` | configurator-loader.js, ThreeSceneMinimal.vue (loadProductConfig, loadSavedConfiguration) | Environment variable |
+| Color options (6 colors with prices) | ThreeSceneMinimal.vue, api.product-config defaults | Fully from admin config API |
+| Material options (4 materials) | ThreeSceneMinimal.vue, api.product-config defaults | Fully from admin config API |
+| Pillow options (4 styles) | ThreeSceneMinimal.vue | From admin config |
+| Leg options (4 styles) | ThreeSceneMinimal.vue | From admin config |
+| Base price $299.99 | ThreeSceneMinimal.vue, shopifyService.ts | From Shopify product data |
 | Model list (4 models) | ThreeSceneMinimal.vue | Dynamic from admin |
 | Plan prices ($0/$19/$49/$99) | billing.server.ts | Configurable |
 | Trial duration (14 days) | billing.server.ts | Configurable |
@@ -1110,36 +815,21 @@ On add-to-cart, the loader creates:
 
 | Component | Status | Action Needed |
 |---|---|---|
-| `ThreeSceneModal.vue` | Older, simpler version with placeholder cube geometry | Remove or archive |
-| `AdminTryOnTest.vue` | Superseded by AdminCalibrateTryOn | Remove or archive |
-| `CustomizationOption` (Prisma) | Deprecated model, unused | Remove from schema |
-| `app.additional.tsx` | Shopify template placeholder with broken imports | Delete |
-| `app.configurator.tsx` | Partially orphaned, overlaps with product routes | Integrate or remove |
+| `ThreeSceneModal.vue` (~737 lines) | Legacy modal with placeholder cube | Remove or archive |
+| `AdminTryOnTest.vue` (~141 lines) | Superseded by AdminCalibrateTryOn | Remove or archive |
+| `CustomizationOption` (Prisma model) | Deprecated, unused | Remove from schema |
+| `app.additional.tsx` | Template placeholder with broken imports | Delete |
 
----
+### Code Quality Metrics
 
-## RESEARCH CONCLUSIONS
-
-### What Is Production-Ready
-1. **3D Configurator Core**: Model loading, rendering, OrbitControls, color/material customization, pricing -- all solid
-2. **Virtual Try-On (Face AR)**: Sophisticated MediaPipe + Three.js pipeline with calibration system -- genuinely innovative
-3. **Space AR**: Fully working via Shopify's native Scene Viewer/AR Quick Look integration -- zero custom code needed
-4. **Shopify Admin App**: Dashboard, product CRUD, billing -- functional and complete
-5. **Theme Extension**: Well-built App Block with good merchant customization options
-6. **PostMessage Protocol**: Robust bidirectional communication between iframe and storefront
-
-### What Needs Work Before Production
-1. **Analytics**: Route missing entirely -- implement or remove from plan features
-2. **API Security**: All public endpoints lack authentication and rate limiting
-3. **Input Validation**: Missing on most API endpoints
-4. **GDPR Data Export**: Only logs data, doesn't actually export to customer
-5. **Test Coverage**: Zero automated tests
-6. **Hardcoded URLs**: Production URLs scattered across codebase instead of environment variables
-7. **Space AR Limitation**: AR view shows base model, not customized colors/materials
-
-### What Is Technically Impressive
-1. **Per-mesh color customization**: Clicking individual 3D model parts and applying colors independently
-2. **Face tracking pipeline**: MediaPipe to Three.js coordinate conversion with dampened rotation
-3. **Calibration system**: Real-time offset/scale adjustment with live camera preview
-4. **Draft order integration**: Custom pricing flow through Shopify's GraphQL API
-5. **Multi-source model loading**: Priority chain from API config to URL params to local files
+| Aspect | Score (1-10) | Notes |
+|---|---|---|
+| **Feature Completeness** | 9 | Most features work; Analytics missing |
+| **Code Organization** | 5 | ThreeSceneMinimal.vue is 3614 lines (should be split) |
+| **Type Safety** | 3 | No TypeScript in ThreeSceneMinimal despite complex data |
+| **Error Handling** | 6 | Good in some areas, missing in API JSON parsing |
+| **Input Validation** | 4 | Missing on most public endpoints |
+| **Security** | 4 | Admin routes secured, all public APIs open |
+| **Test Coverage** | 1 | No test files found |
+| **Performance** | 6 | No obvious bottlenecks |
+| **Maintainability** | 5 | Large monolithic components, hardcoded values |

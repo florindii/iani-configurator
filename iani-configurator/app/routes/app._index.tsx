@@ -447,7 +447,7 @@ export default function Index() {
                     </Text>
                   </InlineStack>
                   <Text as="p" tone="subdued">
-                    The 3D configurator is live on your store. Keep adding products or check your analytics to see how customers interact.
+                    The 3D configurator is live on your store. Keep adding products and customizing your 3D experience.
                   </Text>
                   <InlineStack gap="300">
                     <Button onClick={() => navigate("/app/products/new")}>

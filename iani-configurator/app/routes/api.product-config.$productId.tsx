@@ -1,6 +1,7 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import db from "../db.server";
 import { getShopSubscription, hasFeatureAccess } from "../billing.server";
+import { checkRateLimit, rateLimitResponse } from "../utils/api-security.server";
 
 // CORS headers for cross-origin requests from the configurator iframe
 const corsHeaders = {
@@ -10,6 +11,10 @@ const corsHeaders = {
 };
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
+  if (!checkRateLimit(request, "product-config", 100)) {
+    return rateLimitResponse(corsHeaders);
+  }
+
   const { productId } = params;
   const url = new URL(request.url);
   const shop = url.searchParams.get("shop");

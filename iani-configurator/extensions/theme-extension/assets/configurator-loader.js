@@ -6,8 +6,9 @@
   var containers = document.querySelectorAll('[id^="iani-3d-configurator-"]');
   if (!containers.length) return;
 
-  var API_BASE = 'https://iani-configurator-1.onrender.com';
-  var CONFIGURATOR_BASE = 'https://iani-configurator.vercel.app';
+  // Fallback defaults — override via block settings in the Shopify theme editor
+  var DEFAULT_API_BASE = 'https://iani-configurator-1.onrender.com';
+  var DEFAULT_CONFIGURATOR_BASE = 'https://iani-configurator.vercel.app';
 
   containers.forEach(function(w) {
     var c = {
@@ -20,7 +21,8 @@
       shop: w.dataset.shop,
       currency: w.dataset.currency,
       moneyFormat: w.dataset.moneyFormat,
-      configuratorUrl: w.dataset.configuratorUrl || CONFIGURATOR_BASE,
+      configuratorUrl: w.dataset.configuratorUrl || DEFAULT_CONFIGURATOR_BASE,
+      apiBase: w.dataset.apiUrl || DEFAULT_API_BASE,
       displayMode: w.dataset.displayMode,
       autoLoad: w.dataset.autoLoad === 'true',
       modelUrl: w.dataset.modelUrl || ''
@@ -71,7 +73,7 @@
       // Merge mesh customizations into the configuration for storage
       configuration._meshCustomizations = JSON.stringify(meshCustomizations);
 
-      return fetch(API_BASE + '/api/save-configuration', {
+      return fetch(c.apiBase + '/api/save-configuration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -100,7 +102,7 @@
     }
 
     function buildViewConfigUrl(configId) {
-      var u = new URL(CONFIGURATOR_BASE);
+      var u = new URL(c.configuratorUrl);
       u.searchParams.set('configId', configId);
       u.searchParams.set('readonly', 'true');
       u.searchParams.set('product', c.productId);

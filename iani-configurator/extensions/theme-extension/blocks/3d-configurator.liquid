@@ -274,6 +274,7 @@
   data-currency="{{ cart.currency.iso_code }}"
   data-money-format="{{ shop.money_format | escape }}"
   data-configurator-url="{{ block.settings.configurator_url }}"
+  data-api-url="{{ block.settings.api_base_url }}"
   data-display-mode="{{ block.settings.display_mode }}"
   data-show-fullscreen="{{ block.settings.show_fullscreen_button }}"
   data-auto-load="{{ block.settings.auto_load }}"
@@ -355,6 +356,13 @@
       "label": "Configurator URL",
       "info": "The URL where your 3D configurator is hosted",
       "default": "https://iani-configurator.vercel.app"
+    },
+    {
+      "type": "text",
+      "id": "api_base_url",
+      "label": "API Base URL",
+      "info": "The URL of your Shopify app backend (do not change unless self-hosting)",
+      "default": "https://iani-configurator-1.onrender.com"
     },
     {
       "type": "select",

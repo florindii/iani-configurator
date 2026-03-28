@@ -2,6 +2,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { db } from "../db.server";
+import { checkRateLimit, rateLimitResponse } from "../utils/api-security.server";
 
 // CORS headers for cross-origin requests
 const corsHeaders = {
@@ -34,6 +35,10 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   // Handle preflight requests
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
+  }
+
+  if (!checkRateLimit(request, "update-config", 20)) {
+    return rateLimitResponse(corsHeaders);
   }
 
   try {

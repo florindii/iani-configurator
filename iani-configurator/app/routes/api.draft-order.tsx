@@ -2,6 +2,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { unauthenticated } from "../shopify.server";
+import { checkRateLimit, rateLimitResponse } from "../utils/api-security.server";
 
 // Add CORS headers to response
 const corsHeaders = {
@@ -23,6 +24,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  if (!checkRateLimit(request, "draft-order", 10)) {
+    return rateLimitResponse(corsHeaders);
+  }
 
   try {
     const body = await request.json();

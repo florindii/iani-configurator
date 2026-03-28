@@ -2,6 +2,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { db } from "../db.server";
+import { checkRateLimit, rateLimitResponse, validateShop, forbiddenResponse } from "../utils/api-security.server";
 
 // Add CORS headers to response
 const corsHeaders = {
@@ -16,12 +17,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  if (!checkRateLimit(request, "cart-add", 20)) {
+    return rateLimitResponse(corsHeaders);
+  }
+
   try {
     const body = await request.json();
     const {
       shop,
-      productId,  // This is the Product3D id from the database
-      shopifyProductId, // Alternatively, the Shopify product ID
+      productId,
+      shopifyProductId,
       configurationData,
       totalPrice,
       customerId,
@@ -33,6 +38,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return json({
         error: "Missing required fields: shop, productId/shopifyProductId, configurationData, totalPrice"
       }, { status: 400, headers: corsHeaders });
+    }
+
+    if (!(await validateShop(shop))) {
+      return forbiddenResponse("Shop not registered", corsHeaders);
     }
 
     if (import.meta.env.DEV) {
