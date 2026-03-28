@@ -292,9 +292,9 @@
             <span>Try On</span>
           </button>
 
-          <!-- Space AR Button (only shown when enabled and device supports WebXR) -->
+          <!-- Space AR Button (only shown when enabled, device supports WebXR, and NOT a try-on product) -->
           <button
-            v-if="spaceArEnabled && spaceArSupported && !isInArSession"
+            v-if="spaceArEnabled && spaceArSupported && !isInArSession && !tryOnEnabled"
             @click="startArSession"
             class="space-ar-btn"
             title="View this product in your room using AR">
@@ -327,15 +327,8 @@
       <div v-if="!arModelPlaced" class="ar-instructions">
         Point your camera at the floor and tap to place
       </div>
-      <div v-if="arMoveMode" class="ar-instructions ar-instructions--move">
-        Tap to confirm position
-      </div>
-      <div v-if="arModelPlaced" class="ar-controls">
-        <button @click="rotateArModel(-10)" class="ar-control-btn">&#8634; Rotate</button>
-        <button @click="scaleArModel(1.05)" class="ar-control-btn">+ Bigger</button>
-        <button @click="toggleArMoveMode" class="ar-control-btn" :class="{ 'ar-control-btn--active': arMoveMode }">&#10021; Move</button>
-        <button @click="scaleArModel(0.95)" class="ar-control-btn">- Smaller</button>
-        <button @click="rotateArModel(10)" class="ar-control-btn">Rotate &#8635;</button>
+      <div v-if="arModelPlaced && arGestureHint" class="ar-instructions ar-instructions--hint">
+        Drag to move &bull; Pinch to resize &bull; Two fingers to rotate
       </div>
     </div>
 
@@ -466,6 +459,7 @@ const spaceArSupported = ref(false)
 const isInArSession = ref(false)
 const arModelPlaced = ref(false)
 const arMoveMode = ref(false) // When true, tapping moves the model
+const arGestureHint = ref(false) // Show gesture hint briefly after placement
 let hitTestSource = null
 let hitTestSourceRequested = false
 let reticle = null
@@ -473,6 +467,11 @@ let moveIndicator = null // Ring under the model showing it can be moved
 let arModelContainer = null
 let savedBackground = null
 let arMoveTimeout = null // Auto-hide move indicator after 5s
+let arGestureHintTimeout = null
+
+// Touch gesture state for AR (Shopify-style: drag=move, pinch=scale, two-finger-rotate=rotate)
+let arTouches = { prev: [], count: 0 }
+let arTouchMoveActive = false // Single-finger drag is moving the model
 
 // Load configuration from merchant's settings
 const loadProductConfig = async () => {
@@ -1974,13 +1973,18 @@ const hideMoveIndicator = () => {
 const onArSelect = () => {
   if (!arModelContainer) return
 
-  // INITIAL PLACEMENT: place model at reticle
+  // INITIAL PLACEMENT: place model at reticle (tap to place)
   if (!arModelPlaced.value) {
     if (!reticle || !reticle.visible) return
     arModelContainer.position.setFromMatrixPosition(reticle.matrix)
     arModelContainer.visible = true
     arModelPlaced.value = true
     reticle.visible = false
+
+    // Show gesture hint briefly
+    arGestureHint.value = true
+    clearTimeout(arGestureHintTimeout)
+    arGestureHintTimeout = setTimeout(() => { arGestureHint.value = false }, 4000)
 
     // Create move indicator and show it briefly
     createMoveIndicator()
@@ -1989,17 +1993,93 @@ const onArSelect = () => {
     return
   }
 
-  // AFTER PLACEMENT: toggle move mode on tap
-  if (arMoveMode.value) {
-    // Was in move mode -> confirm new position, exit move mode
-    arMoveMode.value = false
-    hideMoveIndicator()
-    console.log('🔲 Model repositioned to:', arModelContainer.position.toArray())
-  } else {
-    // Enter move mode: model will follow surface
+  // After placement, taps are ignored (gestures handle everything)
+}
+
+// Touch gesture handlers for Shopify-style AR interaction
+const onArTouchStart = (e) => {
+  if (!arModelPlaced.value || !arModelContainer) return
+  const touches = e.touches || e.changedTouches
+  arTouches.count = touches.length
+  arTouches.prev = Array.from(touches).map(t => ({ x: t.clientX, y: t.clientY }))
+
+  if (touches.length === 1) {
+    // Single finger: start drag-to-move (activate hit-test move mode)
+    arTouchMoveActive = true
     arMoveMode.value = true
     showMoveIndicator()
-    console.log('🔲 Move mode activated')
+  }
+  // Hide gesture hint on first interaction
+  arGestureHint.value = false
+  clearTimeout(arGestureHintTimeout)
+}
+
+const onArTouchMove = (e) => {
+  if (!arModelPlaced.value || !arModelContainer) return
+  const touches = e.touches || e.changedTouches
+  const current = Array.from(touches).map(t => ({ x: t.clientX, y: t.clientY }))
+
+  if (touches.length === 2 && arTouches.prev.length === 2) {
+    // Two-finger gestures: pinch-to-scale + rotate
+
+    // Calculate previous and current distance (pinch)
+    const prevDist = Math.hypot(
+      arTouches.prev[1].x - arTouches.prev[0].x,
+      arTouches.prev[1].y - arTouches.prev[0].y
+    )
+    const currDist = Math.hypot(
+      current[1].x - current[0].x,
+      current[1].y - current[0].y
+    )
+    if (prevDist > 0) {
+      const scaleFactor = currDist / prevDist
+      const newScale = arModelContainer.scale.x * scaleFactor
+      const clamped = Math.max(0.25, Math.min(4, newScale))
+      arModelContainer.scale.setScalar(clamped)
+    }
+
+    // Calculate rotation from angle change between two fingers
+    const prevAngle = Math.atan2(
+      arTouches.prev[1].y - arTouches.prev[0].y,
+      arTouches.prev[1].x - arTouches.prev[0].x
+    )
+    const currAngle = Math.atan2(
+      current[1].y - current[0].y,
+      current[1].x - current[0].x
+    )
+    const deltaAngle = currAngle - prevAngle
+    arModelContainer.rotation.y -= deltaAngle
+
+    // Disable single-finger move during two-finger gesture
+    arTouchMoveActive = false
+    arMoveMode.value = false
+    hideMoveIndicator()
+  }
+  // Single-finger drag: move is handled via hit-test in the animation loop (arMoveMode)
+
+  arTouches.prev = current
+  arTouches.count = touches.length
+}
+
+const onArTouchEnd = (e) => {
+  const remaining = e.touches ? e.touches.length : 0
+  if (remaining === 0) {
+    // All fingers lifted: stop move mode
+    if (arTouchMoveActive) {
+      arMoveMode.value = false
+      hideMoveIndicator()
+      arTouchMoveActive = false
+    }
+    arTouches.prev = []
+    arTouches.count = 0
+  } else if (remaining === 1) {
+    // Went from two fingers to one: start single-finger move
+    const touches = e.touches
+    arTouches.prev = [{ x: touches[0].clientX, y: touches[0].clientY }]
+    arTouches.count = 1
+    arTouchMoveActive = true
+    arMoveMode.value = true
+    showMoveIndicator()
   }
 }
 
@@ -2008,9 +2088,22 @@ const onArSessionEnd = () => {
   isInArSession.value = false
   arModelPlaced.value = false
   arMoveMode.value = false
+  arGestureHint.value = false
+  arTouchMoveActive = false
+  arTouches = { prev: [], count: 0 }
   hitTestSource = null
   hitTestSourceRequested = false
   clearTimeout(arMoveTimeout)
+  clearTimeout(arGestureHintTimeout)
+
+  // Remove touch gesture listeners
+  const overlayRoot = document.getElementById('ar-overlay')
+  if (overlayRoot) {
+    overlayRoot.removeEventListener('touchstart', onArTouchStart)
+    overlayRoot.removeEventListener('touchmove', onArTouchMove)
+    overlayRoot.removeEventListener('touchend', onArTouchEnd)
+    overlayRoot.removeEventListener('touchcancel', onArTouchEnd)
+  }
 
   // Restore scene
   if (savedBackground !== null) {
@@ -2083,6 +2176,14 @@ const startArSession = async () => {
     session.addEventListener('select', onArSelect)
     session.addEventListener('end', onArSessionEnd)
 
+    // Register touch gesture handlers on the overlay for Shopify-style interaction
+    if (overlayRoot) {
+      overlayRoot.addEventListener('touchstart', onArTouchStart, { passive: true })
+      overlayRoot.addEventListener('touchmove', onArTouchMove, { passive: true })
+      overlayRoot.addEventListener('touchend', onArTouchEnd, { passive: true })
+      overlayRoot.addEventListener('touchcancel', onArTouchEnd, { passive: true })
+    }
+
     renderer.xr.setReferenceSpaceType('local')
     await renderer.xr.setSession(session)
 
@@ -2107,34 +2208,12 @@ const startArSession = async () => {
   }
 }
 
-const toggleArMoveMode = () => {
-  if (arMoveMode.value) {
-    arMoveMode.value = false
-    hideMoveIndicator()
-  } else {
-    arMoveMode.value = true
-    showMoveIndicator()
-  }
-}
-
 const exitArSession = async () => {
   const session = renderer?.xr?.getSession()
   if (session) await session.end()
 }
 
-const rotateArModel = (degrees) => {
-  if (arModelContainer) {
-    arModelContainer.rotation.y += THREE.MathUtils.degToRad(degrees)
-  }
-}
 
-const scaleArModel = (factor) => {
-  if (arModelContainer) {
-    const newScale = arModelContainer.scale.x * factor
-    const clamped = Math.max(0.25, Math.min(4, newScale))
-    arModelContainer.scale.setScalar(clamped)
-  }
-}
 
 // ==================== END SPACE AR ====================
 
@@ -3540,37 +3619,6 @@ onUnmounted(() => {
   display: block;
 }
 
-.ar-controls {
-  position: absolute;
-  bottom: 100px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 8px;
-  pointer-events: auto;
-}
-
-.ar-control-btn {
-  padding: 10px 16px;
-  background: rgba(0, 0, 0, 0.6);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 20px;
-  font-size: 13px;
-  cursor: pointer;
-  pointer-events: auto;
-  backdrop-filter: blur(4px);
-}
-
-.ar-control-btn:active {
-  background: rgba(0, 0, 0, 0.8);
-}
-
-.ar-control-btn--active {
-  background: rgba(99, 102, 241, 0.7);
-  border-color: rgba(165, 180, 252, 0.6);
-}
-
 .ar-instructions {
   position: absolute;
   top: 50%;
@@ -3586,11 +3634,18 @@ onUnmounted(() => {
   backdrop-filter: blur(4px);
 }
 
-.ar-instructions--move {
+.ar-instructions--hint {
   top: auto;
-  bottom: 160px;
+  bottom: 100px;
+  transform: translateX(-50%);
   font-size: 14px;
-  padding: 10px 20px;
+  padding: 12px 20px;
+  animation: ar-hint-fade 4s ease-out forwards;
+}
+
+@keyframes ar-hint-fade {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 .ar-exit-btn {

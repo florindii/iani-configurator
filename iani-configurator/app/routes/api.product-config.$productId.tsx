@@ -65,7 +65,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
             tryOnType: null,
             tryOnOffsetY: 0,
             tryOnScale: 1,
-            spaceArEnabled: false,
+            spaceArEnabled: canUseSpaceAr,
             colorOptions: [
               { name: "Ocean Blue", hexCode: "#1E90FF", price: 299.99, isDefault: true },
               { name: "Crimson Red", hexCode: "#DC143C", price: 319.99, isDefault: false },
@@ -106,7 +106,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
           tryOnType: effectiveTryOnEnabled ? product3D.tryOnType : null,
           tryOnOffsetY: product3D.tryOnOffsetY,
           tryOnScale: product3D.tryOnScale,
-          spaceArEnabled: canUseSpaceAr,
+          // Space AR disabled for try-on products (wearables should only use face AR)
+          spaceArEnabled: effectiveTryOnEnabled ? false : canUseSpaceAr,
           colorOptions: product3D.colorOptions.map((c) => ({
             id: c.id,
             name: c.name,
