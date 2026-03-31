@@ -790,19 +790,36 @@ function combineVideoAndModel(): HTMLCanvasElement {
   const overlay = tryOnCanvas.value!
 
   // Use overlay canvas dimensions to maintain correct glasses size
-  // The overlay is sized to match the displayed video, not the native resolution
   canvas.width = overlay.width
   canvas.height = overlay.height
 
   const ctx = canvas.getContext('2d')!
 
-  // Draw mirrored video scaled to match overlay size
+  // Replicate CSS object-fit: cover behavior for the video
+  // The displayed video is cropped/scaled by CSS, but drawImage uses full native frame
+  const nw = video.videoWidth || 640
+  const nh = video.videoHeight || 480
+  const displayAspect = canvas.width / canvas.height
+  const nativeAspect = nw / nh
+
+  let sx = 0, sy = 0, sw = nw, sh = nh
+  if (nativeAspect > displayAspect) {
+    // Native is wider — crop sides
+    sw = nh * displayAspect
+    sx = (nw - sw) / 2
+  } else {
+    // Native is taller — crop top/bottom
+    sh = nw / displayAspect
+    sy = (nh - sh) / 2
+  }
+
+  // Draw mirrored video with object-fit:cover crop applied
   ctx.save()
   ctx.scale(-1, 1)
-  ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height)
+  ctx.drawImage(video, sx, sy, sw, sh, -canvas.width, 0, canvas.width, canvas.height)
   ctx.restore()
 
-  // Draw 3D overlay (also mirrored) - no scaling needed, same size
+  // Draw 3D overlay (also mirrored) - exact same size, no crop needed
   ctx.save()
   ctx.scale(-1, 1)
   ctx.drawImage(overlay, -canvas.width, 0, canvas.width, canvas.height)
