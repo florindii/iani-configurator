@@ -75,7 +75,7 @@
       </div>
 
       <!-- Controls -->
-      <div v-if="cameraReady" class="try-on-controls">
+      <div v-if="cameraReady && !props.hideControls" class="try-on-controls">
         <!-- Color Options -->
         <div class="color-options" v-if="colorOptions.length > 0">
           <span class="control-label">Color:</span>
@@ -94,6 +94,15 @@
 
         <!-- Action Buttons -->
         <div class="action-buttons">
+          <!-- Adjust Fit Toggle -->
+          <button class="adjust-fit-btn" @click="showFitAdjust = !showFitAdjust" :class="{ active: showFitAdjust }" title="Adjust fit">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span>Adjust Fit</span>
+          </button>
+
           <!-- Download Photo -->
           <button class="download-btn" @click="downloadPhoto" title="Download photo">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -103,6 +112,22 @@
             </svg>
             <span>Download</span>
           </button>
+        </div>
+
+        <!-- Fit Adjustment Slider (shown when customer clicks Adjust Fit) -->
+        <div v-if="showFitAdjust" class="fit-adjust-panel">
+          <div class="fit-adjust-row">
+            <span class="fit-label">Position</span>
+            <input
+              type="range"
+              v-model.number="customerFitOffset"
+              min="-15"
+              max="15"
+              step="1"
+              class="fit-slider"
+            />
+            <button class="fit-reset" @click="customerFitOffset = 0" title="Reset">Reset</button>
+          </div>
         </div>
       </div>
     </div>
@@ -123,6 +148,7 @@ const props = defineProps<{
   selectedColor: string
   offsetY?: number // Vertical offset percentage (-50 to 50)
   scale?: number // Scale multiplier (0.5 to 2.0)
+  hideControls?: boolean // Hide controls (used by admin calibration)
 }>()
 
 // Emits
@@ -130,6 +156,7 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'capturePreview', dataUrl: string): void
   (e: 'colorChange', color: string): void
+  (e: 'modelReady', info: { width: number; height: number; depth: number }): void
 }>()
 
 // Refs
@@ -142,6 +169,10 @@ const cameraError = ref<string | null>(null)
 const faceDetected = ref(false)
 const isLoadingModel = ref(true)
 const selectedColorLocal = ref(props.selectedColor)
+
+// Customer fit adjustment (Improvement #2: lets customers fine-tune fit)
+const customerFitOffset = ref(0) // -15 to +15, small range for customer tweaking
+const showFitAdjust = ref(false)
 
 // Three.js instances
 let renderer: THREE.WebGLRenderer | null = null
@@ -420,6 +451,9 @@ async function loadModel() {
     // Save base scale for face tracking adjustments
     baseModelScale = autoScale
 
+    // Emit model dimensions for calibration auto-suggest
+    emit('modelReady', { width: size.x, height: size.y, depth: size.z })
+
     // Apply scale
     model.scale.setScalar(autoScale)
 
@@ -632,9 +666,16 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     model.visible = true
 
     // Calculate center point between the two eyes (in world coords)
-    // This is the MIDPOINT between the green dots - glasses center should be HERE
-    const centerX = (leftEyePos.x + rightEyePos.x) / 2
-    const centerY = (leftEyePos.y + rightEyePos.y) / 2
+    const eyeCenterX = (leftEyePos.x + rightEyePos.x) / 2
+    const eyeCenterY = (leftEyePos.y + rightEyePos.y) / 2
+
+    // Use nose bridge landmark for vertical positioning (more accurate than eye midpoint)
+    const noseBridgePos = faceToThreeJS(landmarks.noseBridge.x, landmarks.noseBridge.y)
+
+    // Horizontal: center between eyes, Vertical: blend between eye center and nose bridge
+    // Nose bridge gives us the actual resting point for glasses frames
+    const centerX = eyeCenterX
+    const centerY = (eyeCenterY * 0.35 + noseBridgePos.y * 0.65) // Weighted towards nose bridge
 
     // Calculate the actual eye distance in world units
     const eyeDistanceWorld = Math.sqrt(
@@ -642,16 +683,13 @@ function updateModelPosition(landmarks: FaceLandmarks) {
       Math.pow(rightEyePos.y - leftEyePos.y, 2)
     )
 
-    // Position glasses so LENSES align with the green dots (eyes)
-    // Base offset to align lenses with eyes (most models have origin at bridge)
-    const baseLensOffset = eyeDistanceWorld * 0.35
-
-    // Apply custom offset from props (percentage of eye distance)
+    // Apply custom offset from props + customer fit adjustment (percentage of eye distance)
     // Positive offsetY = move DOWN, Negative = move UP
-    const customOffset = (props.offsetY || 0) / 100 * eyeDistanceWorld
+    const totalOffsetY = (props.offsetY || 0) + customerFitOffset.value
+    const customOffset = totalOffsetY / 100 * eyeDistanceWorld
 
     model.position.x = centerX
-    model.position.y = centerY - baseLensOffset - customOffset  // Apply both offsets
+    model.position.y = centerY - customOffset
 
     // Z position: Place model at z=0 (camera looks at this plane)
     model.position.z = 0
@@ -1167,6 +1205,96 @@ onUnmounted(() => {
   background: #22c55e;
 }
 
+/* Adjust Fit Button */
+.adjust-fit-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #333;
+  color: white;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.adjust-fit-btn:hover {
+  background: #555;
+}
+
+.adjust-fit-btn.active {
+  background: #667eea;
+}
+
+/* Fit Adjustment Panel */
+.fit-adjust-panel {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin-top: 4px;
+}
+
+.fit-adjust-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fit-label {
+  color: #ccc;
+  font-size: 13px;
+  white-space: nowrap;
+  min-width: 55px;
+}
+
+.fit-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #555;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.fit-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+}
+
+.fit-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  border: none;
+}
+
+.fit-reset {
+  background: none;
+  border: 1px solid #666;
+  color: #ccc;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.fit-reset:hover {
+  border-color: #999;
+  color: #fff;
+}
+
 /* Mobile Responsive */
 @media (max-width: 640px) {
   .try-on-overlay {
@@ -1190,7 +1318,8 @@ onUnmounted(() => {
   }
 
   .capture-btn,
-  .download-btn {
+  .download-btn,
+  .adjust-fit-btn {
     flex: 1;
     justify-content: center;
   }

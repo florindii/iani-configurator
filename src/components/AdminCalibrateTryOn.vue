@@ -29,7 +29,9 @@
             :scale="scale"
             :hide-controls="true"
             @close="() => {}"
+            @capturePreview="() => {}"
             @colorChange="() => {}"
+            @model-ready="onModelReady"
           />
         </div>
         <div class="preview-info">
@@ -76,6 +78,17 @@
           <p class="control-hint">
             Adjust size to fit face width
           </p>
+        </div>
+
+        <!-- Auto-Suggestion Banner -->
+        <div v-if="hasAutoSuggestion" class="auto-suggest-banner">
+          <p class="suggest-title">Auto-detected suggestion</p>
+          <p class="suggest-detail">
+            Based on model shape: offset <strong>{{ suggestedOffsetY }}%</strong>, scale <strong>{{ suggestedScale.toFixed(2) }}x</strong>
+          </p>
+          <button @click="applySuggestion" class="btn-suggest">
+            Apply Suggestion
+          </button>
         </div>
 
         <div class="preset-buttons">
@@ -138,6 +151,39 @@ const tryOnComponent = ref<InstanceType<typeof VirtualTryOn> | null>(null)
 const colorOptions = ref([
   { value: 'default', name: 'Default', hex: '#333333' }
 ])
+
+// Model dimensions for auto-suggest
+const modelDimensions = ref<{ width: number; height: number; depth: number } | null>(null)
+const hasAutoSuggestion = ref(false)
+const suggestedOffsetY = ref(0)
+const suggestedScale = ref(1)
+
+function onModelReady(info: { width: number; height: number; depth: number }) {
+  modelDimensions.value = info
+  // Auto-suggest based on model proportions:
+  // Wide frames (aviators) need less vertical offset, tall frames need more
+  const aspectRatio = info.width / info.height
+  // Typical glasses aspect ratio is ~2.5-3.5 (wide). Tall models (ratio < 2) sit lower
+  if (aspectRatio < 2.0) {
+    suggestedOffsetY.value = -5 // Push up for tall/round frames
+    suggestedScale.value = 0.95
+  } else if (aspectRatio > 3.5) {
+    suggestedOffsetY.value = 2 // Wide aviators sit slightly lower
+    suggestedScale.value = 1.05
+  } else {
+    suggestedOffsetY.value = 0
+    suggestedScale.value = 1.0
+  }
+  // Only show suggestion if values differ from current and user hasn't already calibrated
+  hasAutoSuggestion.value = (currentOffsetY === 0 && currentScale === 1)
+  console.log('📐 Model dimensions:', info, 'Aspect ratio:', aspectRatio.toFixed(2), 'Suggested:', suggestedOffsetY.value, suggestedScale.value)
+}
+
+function applySuggestion() {
+  offsetY.value = suggestedOffsetY.value
+  scale.value = suggestedScale.value
+  hasAutoSuggestion.value = false
+}
 
 // Preset functions
 function resetToDefaults() {
@@ -433,6 +479,44 @@ onMounted(() => {
   font-size: 0.75rem;
   color: #9ca3af;
   font-style: italic;
+}
+
+/* Auto-Suggestion Banner */
+.auto-suggest-banner {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  text-align: center;
+}
+
+.suggest-title {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4338ca;
+}
+
+.suggest-detail {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.75rem;
+  color: #6366f1;
+}
+
+.btn-suggest {
+  padding: 0.4rem 1.25rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-suggest:hover {
+  background: #5568d3;
 }
 
 /* Preset Buttons */
