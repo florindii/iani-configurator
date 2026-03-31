@@ -1133,6 +1133,7 @@ onUnmounted(() => {
 }
 
 .try-on-controls {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1228,13 +1229,17 @@ onUnmounted(() => {
   background: #667eea;
 }
 
-/* Fit Adjustment Panel */
+/* Fit Adjustment Panel - positioned above controls so it doesn't affect layout */
 .fit-adjust-panel {
-  width: 100%;
-  background: rgba(0, 0, 0, 0.4);
-  border-radius: 8px;
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  border-radius: 8px 8px 0 0;
   padding: 10px 16px;
-  margin-top: 4px;
+  margin-bottom: 4px;
 }
 
 .fit-adjust-row {
