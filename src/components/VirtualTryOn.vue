@@ -705,13 +705,13 @@ function updateModelPosition(landmarks: FaceLandmarks) {
     model.scale.setScalar(Math.max(finalScale, 10)) // Minimum scale
 
     // Apply face rotation
-    // Video is mirrored (selfie mode):
-    // - When YOU turn your head to YOUR right, it appears as LEFT in the video
-    // - The yaw from face tracking gives the actual head direction
-    // - We need to INVERT yaw so glasses match the mirrored appearance
-    model.rotation.x = -landmarks.rotation.pitch * 0.3  // Follow head pitch
-    model.rotation.y = -landmarks.rotation.yaw * 0.6  // Inverted for mirrored video
-    model.rotation.z = landmarks.rotation.roll * 0.5  // Follow head tilt
+    // Both video and overlay canvas are CSS-mirrored (scaleX(-1))
+    // MediaPipe gives rotation from the raw camera (non-mirrored)
+    // The CSS mirror on the overlay flips the Y-rotation visually,
+    // so we pass yaw with the SAME sign — the CSS mirror handles the flip
+    model.rotation.x = -landmarks.rotation.pitch * 0.8  // Pitch: look up/down
+    model.rotation.y = landmarks.rotation.yaw * 1.2     // Yaw: turn left/right (CSS mirror flips it)
+    model.rotation.z = landmarks.rotation.roll * 0.8    // Roll: head tilt
 
     // Debug logging
     if (Math.random() < 0.02) {
