@@ -293,22 +293,28 @@ export default function EditProduct() {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'CALIBRATION_SAVED') {
         console.log('Calibration saved:', event.data);
+        const newOffsetY = event.data.offsetY ?? tryOnOffsetY;
+        const newScale = event.data.scale ?? tryOnScale;
         // Update local state with new values
-        if (event.data.offsetY !== undefined) {
-          setTryOnOffsetY(event.data.offsetY);
-        }
-        if (event.data.scale !== undefined) {
-          setTryOnScale(event.data.scale);
-        }
+        setTryOnOffsetY(newOffsetY);
+        setTryOnScale(newScale);
+        // Auto-save to database
+        const formData = new FormData();
+        formData.set("intent", "update-try-on");
+        formData.set("tryOnEnabled", tryOnEnabled.toString());
+        formData.set("tryOnType", tryOnType);
+        formData.set("tryOnOffsetY", newOffsetY.toString());
+        formData.set("tryOnScale", newScale.toString());
+        submit(formData, { method: "post" });
         // Show success message
-        setCalibrationStatus("Settings saved successfully! ✓");
+        setCalibrationStatus("Calibration saved to database! ✓");
         setTimeout(() => setCalibrationStatus(""), 5000);
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  }, [tryOnEnabled, tryOnType, tryOnOffsetY, tryOnScale, submit]);
 
   // Open calibration tool in new window
   const openCalibrationTool = () => {
