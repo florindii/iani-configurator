@@ -105,9 +105,7 @@
       var u = new URL(c.configuratorUrl);
       u.searchParams.set('configId', configId);
       u.searchParams.set('readonly', 'true');
-      u.searchParams.set('product', c.productId);
       u.searchParams.set('shop', c.shop);
-      if (c.modelUrl) u.searchParams.set('modelUrl', c.modelUrl);
       return u.toString();
     }
 
@@ -185,8 +183,8 @@
         } catch (x) {}
       }
 
-      // Add view configuration link
-      props['View 3D Configuration'] = buildViewConfigUrl(configId);
+      // Hidden from cart, visible in Shopify admin order page
+      props['_View Configuration'] = buildViewConfigUrl(configId);
 
       // Store in localStorage for cart preview
       try {

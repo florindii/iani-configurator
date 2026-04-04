@@ -436,6 +436,7 @@ const frameOptions = ref([
 const configLoaded = ref(false)
 const productName = ref('Customize Your Product')
 const productModelUrl = ref('') // Model URL from product config API
+const savedProductId = ref('') // Product ID from saved configuration (readonly mode)
 
 // Shopify price context (from URL params)
 const shopifyBasePrice = ref(null)
@@ -910,10 +911,14 @@ const applySavedMeshCustomizations = () => {
       if (Array.isArray(child.material)) {
         child.material.forEach((mat) => {
           mat.color.setHex(colorHex)
+          mat.roughness = 0.8
+          mat.metalness = 0.1
           mat.needsUpdate = true
         })
       } else if (child.material) {
         child.material.color.setHex(colorHex)
+        child.material.roughness = 0.8
+        child.material.metalness = 0.1
         child.material.needsUpdate = true
       }
     }
@@ -2226,7 +2231,7 @@ const isEmbeddedInShopify = () => {
 const getShopifyContext = () => {
   const urlParams = new URLSearchParams(window.location.search)
   return {
-    productId: urlParams.get('product'),
+    productId: urlParams.get('product') || savedProductId.value,
     variantId: urlParams.get('variant'),
     shop: urlParams.get('shop'),
     handle: urlParams.get('handle'),
@@ -2272,6 +2277,15 @@ const loadSavedConfiguration = async () => {
       const config = data.configuration
 
       console.log('✅ Configuration loaded:', config)
+
+      // Set model URL and product context from saved configuration
+      if (config.modelUrl && !productModelUrl.value) {
+        productModelUrl.value = config.modelUrl
+        console.log('📦 Model URL from saved config:', config.modelUrl)
+      }
+      if (config.productId) {
+        savedProductId.value = config.productId
+      }
 
       // Store the saved mesh customizations for later application
       const savedMeshCustomizations = config.meshCustomizations || {}
@@ -2596,14 +2610,14 @@ onMounted(async () => {
     window.parent.postMessage({ type: 'IANI_READY' }, '*')
   }
 
-  // Load product configuration from merchant's settings
-  await loadProductConfig()
-
-  // If in readonly mode with a configId, load the saved configuration
+  // In readonly mode, load saved configuration first (provides model URL + product context)
   if (isReadOnlyMode.value) {
     console.log('👁️ Read-only mode detected, loading saved configuration...')
     await loadSavedConfiguration()
   }
+
+  // Load product configuration from merchant's settings
+  await loadProductConfig()
 
   setTimeout(async () => {
     await initThreeJS()
