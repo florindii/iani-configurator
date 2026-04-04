@@ -330,6 +330,19 @@
       <div v-if="arModelPlaced && arGestureHint" class="ar-instructions ar-instructions--hint">
         Drag to move &bull; Pinch to resize &bull; Two fingers to rotate
       </div>
+      <!-- Height adjustment buttons -->
+      <div v-if="arModelPlaced" class="ar-height-controls">
+        <button @click="adjustArHeight(0.03)" class="ar-height-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="18 15 12 9 6 15"></polyline>
+          </svg>
+        </button>
+        <button @click="adjustArHeight(-0.03)" class="ar-height-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- Virtual Try-On Modal -->
@@ -459,7 +472,6 @@ const spaceArEnabled = ref(false)
 const spaceArSupported = ref(false)
 const isInArSession = ref(false)
 const arModelPlaced = ref(false)
-const arMoveMode = ref(false) // When true, tapping moves the model
 const arGestureHint = ref(false) // Show gesture hint briefly after placement
 let hitTestSource = null
 let hitTestSourceRequested = false
@@ -467,7 +479,6 @@ let reticle = null
 let moveIndicator = null // Ring under the model showing it can be moved
 let arModelContainer = null
 let savedBackground = null
-let arMoveTimeout = null // Auto-hide move indicator after 5s
 let arGestureHintTimeout = null
 
 // Touch gesture state for AR (Shopify-style: drag=move, pinch=scale, two-finger-rotate=rotate)
@@ -1850,9 +1861,8 @@ const createFallbackModel = () => {
 const animate = (timestamp, frame) => {
   if (!renderer || !scene || !camera) return
 
-  // AR mode: handle hit-test for surface detection
-  // Active when: not yet placed OR in move mode (repositioning)
-  if (isInArSession.value && frame && (!arModelPlaced.value || arMoveMode.value)) {
+  // AR mode: handle hit-test for surface detection (reticle only, before placement)
+  if (isInArSession.value && frame && !arModelPlaced.value) {
     const referenceSpace = renderer.xr.getReferenceSpace()
 
     if (!hitTestSourceRequested) {
@@ -1871,18 +1881,12 @@ const animate = (timestamp, frame) => {
         const hit = hitTestResults[0]
         const pose = hit.getPose(referenceSpace)
         if (pose) {
-          if (!arModelPlaced.value && reticle) {
-            // Before placement: show reticle on surface
+          if (reticle) {
             reticle.visible = true
             reticle.matrix.fromArray(pose.transform.matrix)
-          } else if (arMoveMode.value && arModelContainer) {
-            // Move mode: model follows the surface in real-time
-            const position = new THREE.Vector3()
-            position.setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix))
-            arModelContainer.position.copy(position)
           }
         }
-      } else if (!arModelPlaced.value && reticle) {
+      } else if (reticle) {
         reticle.visible = false
       }
     }
@@ -1962,17 +1966,10 @@ const createMoveIndicator = () => {
 
 const showMoveIndicator = () => {
   if (moveIndicator) moveIndicator.visible = true
-  // Auto-hide after 5 seconds
-  clearTimeout(arMoveTimeout)
-  arMoveTimeout = setTimeout(() => {
-    if (moveIndicator) moveIndicator.visible = false
-    arMoveMode.value = false
-  }, 5000)
 }
 
 const hideMoveIndicator = () => {
   if (moveIndicator) moveIndicator.visible = false
-  clearTimeout(arMoveTimeout)
 }
 
 const onArSelect = () => {
@@ -2001,6 +1998,26 @@ const onArSelect = () => {
   // After placement, taps are ignored (gestures handle everything)
 }
 
+// Project screen-space touch delta to world-space movement on the ground plane
+const projectTouchDeltaToWorld = (dx, dy) => {
+  if (!renderer || !arModelContainer) return new THREE.Vector3()
+  const xrCamera = renderer.xr.getCamera()
+  // Get camera's forward and right vectors projected onto horizontal plane
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(xrCamera.quaternion)
+  forward.y = 0
+  forward.normalize()
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(xrCamera.quaternion)
+  right.y = 0
+  right.normalize()
+  // Scale: larger move sensitivity when model is further away
+  const distance = xrCamera.position.distanceTo(arModelContainer.position)
+  const sensitivity = Math.max(0.001, distance * 0.002)
+  const worldDelta = new THREE.Vector3()
+  worldDelta.addScaledVector(right, dx * sensitivity)
+  worldDelta.addScaledVector(forward, -dy * sensitivity) // Invert Y: drag down = move away
+  return worldDelta
+}
+
 // Touch gesture handlers for Shopify-style AR interaction
 const onArTouchStart = (e) => {
   if (!arModelPlaced.value || !arModelContainer) return
@@ -2009,9 +2026,7 @@ const onArTouchStart = (e) => {
   arTouches.prev = Array.from(touches).map(t => ({ x: t.clientX, y: t.clientY }))
 
   if (touches.length === 1) {
-    // Single finger: start drag-to-move (activate hit-test move mode)
     arTouchMoveActive = true
-    arMoveMode.value = true
     showMoveIndicator()
   }
   // Hide gesture hint on first interaction
@@ -2038,9 +2053,8 @@ const onArTouchMove = (e) => {
     )
     if (prevDist > 0) {
       const scaleFactor = currDist / prevDist
-      const newScale = arModelContainer.scale.x * scaleFactor
-      const clamped = Math.max(0.25, Math.min(4, newScale))
-      arModelContainer.scale.setScalar(clamped)
+      const newScale = Math.max(0.25, Math.min(4, arModelContainer.scale.x * scaleFactor))
+      arModelContainer.scale.setScalar(newScale)
     }
 
     // Calculate rotation from angle change between two fingers
@@ -2057,10 +2071,14 @@ const onArTouchMove = (e) => {
 
     // Disable single-finger move during two-finger gesture
     arTouchMoveActive = false
-    arMoveMode.value = false
     hideMoveIndicator()
+  } else if (touches.length === 1 && arTouches.prev.length >= 1 && arTouchMoveActive) {
+    // Single-finger drag: move model on the ground plane
+    const dx = current[0].x - arTouches.prev[0].x
+    const dy = current[0].y - arTouches.prev[0].y
+    const worldDelta = projectTouchDeltaToWorld(dx, dy)
+    arModelContainer.position.add(worldDelta)
   }
-  // Single-finger drag: move is handled via hit-test in the animation loop (arMoveMode)
 
   arTouches.prev = current
   arTouches.count = touches.length
@@ -2069,21 +2087,16 @@ const onArTouchMove = (e) => {
 const onArTouchEnd = (e) => {
   const remaining = e.touches ? e.touches.length : 0
   if (remaining === 0) {
-    // All fingers lifted: stop move mode
-    if (arTouchMoveActive) {
-      arMoveMode.value = false
-      hideMoveIndicator()
-      arTouchMoveActive = false
-    }
+    arTouchMoveActive = false
+    hideMoveIndicator()
     arTouches.prev = []
     arTouches.count = 0
   } else if (remaining === 1) {
-    // Went from two fingers to one: start single-finger move
+    // Went from two fingers to one: resume single-finger move
     const touches = e.touches
     arTouches.prev = [{ x: touches[0].clientX, y: touches[0].clientY }]
     arTouches.count = 1
     arTouchMoveActive = true
-    arMoveMode.value = true
     showMoveIndicator()
   }
 }
@@ -2092,13 +2105,11 @@ const onArSessionEnd = () => {
   console.log('🔲 AR session ended')
   isInArSession.value = false
   arModelPlaced.value = false
-  arMoveMode.value = false
   arGestureHint.value = false
   arTouchMoveActive = false
   arTouches = { prev: [], count: 0 }
   hitTestSource = null
   hitTestSourceRequested = false
-  clearTimeout(arMoveTimeout)
   clearTimeout(arGestureHintTimeout)
 
   // Remove touch gesture listeners
@@ -2155,11 +2166,20 @@ const startArSession = async () => {
       arModel.scale.multiplyScalar(scaleFactor)
     }
 
-    // Center and ground the model
+    // Center and ground the model by translating geometry (not position offset).
+    // This ensures the model's base-center is at (0,0,0) so pinch-to-scale
+    // grows uniformly in place without drifting toward/away from camera.
     const centeredBox = new THREE.Box3().setFromObject(arModel)
     const center = centeredBox.getCenter(new THREE.Vector3())
-    arModel.position.sub(center)
-    arModel.position.y -= centeredBox.min.y
+    const offsetX = -center.x
+    const offsetY = -centeredBox.min.y  // Ground the model (bottom at y=0)
+    const offsetZ = -center.z
+    arModel.traverse((child) => {
+      if (child.isMesh && child.geometry) {
+        child.geometry.translate(offsetX, offsetY, offsetZ)
+      }
+    })
+    arModel.position.set(0, 0, 0)
     arModelContainer.add(arModel)
 
     // Create reticle
@@ -2210,6 +2230,12 @@ const startArSession = async () => {
       scene.remove(arModelContainer)
       arModelContainer = null
     }
+  }
+}
+
+const adjustArHeight = (delta) => {
+  if (arModelContainer) {
+    arModelContainer.position.y += delta
   }
 }
 
@@ -3631,6 +3657,7 @@ onUnmounted(() => {
 
 .ar-overlay--active {
   display: block;
+  pointer-events: auto;
 }
 
 .ar-instructions {
@@ -3680,5 +3707,36 @@ onUnmounted(() => {
 
 .ar-exit-btn:active {
   background: rgba(220, 38, 38, 1);
+}
+
+.ar-height-controls {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.ar-height-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.85);
+  color: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.ar-height-btn:active {
+  background: rgba(255, 255, 255, 1);
+  transform: scale(0.9);
 }
 </style>
