@@ -75,13 +75,19 @@
 
       const text=(el.textContent||'').trim();
 
-      if(text==='Configuration ID:'||text==='Configuration ID'){
+      if(text==='Configuration ID:'||text==='Configuration ID'||text==='View Configuration:'||text==='View Configuration'){
         el.style.display='none';
         el.dataset.ianiHidden='true';
         return;
       }
 
       if(/^config_\d+_[a-z0-9]+$/i.test(text)){
+        el.style.display='none';
+        el.dataset.ianiHidden='true';
+        return;
+      }
+
+      if(text.indexOf('iani-configurator.vercel.app')!==-1){
         el.style.display='none';
         el.dataset.ianiHidden='true';
         return;

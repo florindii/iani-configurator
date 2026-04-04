@@ -183,8 +183,8 @@
         } catch (x) {}
       }
 
-      // Hidden from cart, visible in Shopify admin order page
-      props['_View Configuration'] = buildViewConfigUrl(configId);
+      // Visible in Shopify admin order page, hidden from cart via cart-preview.liquid
+      props['View Configuration'] = buildViewConfigUrl(configId);
 
       // Store in localStorage for cart preview
       try {
