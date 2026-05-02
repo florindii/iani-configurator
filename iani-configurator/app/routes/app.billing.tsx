@@ -323,7 +323,7 @@ export default function BillingPage() {
                 • <strong>Pro ($49/mo)</strong> - Unlimited products with Virtual Try-On for glasses, hats, and jewelry. No watermark. Most popular for eyewear stores.
               </Text>
               <Text as="p" tone="subdued">
-                • <strong>Business ($99/mo)</strong> - Everything in Pro plus View in Space AR for furniture, analytics dashboard, and priority support.
+                • <strong>Business ($99/mo)</strong> - Everything in Pro plus View in Space AR for furniture and priority support.
               </Text>
             </BlockStack>
           </Card>

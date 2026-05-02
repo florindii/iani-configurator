@@ -328,7 +328,7 @@ export default function Index() {
         </BlockStack>
 
         {/* ── Slim Onboarding Banner ────────────────────────────────────── */}
-        {showOnboarding && (
+        {/* {showOnboarding && (
           <Banner
             title={`Setup progress: ${onboarding.stepsCompleted} of 3 steps complete`}
             tone="info"
@@ -372,7 +372,7 @@ export default function Index() {
               </InlineStack>
             </BlockStack>
           </Banner>
-        )}
+        )} */}
 
         {/* ── Trial Warning ─────────────────────────────────────────────── */}
         {subscription.isTrialing && subscription.trialEndsAt && (

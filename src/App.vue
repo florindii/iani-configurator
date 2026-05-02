@@ -2,14 +2,18 @@
 import { onMounted } from 'vue'
 import ThreeSceneMinimal from './components/ThreeSceneMinimal.vue'
 import AdminCalibrateTryOn from './components/AdminCalibrateTryOn.vue'
+import Demo from './components/Demo.vue'
 import shopifyService from './services/shopifyService'
 
 const urlParams = new URLSearchParams(window.location.search)
 const isEmbedded = urlParams.get('embedded') === 'true'
 const isAdminCalibrate = urlParams.get('admin-calibrate') === 'true' || window.location.pathname === '/admin-calibrate'
+const isDemo = urlParams.get('demo') === 'true' || window.location.pathname === '/demo'
 
 onMounted(() => {
-  if (isAdminCalibrate) {
+  if (isDemo) {
+    console.log('🎬 Demo Landing Page')
+  } else if (isAdminCalibrate) {
     console.log('🎯 Admin Calibration Mode - Full calibration tool')
   } else {
     console.log('🚀 Vue App initialized - FULLSCREEN VERSION')
@@ -28,7 +32,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <AdminCalibrateTryOn v-if="isAdminCalibrate" />
+  <Demo v-if="isDemo" />
+  <AdminCalibrateTryOn v-else-if="isAdminCalibrate" />
   <ThreeSceneMinimal v-else />
 </template>
 

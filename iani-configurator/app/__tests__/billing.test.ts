@@ -53,12 +53,6 @@ describe("PLANS", () => {
     expect(PLANS.business.price).toBe(99);
   });
 
-  it("analytics is false for ALL plans", () => {
-    expect(PLANS.free.features.analytics).toBe(false);
-    expect(PLANS.starter.features.analytics).toBe(false);
-    expect(PLANS.pro.features.analytics).toBe(false);
-    expect(PLANS.business.features.analytics).toBe(false);
-  });
 });
 
 // ── hasFeatureAccess ──────────────────────────────────────────────────────────

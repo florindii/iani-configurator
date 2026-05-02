@@ -35,8 +35,6 @@
           <div>Total Meshes: {{ debugStats.totalMeshes }}</div>
           <div>Cushions: {{ debugStats.cushions }}</div>
           <div>Frame: {{ debugStats.frame }}</div>
-          <div>Pillows: {{ debugStats.pillows }}</div>
-          <div>Legs: {{ debugStats.legs }}</div>
         </div>
         <button @click="exportModelStructure">Export Structure</button>
       </div>
@@ -387,9 +385,7 @@ const availableModels = ref([
 const debugStats = ref({
   totalMeshes: 0,
   cushions: 0,
-  frame: 0,
-  pillows: 0,
-  legs: 0
+  frame: 0
 })
 
 const showCustomizationPanel = ref(null)
@@ -399,12 +395,9 @@ const clickedMesh = ref(null)
 // Three.js variables
 let scene, camera, renderer, model, controls, raycaster, mouse
 
-// Store references to different parts of the sofa
 let sofaParts = {
   cushions: [],
   frame: [],
-  pillows: [],
-  legs: [],
   all: []
 }
 
@@ -596,19 +589,6 @@ const loadProductConfig = async () => {
   }
 }
 
-const pillowOptions = ref([
-  { label: 'Classic', value: 'classic', color: '#E8E8E8', extraCost: 0 },
-  { label: 'Velvet Blue', value: 'velvet-blue', color: '#3A5FCD', extraCost: 35 },
-  { label: 'Golden', value: 'golden', color: '#DAA520', extraCost: 40 },
-  { label: 'Burgundy', value: 'burgundy', color: '#8B0000', extraCost: 35 }
-])
-
-const legOptions = ref([
-  { label: 'Wooden Legs', value: 'wooden', color: '#8B4513', extraCost: 0 },
-  { label: 'Metal Legs', value: 'metal', color: '#696969', extraCost: 60 },
-  { label: 'Brass Legs', value: 'brass', color: '#B5651D', extraCost: 80 },
-  { label: 'Black Metal', value: 'black-metal', color: '#2F4F4F', extraCost: 65 }
-])
 
 
 
@@ -650,13 +630,6 @@ const totalExtraCost = computed(() => {
     const selectedFrame = frameOptions.value.find(f => f.value === configuration.value.frameMaterial)
     if (selectedFrame) extras += selectedFrame.extraCost
 
-    // Add extra costs from selected pillow style
-    const selectedPillow = pillowOptions.value.find(p => p.value === configuration.value.pillowStyle)
-    if (selectedPillow) extras += selectedPillow.extraCost
-
-    // Add extra costs from selected leg style
-    const selectedLeg = legOptions.value.find(l => l.value === configuration.value.legStyle)
-    if (selectedLeg) extras += selectedLeg.extraCost
   }
 
   return extras
@@ -727,15 +700,6 @@ const getFrameLabel = () => {
   return selected ? selected.label : 'Select Material'
 }
 
-const getPillowLabel = () => {
-  const selected = pillowOptions.value.find(p => p.value === configuration.value.pillowStyle)
-  return selected ? selected.label : 'Select Style'
-}
-
-const getLegLabel = () => {
-  const selected = legOptions.value.find(l => l.value === configuration.value.legStyle)
-  return selected ? selected.label : 'Select Style'
-}
 
 
 
@@ -783,9 +747,7 @@ const onMouseClick = (event) => {
     if (!targetMesh.userData.customConfig) {
       targetMesh.userData.customConfig = {
         cushionColor: configuration.value.cushionColor,
-        frameMaterial: configuration.value.frameMaterial,
-        pillowStyle: configuration.value.pillowStyle,
-        legStyle: configuration.value.legStyle
+        frameMaterial: configuration.value.frameMaterial
       }
     }
     
@@ -795,10 +757,6 @@ const onMouseClick = (event) => {
       configuration.value.cushionColor = targetMesh.userData.customConfig.cushionColor
     } else if (partType === 'frame') {
       configuration.value.frameMaterial = targetMesh.userData.customConfig.frameMaterial
-    } else if (partType === 'pillow') {
-      configuration.value.pillowStyle = targetMesh.userData.customConfig.pillowStyle
-    } else if (partType === 'leg') {
-      configuration.value.legStyle = targetMesh.userData.customConfig.legStyle
     }
     
     // Set the selected part for UI display
@@ -846,8 +804,6 @@ const changeModel = async () => {
   sofaParts = {
     cushions: [],
     frame: [],
-    pillows: [],
-    legs: [],
     all: []
   }
   
@@ -1062,17 +1018,6 @@ const updateFrameMaterial = (material) => {
   updateFrameMaterials()
 }
 
-const updatePillowStyle = (style) => {
-  console.log('🟨 Updating pillow style to:', style)
-  configuration.value.pillowStyle = style
-  updatePillowStyles()
-}
-
-const updateLegStyle = (style) => {
-  console.log('⚫ Updating leg style to:', style)
-  configuration.value.legStyle = style
-  updateLegStyles()
-}
 
 
 
@@ -1216,157 +1161,6 @@ const updateFrameMaterials = () => {
   console.log('⚠️ No clicked mesh available')
 }
 
-const updatePillowStyles = () => {
-  console.log('🟨 updatePillowStyles called - Parts available:', sofaParts.pillows.length)
-  
-  // If we have a specific clicked mesh, only update that one
-  if (clickedMesh.value && clickedMesh.value.userData.partType === 'pillow') {
-    const pillowColor = getPillowColor(configuration.value.pillowStyle)
-    const pillowProps = getPillowMaterialProperties(configuration.value.pillowStyle)
-    console.log('🟨 Applying pillow style to clicked mesh only:', clickedMesh.value.name)
-    
-    if (clickedMesh.value.material) {
-      // Handle material arrays
-      if (Array.isArray(clickedMesh.value.material)) {
-        clickedMesh.value.material.forEach((mat, index) => {
-          mat.color.setHex(pillowColor)
-          mat.roughness = pillowProps.roughness
-          mat.metalness = pillowProps.metalness
-          mat.needsUpdate = true
-          console.log(`   - Updated material ${index}: #${mat.color.getHexString()}`)
-        })
-      } else {
-        clickedMesh.value.material.color.setHex(pillowColor)
-        clickedMesh.value.material.roughness = pillowProps.roughness
-        clickedMesh.value.material.metalness = pillowProps.metalness
-        clickedMesh.value.material.needsUpdate = true
-        console.log(`   - New color: #${clickedMesh.value.material.color.getHexString()}`)
-      }
-      
-      // Save the configuration to this specific mesh
-      if (!clickedMesh.value.userData.customConfig) {
-        clickedMesh.value.userData.customConfig = {}
-      }
-      clickedMesh.value.userData.customConfig.pillowStyle = configuration.value.pillowStyle
-      console.log(`   - Saved config to mesh:`, clickedMesh.value.userData.customConfig)
-    }
-    return
-  }
-  
-  // Otherwise, update all pillows (initial load or hotspot click)
-  if (!sofaParts.pillows.length) {
-    console.log('⚠️ No pillow parts found in the model')
-    return
-  }
-  
-  const pillowColor = getPillowColor(configuration.value.pillowStyle)
-  const pillowProps = getPillowMaterialProperties(configuration.value.pillowStyle)
-  
-  console.log('🟨 Applying pillow style:', configuration.value.pillowStyle, 'color:', pillowColor.toString(16))
-  
-  sofaParts.pillows.forEach((pillow, index) => {
-    console.log(`   Updating pillow ${index}: ${pillow.name}`)
-    if (pillow.material) {
-      pillow.material.color.setHex(pillowColor)
-      pillow.material.roughness = pillowProps.roughness
-      pillow.material.metalness = pillowProps.metalness
-      pillow.material.needsUpdate = true
-      
-      // Save config to each mesh
-      if (!pillow.userData.customConfig) {
-        pillow.userData.customConfig = {}
-      }
-      pillow.userData.customConfig.pillowStyle = configuration.value.pillowStyle
-      
-      console.log(`   - New color: #${pillow.material.color.getHexString()}`)
-    }
-  })
-}
-
-const updateLegStyles = () => {
-  console.log('⚫ updateLegStyles called - Parts available:', sofaParts.legs.length)
-  
-  // If we have a specific clicked mesh, only update that one
-  if (clickedMesh.value && clickedMesh.value.userData.partType === 'leg') {
-    const legColor = getLegColor(configuration.value.legStyle)
-    const legProps = getLegMaterialProperties(configuration.value.legStyle)
-    console.log('⚫ Applying leg style to clicked mesh only:', clickedMesh.value.name)
-    
-    if (clickedMesh.value.material) {
-      // Handle material arrays
-      if (Array.isArray(clickedMesh.value.material)) {
-        clickedMesh.value.material.forEach((mat, index) => {
-          mat.color.setHex(legColor)
-          mat.roughness = legProps.roughness
-          mat.metalness = legProps.metalness
-          mat.needsUpdate = true
-          console.log(`   - Updated material ${index}: #${mat.color.getHexString()}`)
-          
-          if (configuration.value.legStyle.includes('metal') || configuration.value.legStyle.includes('brass')) {
-            mat.metalness = 0.8
-            mat.roughness = 0.3
-            console.log(`   - Applied metallic properties to material ${index}`)
-          }
-        })
-      } else {
-        clickedMesh.value.material.color.setHex(legColor)
-        clickedMesh.value.material.roughness = legProps.roughness
-        clickedMesh.value.material.metalness = legProps.metalness
-        clickedMesh.value.material.needsUpdate = true
-        console.log(`   - Updated material: #${clickedMesh.value.material.color.getHexString()}`)
-        
-        if (configuration.value.legStyle.includes('metal') || configuration.value.legStyle.includes('brass')) {
-          clickedMesh.value.material.metalness = 0.8
-          clickedMesh.value.material.roughness = 0.3
-          console.log(`   - Applied metallic properties`)
-        }
-      }
-      
-      // Save the configuration to this specific mesh
-      if (!clickedMesh.value.userData.customConfig) {
-        clickedMesh.value.userData.customConfig = {}
-      }
-      clickedMesh.value.userData.customConfig.legStyle = configuration.value.legStyle
-      console.log(`   - Saved config to mesh:`, clickedMesh.value.userData.customConfig)
-    }
-    return
-  }
-  
-  // Otherwise, update all legs (initial load or hotspot click)
-  if (!sofaParts.legs.length) {
-    console.log('⚠️ No leg parts found in the model - working with existing parts only')
-    return
-  }
-  
-  const legColor = getLegColor(configuration.value.legStyle)
-  const legProps = getLegMaterialProperties(configuration.value.legStyle)
-  
-  console.log('⚫ Applying leg style:', configuration.value.legStyle, 'color:', legColor.toString(16))
-  
-  sofaParts.legs.forEach((leg, index) => {
-    console.log(`   Updating existing leg ${index}: ${leg.name}`)
-    if (leg.material) {
-      leg.material.color.setHex(legColor)
-      leg.material.roughness = legProps.roughness
-      leg.material.metalness = legProps.metalness
-      leg.material.needsUpdate = true
-      
-      // Save config to each mesh
-      if (!leg.userData.customConfig) {
-        leg.userData.customConfig = {}
-      }
-      leg.userData.customConfig.legStyle = configuration.value.legStyle
-      
-      console.log(`   - Updated material: #${leg.material.color.getHexString()}`)
-      
-      if (configuration.value.legStyle.includes('metal') || configuration.value.legStyle.includes('brass')) {
-        leg.material.metalness = 0.8
-        leg.material.roughness = 0.3
-        console.log(`   - Applied metallic properties`)
-      }
-    }
-  })
-}
 
 
 
@@ -1377,8 +1171,6 @@ const identifySofaParts = () => {
   sofaParts = {
     cushions: [],
     frame: [],
-    pillows: [],
-    legs: [],
     all: []
   }
   
@@ -1450,14 +1242,14 @@ const identifySofaParts = () => {
         if (import.meta.env.DEV) console.log(`✅ CUSHION: ${child.name}`)
         identified = true
       } else if (legPatterns.some(pattern => name.includes(pattern))) {
-        sofaParts.legs.push(child)
-        child.userData.partType = 'leg'
-        if (import.meta.env.DEV) console.log(`✅ LEG: ${child.name}`)
+        sofaParts.frame.push(child)
+        child.userData.partType = 'frame'
+        if (import.meta.env.DEV) console.log(`✅ LEG->FRAME: ${child.name}`)
         identified = true
       } else if (armPatterns.some(pattern => name.includes(pattern))) {
-        sofaParts.pillows.push(child)
-        child.userData.partType = 'pillow'
-        if (import.meta.env.DEV) console.log(`✅ ARM/PILLOW: ${child.name}`)
+        sofaParts.cushions.push(child)
+        child.userData.partType = 'cushion'
+        if (import.meta.env.DEV) console.log(`✅ ARM->CUSHION: ${child.name}`)
         identified = true
       }
 
@@ -1477,8 +1269,6 @@ child.userData.isClickable = true
     console.log('🎯 FINAL CLICKABLE PARTS:')
     console.log(`   🟦 Cushions: ${sofaParts.cushions.length}`, sofaParts.cushions.map(p => p.name))
     console.log(`   🔲 Frame: ${sofaParts.frame.length}`, sofaParts.frame.map(p => p.name))
-    console.log(`   🟨 Pillows: ${sofaParts.pillows.length}`, sofaParts.pillows.map(p => p.name))
-    console.log(`   ⚫ Legs: ${sofaParts.legs.length}`, sofaParts.legs.map(p => p.name))
     console.log(`   📊 Total: ${sofaParts.all.length}`)
   }
   
@@ -1489,9 +1279,7 @@ const updateDebugStats = () => {
   debugStats.value = {
     totalMeshes: sofaParts.all.length,
     cushions: sofaParts.cushions.length,
-    frame: sofaParts.frame.length,
-    pillows: sofaParts.pillows.length,
-    legs: sofaParts.legs.length
+    frame: sofaParts.frame.length
   }
 }
 
@@ -1525,15 +1313,6 @@ const getFrameColor = (material) => {
   return colorMap[material] || 0x8B4513
 }
 
-const getPillowColor = (style) => {
-  const pillow = pillowOptions.value.find(p => p.value === style)
-  return pillow ? parseInt(pillow.color.replace('#', '0x')) : 0xE8E8E8
-}
-
-const getLegColor = (style) => {
-  const leg = legOptions.value.find(l => l.value === style)
-  return leg ? parseInt(leg.color.replace('#', '0x')) : 0x8B4513
-}
 
 const getFrameMaterialProperties = (material) => {
   const properties = {
@@ -1545,25 +1324,6 @@ const getFrameMaterialProperties = (material) => {
   return properties[material] || properties.oak
 }
 
-const getPillowMaterialProperties = (style) => {
-  const properties = {
-    classic: { roughness: 0.8, metalness: 0.0 },
-    'velvet-blue': { roughness: 0.9, metalness: 0.0 },
-    golden: { roughness: 0.6, metalness: 0.2 },
-    burgundy: { roughness: 0.8, metalness: 0.0 }
-  }
-  return properties[style] || properties.classic
-}
-
-const getLegMaterialProperties = (style) => {
-  const properties = {
-    wooden: { roughness: 0.8, metalness: 0.0 },
-    metal: { roughness: 0.2, metalness: 0.9 },
-    brass: { roughness: 0.3, metalness: 0.8 },
-    'black-metal': { roughness: 0.2, metalness: 0.9 }
-  }
-  return properties[style] || properties.wooden
-}
 
 // Initialize Three.js scene
 const initThreeJS = async () => {
@@ -1790,8 +1550,6 @@ const loadModel = async () => {
     // setTimeout(() => {
     //   updateCushionColors()
     //   updateFrameMaterials()
-    //   updatePillowStyles()
-    //   updateLegStyles()
     // }, 500)
     
     isLoading.value = false
@@ -2485,8 +2243,6 @@ const addToCart = async () => {
       // Hidden properties (prefixed with _)
       _cushionColor: configuration.value.cushionColor,
       _frameMaterial: configuration.value.frameMaterial,
-      _pillowStyle: configuration.value.pillowStyle,
-      _legStyle: configuration.value.legStyle,
       _size: configuration.value.size,
       _model: selectedModel.value,
       // Store all mesh customizations for restoration
@@ -3367,13 +3123,13 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
-.material-options, .pillow-options, .leg-options {
+.material-options {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.material-option, .pillow-option, .leg-option {
+.material-option {
   padding: 12px 16px;
   border: 2px solid #e1e5e9;
   border-radius: 6px;
@@ -3383,20 +3139,20 @@ onUnmounted(() => {
   position: relative;
 }
 
-.material-option:hover, .pillow-option:hover, .leg-option:hover {
+.material-option:hover {
   border-color: #0066cc;
   background: #f9f9f9;
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(0, 102, 204, 0.1);
 }
 
-.material-option.active, .pillow-option.active, .leg-option.active {
+.material-option.active {
   border-color: #0066cc;
   background: #f0f7ff;
   box-shadow: 0 3px 10px rgba(0, 102, 204, 0.15);
 }
 
-.material-name, .pillow-name, .leg-name {
+.material-name {
   font-weight: 600;
   color: #333;
   display: block;
@@ -3409,7 +3165,7 @@ onUnmounted(() => {
   margin-bottom: 4px;
 }
 
-.material-price, .pillow-price, .leg-price {
+.material-price {
   position: absolute;
   top: 12px;
   right: 16px;
@@ -3418,21 +3174,6 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
-.pillow-preview, .leg-preview {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  margin-right: 8px;
-  vertical-align: middle;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.leg-shape {
-  width: 100%;
-  height: 100%;
-  border-radius: 2px;
-}
 
 
 

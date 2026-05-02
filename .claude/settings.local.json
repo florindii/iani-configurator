@@ -36,7 +36,10 @@
       "Bash(del \"C:\\Users\\flori\\Desktop\\iani-configurator\\iani-configurator\\app\\routes\\api.save-configuration.tsx\")",
       "Bash(git -C \"C:\\Users\\flori\\Desktop\\iani-configurator\\iani-configurator\" log --oneline -5)",
       "Bash(find c:UsersfloriDesktopiani-configurator -name *.liquid -type f)",
-      "Bash(node -e \"const icons = require\\('@shopify/polaris-icons'\\); console.log\\('ChartVerticalFilledIcon:', !!icons.ChartVerticalFilledIcon\\); console.log\\('StarFilledIcon:', !!icons.StarFilledIcon\\); console.log\\('ProductIcon:', !!icons.ProductIcon\\); console.log\\('ViewIcon:', !!icons.ViewIcon\\); console.log\\('CheckIcon:', !!icons.CheckIcon\\);\")"
+      "Bash(node -e \"const icons = require\\('@shopify/polaris-icons'\\); console.log\\('ChartVerticalFilledIcon:', !!icons.ChartVerticalFilledIcon\\); console.log\\('StarFilledIcon:', !!icons.StarFilledIcon\\); console.log\\('ProductIcon:', !!icons.ProductIcon\\); console.log\\('ViewIcon:', !!icons.ViewIcon\\); console.log\\('CheckIcon:', !!icons.CheckIcon\\);\")",
+      "Bash(npm test *)",
+      "Bash(npx vitest *)",
+      "Bash(grep -v \"console\\\\|debug\\\\|Debug\\\\|//.*pillow\\\\|//.*leg\")"
     ]
   }
 }
