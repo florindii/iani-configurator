@@ -170,57 +170,46 @@
             </div>
           </div>
 
-          <!-- NORMAL MODE: Default Overview -->
-          <div v-else-if="!selectedPart" class="overview-section">
-            <div class="quick-overview">
-              <h3>✨ How to Customize</h3>
-              <p>Click directly on the model parts to customize them</p>
-            </div>
-          </div>
-
-          <!-- NORMAL MODE: Main Customization Menu After Mesh Selection -->
+          <!-- NORMAL MODE: Colors & materials always visible -->
           <div v-else class="customization-menu">
-            <div class="back-button" @click="clearSelection()">
-              ← Back to Overview
-            </div>
-            <h3 class="option-title">{{ selectedPart.name }}</h3>
-            <p class="option-subtitle">Select customization option</p>
-            
-            <!-- Customization Options Buttons -->
-            <div class="customization-buttons">
-              <button 
-                class="custom-btn colors-btn"
-                @click="showCustomizationPanel = 'colors'"
-              >
-                <span class="btn-icon">🟦</span>
-                <span class="btn-text">Colors</span>
-              </button>
-              <button 
-                class="custom-btn frame-btn"
-                @click="showCustomizationPanel = 'frame'"
-              >
-                <span class="btn-icon">🔲</span>
-                <span class="btn-text">Frame</span>
-              </button>
+            <!-- Active part indicator (when a part is selected) -->
+            <div v-if="selectedPart" class="active-part-bar">
+              <div class="active-part-info">
+                <span class="active-part-dot"></span>
+                <div class="active-part-text">
+                  <span class="active-part-label">Now customizing</span>
+                  <span class="active-part-name">{{ selectedPart.name }}</span>
+                </div>
+              </div>
+              <button class="active-part-clear" @click="clearSelection()">Done</button>
             </div>
 
-            <!-- Colors Panel -->
-            <div v-if="showCustomizationPanel === 'colors'" class="customization-panel">
-              <h4 class="panel-title">🟦 Available Colors</h4>
+            <!-- Hint when nothing is selected yet -->
+            <div
+              v-else
+              class="select-part-hint"
+              :class="{ 'select-part-hint--flash': showSelectPartHint }"
+            >
+              👆 Tap a part on the model, then choose a color or material below
+            </div>
+
+            <!-- Colors (always visible) -->
+            <div class="customization-panel">
+              <h4 class="panel-title">🎨 Colors</h4>
               <p class="panel-subtitle">{{ getSelectedColorLabel() }}</p>
-              
+
               <!-- Preset Colors -->
               <div class="subsection">
                 <h5 class="subsection-title">Preset Colors</h5>
                 <div class="color-grid">
-                  <div 
-                    v-for="color in colorOptions" 
+                  <div
+                    v-for="color in colorOptions"
                     :key="color.value"
-                    :class="['color-option', { active: configuration.cushionColor === color.value && !configuration.isCustomColor }]"
+                    :class="['color-option', { active: configuration.cushionColor === color.value && !configuration.isCustomColor, 'is-disabled': !selectedPart }]"
                     @click="setPresetColor(color.value, color.hex)"
                     :title="`${color.label} - ${color.price}`"
                   >
-                    <div 
+                    <div
                       class="color-swatch"
                       :style="{ backgroundColor: color.hex }"
                     ></div>
@@ -229,19 +218,19 @@
                   </div>
                 </div>
               </div>
-              
+
               <!-- Custom Color Picker -->
               <div class="subsection">
                 <h5 class="subsection-title">Custom Color</h5>
                 <div class="custom-color-section">
-                  <input 
-                    type="color" 
+                  <input
+                    type="color"
                     v-model="customColor"
                     @input="setCustomColor"
                     class="color-picker-input"
                     title="Pick any custom color"
                   />
-                  <div 
+                  <div
                     v-if="configuration.isCustomColor"
                     class="custom-color-preview"
                     :style="{ backgroundColor: customColor }"
@@ -252,15 +241,15 @@
               </div>
             </div>
 
-            <!-- Frame Panel -->
-            <div v-if="showCustomizationPanel === 'frame'" class="customization-panel">
-              <h4 class="panel-title">🔲 Frame Material</h4>
+            <!-- Frame Material (always visible) -->
+            <div class="customization-panel">
+              <h4 class="panel-title">🪵 Frame Material</h4>
               <p class="panel-subtitle">{{ getFrameLabel() }}</p>
               <div class="material-options">
                 <div
                   v-for="frame in frameOptions"
                   :key="frame.value"
-                  :class="['material-option', { active: configuration.frameMaterial === frame.value }]"
+                  :class="['material-option', { active: configuration.frameMaterial === frame.value, 'is-disabled': !selectedPart }]"
                   @click="updateFrameMaterial(frame.value)"
                 >
                   <div class="material-swatch" :style="{ background: getMaterialSwatchStyle(frame.value) }"></div>
@@ -394,6 +383,16 @@ const debugStats = ref({
 const showCustomizationPanel = ref(null)
 const selectedPart = ref(null)
 const clickedMesh = ref(null)
+
+// Briefly flashes the "tap a part first" hint when a color/material is
+// chosen without a selected part. Colors only apply per-clicked-mesh.
+const showSelectPartHint = ref(false)
+let selectPartHintTimer = null
+const flashSelectPartHint = () => {
+  showSelectPartHint.value = true
+  if (selectPartHintTimer) clearTimeout(selectPartHintTimer)
+  selectPartHintTimer = setTimeout(() => { showSelectPartHint.value = false }, 2200)
+}
 
 // Three.js variables
 let scene, camera, renderer, model, controls, raycaster, mouse
@@ -989,6 +988,7 @@ const handleTryOnColorChange = (colorValue) => {
 // Set preset color
 const setPresetColor = (colorValue, colorHex) => {
   console.log('🎨 Setting preset color to:', colorValue)
+  if (!clickedMesh.value) { flashSelectPartHint(); return }
   configuration.value.cushionColor = colorValue
   configuration.value.isCustomColor = false
   configuration.value.customHex = null
@@ -999,6 +999,7 @@ const setPresetColor = (colorValue, colorHex) => {
 // Set custom color
 const setCustomColor = () => {
   console.log('🎨 Setting custom color to:', customColor.value)
+  if (!clickedMesh.value) { flashSelectPartHint(); return }
   configuration.value.cushionColor = 'custom'
   configuration.value.isCustomColor = true
   configuration.value.customHex = customColor.value
@@ -1017,6 +1018,7 @@ const updateCushionColor = (colorValue) => {
 
 const updateFrameMaterial = (material) => {
   console.log('🪵 Updating frame material to:', material)
+  if (!clickedMesh.value) { flashSelectPartHint(); return }
   configuration.value.frameMaterial = material
   updateFrameMaterials()
 }
@@ -2846,7 +2848,8 @@ onUnmounted(() => {
 
 /* Configuration Panel */
 .config-section {
-  width: 420px;
+  width: 460px;
+  max-width: 42vw;
   background: white;
   border-left: 1px solid #e1e5e9;
   display: flex;
@@ -2961,6 +2964,117 @@ onUnmounted(() => {
   margin-bottom: 32px;
   padding-bottom: 24px;
   border-bottom: 1px solid #f0f0f0;
+}
+
+/* Active part indicator */
+.active-part-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f0f7ff;
+  border: 1px solid #cfe3ff;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.active-part-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.active-part-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #0066cc;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.15);
+}
+
+.active-part-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.active-part-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #5b7aa3;
+  font-weight: 600;
+}
+
+.active-part-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.active-part-clear {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border: 1px solid #0066cc;
+  background: white;
+  color: #0066cc;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.active-part-clear:hover {
+  background: #0066cc;
+  color: white;
+}
+
+/* Hint shown before a part is selected */
+.select-part-hint {
+  padding: 14px 16px;
+  background: #fff8ec;
+  border: 1px dashed #f0c987;
+  border-radius: 10px;
+  color: #8a6d3b;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-bottom: 20px;
+  transition: all 0.2s ease;
+}
+
+.select-part-hint--flash {
+  background: #fde6c4;
+  border-color: #e8a13c;
+  color: #7a531a;
+  animation: hint-shake 0.4s ease;
+}
+
+@keyframes hint-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+/* Dimmed look for swatches when no part is selected (still clickable -> flashes hint) */
+.color-option.is-disabled,
+.material-option.is-disabled {
+  opacity: 0.55;
+}
+
+.color-option.is-disabled:hover,
+.material-option.is-disabled:hover {
+  opacity: 0.85;
 }
 
 .customization-buttons {
@@ -3320,6 +3434,7 @@ onUnmounted(() => {
 
   .config-section {
     width: 100%;
+    max-width: none;
     flex: 1 1 45vh;
     min-height: 0;
     border-left: none;

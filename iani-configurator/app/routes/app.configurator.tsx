@@ -324,31 +324,85 @@ export default function ConfiguratorPage() {
         </Modal.Section>
       </Modal>
 
-      {/* Configurator Preview Modal */}
+      {/* Configurator Preview Modal — custom full-viewport overlay.
+          Polaris Modal (via App Bridge) caps its width in the embedded admin,
+          so we render our own overlay to guarantee a large split view. */}
       {selectedConfiguratorProduct && (
-        <Modal
-          open={!!selectedConfiguratorProduct}
-          onClose={() => setSelectedConfiguratorProduct(null)}
-          title={`Configure: ${selectedConfiguratorProduct.name}`}
-          size="fullScreen"
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 520,
+            background: 'rgba(0, 0, 0, 0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={() => setSelectedConfiguratorProduct(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Configure ${selectedConfiguratorProduct.name}`}
         >
-          <Modal.Section>
-            <div style={{ height: '90vh', width: '100%' }}>
-              <iframe
-                src={`https://iani-configurator.vercel.app?shop=${encodeURIComponent(shop)}&product=${encodeURIComponent(selectedConfiguratorProduct.shopifyProductId)}&modelUrl=${encodeURIComponent(selectedConfiguratorProduct.baseModelUrl || '')}&preview=true`}
+          <div
+            style={{
+              position: 'relative',
+              width: '96vw',
+              height: '94vh',
+              background: 'white',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 12px 48px rgba(0, 0, 0, 0.35)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 20px',
+                borderBottom: '1px solid #e1e5e9',
+                flexShrink: 0
+              }}
+            >
+              <span style={{ fontSize: '16px', fontWeight: 600, color: '#1a1a1a' }}>
+                Configure: {selectedConfiguratorProduct.name}
+              </span>
+              <button
+                onClick={() => setSelectedConfiguratorProduct(null)}
+                aria-label="Close"
                 style={{
-                  width: '100%',
-                  height: '100%',
                   border: 'none',
-                  borderRadius: '8px'
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  fontSize: '20px',
+                  lineHeight: 1,
+                  color: '#6b7280',
+                  padding: '4px 8px',
+                  borderRadius: '6px'
                 }}
-                title="3D Product Configurator"
-                allow="fullscreen; accelerometer; gyroscope"
-                allowFullScreen
-              />
+              >
+                ✕
+              </button>
             </div>
-          </Modal.Section>
-        </Modal>
+
+            {/* Configurator iframe (fills the rest; Vue app splits 3D left / options right) */}
+            <iframe
+              src={`https://iani-configurator.vercel.app?shop=${encodeURIComponent(shop)}&product=${encodeURIComponent(selectedConfiguratorProduct.shopifyProductId)}&modelUrl=${encodeURIComponent(selectedConfiguratorProduct.baseModelUrl || '')}&preview=true`}
+              style={{
+                flex: 1,
+                width: '100%',
+                border: 'none'
+              }}
+              title="3D Product Configurator"
+              allow="fullscreen; accelerometer; gyroscope; camera; xr-spatial-tracking"
+              allowFullScreen
+            />
+          </div>
+        </div>
       )}
     </Page>
   );
