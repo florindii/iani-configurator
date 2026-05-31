@@ -1,10 +1,76 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 
-const demoIframeRef = ref<HTMLIFrameElement | null>(null)
 const activeFeature = ref<'config' | 'tryon' | 'space'>('config')
+const showBackToTop = ref(false)
+const deviceSupportsAr = ref(false) // True if visitor's device can do WebXR immersive-ar
+const showArLaunchOverlay = ref(false) // Fullscreen tap-to-launch overlay (only after QR scan)
+const iframeRef = ref<HTMLIFrameElement | null>(null)
 
-const configuratorUrl = `${window.location.origin}/?modelFile=Couch.glb`
+const NAV_HEIGHT = 72
+
+// QR codes need a public URL (not localhost) so a phone can actually open them.
+const PUBLIC_BASE_URL = import.meta.env.VITE_CONFIGURATOR_URL || 'https://iani-configurator.vercel.app'
+
+// Each feature's iframe loads the bare configurator at "/" with these query params.
+// The QR code opens the demo page at "/demo" with feature= so the demo loads the
+// right tab automatically and forwards autoStartAr=true into the iframe.
+const featureConfigs: Record<'config' | 'tryon' | 'space', {
+  iframeQuery: string
+  qrPath: string
+  instructions: string[]
+}> = {
+  config: {
+    iframeQuery: '?modelFile=Couch.glb',
+    qrPath: '/demo?feature=config',
+    instructions: [
+      'Click any part of the sofa to select it',
+      'Pick a color or material from the panel',
+      'Drag to rotate, scroll to zoom'
+    ]
+  },
+  tryon: {
+    iframeQuery: '?modelFile=ray_ban_glasses.glb&tryOn=true&tryOnType=glasses',
+    qrPath: '/demo?feature=tryon',
+    instructions: [
+      'Click "Try On" to start the camera',
+      'Allow camera access when prompted',
+      'Move your head to see the glasses follow'
+    ]
+  },
+  space: {
+    iframeQuery: '?modelFile=officeChair.glb&spaceAr=true',
+    qrPath: '/demo?feature=space',
+    instructions: [
+      'Click "View in Your Space" (mobile only)',
+      'Point your phone at the floor',
+      'Tap to place the chair in your room'
+    ]
+  }
+}
+
+// Forwards the page-level autoStartAr param into the iframe so the configurator
+// inside auto-launches AR when arriving via QR scan.
+const pageParams = new URLSearchParams(window.location.search)
+const forwardAutoStartAr = pageParams.get('autoStartAr') === 'true'
+
+const currentInstructions = computed(() => featureConfigs[activeFeature.value].instructions)
+
+// Iframe loads the bare configurator from the same origin (works on localhost + production).
+const configuratorUrl = computed(() => {
+  const base = `${window.location.origin}/${featureConfigs[activeFeature.value].iframeQuery}`
+  return forwardAutoStartAr ? `${base}&autoStartAr=true` : base
+})
+
+// QR code must use the public production URL so a phone can actually reach it.
+// Path is /demo?feature=<id>&autoStartAr=true so the demo page loads the right tab
+// and forwards autoStartAr through to the iframe.
+const qrCodeUrl = computed(() => {
+  const path = featureConfigs[activeFeature.value].qrPath
+  const fullUrl = `${PUBLIC_BASE_URL}${path}&autoStartAr=true`
+  const target = encodeURIComponent(fullUrl)
+  return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data=${target}`
+})
 
 const features = [
   {
@@ -37,12 +103,114 @@ const plans = [
   { name: 'Business', price: '$99', products: 'Unlimited', features: ['Everything in Pro', 'Space AR', 'Priority support'] }
 ]
 
-onMounted(() => {
+const handleScroll = () => {
+  showBackToTop.value = window.scrollY > 600
+}
+
+const prevStyles = {
+  htmlOverflow: '',
+  htmlHeight: '',
+  bodyOverflow: '',
+  bodyHeight: '',
+  appHeight: '',
+  appOverflow: ''
+}
+
+// Listens for postMessages from the configurator iframe.
+// When the iframe signals IANI_AR_READY and the user arrived via QR (autoStartAr=true),
+// we show the fullscreen tap-to-launch overlay.
+const handleIframeMessage = (event: MessageEvent) => {
+  if (!event.data || typeof event.data !== 'object') return
+  if (event.data.type === 'IANI_AR_READY' && forwardAutoStartAr) {
+    showArLaunchOverlay.value = true
+  }
+}
+
+// User tapped the launch overlay. Post message to iframe to start AR.
+// Same-origin iframe → user activation propagates and requestSession can succeed.
+const onArLaunchTap = () => {
+  showArLaunchOverlay.value = false
+  iframeRef.value?.contentWindow?.postMessage({ type: 'IANI_START_AR' }, '*')
+}
+
+onMounted(async () => {
   console.log('🎬 Demo landing page loaded')
+
+  window.addEventListener('message', handleIframeMessage)
+
+  // If arrived via QR scan (e.g. /demo?feature=space&autoStartAr=true),
+  // auto-select that feature's tab so the iframe loads the right experience.
+  const featureParam = pageParams.get('feature')
+  if (featureParam === 'config' || featureParam === 'tryon' || featureParam === 'space') {
+    activeFeature.value = featureParam
+  }
+
+  // Detect whether this device can run WebXR immersive-ar (Android Chrome with ARCore).
+  // If yes, we skip the QR notice — the user can just tap the button inside the iframe.
+  if (typeof navigator !== 'undefined' && (navigator as any).xr) {
+    try {
+      deviceSupportsAr.value = await (navigator as any).xr.isSessionSupported('immersive-ar')
+    } catch {
+      deviceSupportsAr.value = false
+    }
+  }
+
+  // Override the global fullscreen-configurator styles so the demo page can scroll
+  const html = document.documentElement
+  const body = document.body
+  const app = document.getElementById('app')
+
+  prevStyles.htmlOverflow = html.style.overflow
+  prevStyles.htmlHeight = html.style.height
+  prevStyles.bodyOverflow = body.style.overflow
+  prevStyles.bodyHeight = body.style.height
+
+  html.style.overflow = 'auto'
+  html.style.height = 'auto'
+  body.style.overflow = 'auto'
+  body.style.height = 'auto'
+
+  if (app) {
+    prevStyles.appHeight = app.style.height
+    prevStyles.appOverflow = app.style.overflow
+    app.style.height = 'auto'
+    app.style.overflow = 'visible'
+  }
+
+  window.addEventListener('scroll', handleScroll, { passive: true })
 })
 
-const scrollToDemo = () => {
-  document.getElementById('live-demo')?.scrollIntoView({ behavior: 'smooth' })
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', handleScroll)
+  window.removeEventListener('message', handleIframeMessage)
+
+  // Restore original styles in case the user navigates back to the configurator
+  const html = document.documentElement
+  const body = document.body
+  const app = document.getElementById('app')
+
+  html.style.overflow = prevStyles.htmlOverflow
+  html.style.height = prevStyles.htmlHeight
+  body.style.overflow = prevStyles.bodyOverflow
+  body.style.height = prevStyles.bodyHeight
+
+  if (app) {
+    app.style.height = prevStyles.appHeight
+    app.style.overflow = prevStyles.appOverflow
+  }
+})
+
+const scrollToSection = (id: string) => {
+  const el = document.getElementById(id)
+  if (!el) return
+  const top = el.getBoundingClientRect().top + window.scrollY - NAV_HEIGHT
+  window.scrollTo({ top, behavior: 'smooth' })
+}
+
+const scrollToDemo = () => scrollToSection('live-demo')
+
+const scrollToTop = () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 const setActiveFeature = (id: 'config' | 'tryon' | 'space') => {
@@ -61,9 +229,9 @@ const setActiveFeature = (id: 'config' | 'tryon' | 'space') => {
           <span class="logo-text">Iani 3D</span>
         </div>
         <div class="nav-links">
-          <a href="#features">Features</a>
-          <a href="#live-demo">Live Demo</a>
-          <a href="#pricing">Pricing</a>
+          <a href="#features" @click.prevent="scrollToSection('features')">Features</a>
+          <a href="#live-demo" @click.prevent="scrollToSection('live-demo')">Live Demo</a>
+          <a href="#pricing" @click.prevent="scrollToSection('pricing')">Pricing</a>
           <a href="https://apps.shopify.com" class="nav-cta" target="_blank">Install on Shopify</a>
         </div>
       </div>
@@ -140,6 +308,19 @@ const setActiveFeature = (id: 'config' | 'tryon' | 'space') => {
           <h2>Try it yourself</h2>
           <p>Click any part of the model below to customize it. This is the actual app, running live.</p>
         </div>
+        <div v-if="activeFeature === 'space' && !deviceSupportsAr" class="ar-notice">
+          <div class="ar-notice-content">
+            <div class="ar-notice-icon">📱</div>
+            <div class="ar-notice-text">
+              <h3>Space AR requires a mobile device</h3>
+              <p>WebXR is currently supported on Android Chrome with ARCore. Open this URL on your phone, or scan the QR code with your camera to try it instantly.</p>
+            </div>
+          </div>
+          <div class="ar-notice-qr">
+            <img :src="qrCodeUrl" alt="Scan to open on your phone" />
+            <span>Scan to try on phone</span>
+          </div>
+        </div>
         <div class="demo-frame-wrapper">
           <div class="demo-frame-header">
             <div class="demo-dots">
@@ -149,25 +330,34 @@ const setActiveFeature = (id: 'config' | 'tryon' | 'space') => {
           </div>
           <div class="demo-frame-body">
             <iframe
-              ref="demoIframeRef"
+              ref="iframeRef"
               :src="configuratorUrl"
+              :key="configuratorUrl"
               allow="camera; microphone; xr-spatial-tracking; accelerometer; gyroscope; magnetometer"
               class="demo-iframe"
             ></iframe>
           </div>
         </div>
+        <div class="demo-tabs">
+          <button
+            v-for="feature in features"
+            :key="feature.id"
+            class="demo-tab"
+            :class="{ active: activeFeature === feature.id }"
+            @click="setActiveFeature(feature.id as 'config' | 'tryon' | 'space')"
+          >
+            <span class="demo-tab-icon">{{ feature.icon }}</span>
+            <span>{{ feature.title }}</span>
+          </button>
+        </div>
         <div class="demo-instructions">
-          <div class="instruction">
-            <span class="step">1</span>
-            <span>Click any part of the model to select it</span>
-          </div>
-          <div class="instruction">
-            <span class="step">2</span>
-            <span>Pick a color or material from the panel</span>
-          </div>
-          <div class="instruction">
-            <span class="step">3</span>
-            <span>Drag to rotate, scroll to zoom</span>
+          <div
+            v-for="(text, idx) in currentInstructions"
+            :key="idx"
+            class="instruction"
+          >
+            <span class="step">{{ idx + 1 }}</span>
+            <span>{{ text }}</span>
           </div>
         </div>
       </div>
@@ -242,6 +432,44 @@ const setActiveFeature = (id: 'config' | 'tryon' | 'space') => {
         </a>
       </div>
     </section>
+
+    <!-- Fullscreen tap-to-launch AR overlay (shown after QR scan once iframe is ready) -->
+    <div
+      v-if="showArLaunchOverlay"
+      class="ar-launch-overlay"
+      @click="onArLaunchTap"
+      role="button"
+      tabindex="0"
+    >
+      <div class="ar-launch-card">
+        <div class="ar-launch-icon">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+            <path d="M2 17l10 5 10-5"></path>
+            <path d="M2 12l10 5 10-5"></path>
+          </svg>
+        </div>
+        <h2>Ready to view in your space</h2>
+        <p>Tap the button below to launch AR. Allow camera access when prompted, then point your phone at the floor.</p>
+        <button class="ar-launch-btn" @click.stop="onArLaunchTap">
+          Tap to start AR
+        </button>
+        <span class="ar-launch-hint">Browsers require a tap to start the camera</span>
+      </div>
+    </div>
+
+    <!-- Back to top -->
+    <button
+      class="back-to-top"
+      :class="{ visible: showBackToTop }"
+      @click="scrollToTop"
+      aria-label="Back to top"
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="19" x2="12" y2="5"></line>
+        <polyline points="5 12 12 5 19 12"></polyline>
+      </svg>
+    </button>
 
     <!-- Footer -->
     <footer class="footer">
@@ -552,6 +780,61 @@ const setActiveFeature = (id: 'config' | 'tryon' | 'space') => {
   padding: 100px 0;
   background: linear-gradient(180deg, #f8f9ff 0%, #ffffff 100%);
 }
+.ar-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  background: linear-gradient(135deg, #eef2ff 0%, #f3e8ff 100%);
+  border: 1px solid #c4b5fd;
+  border-radius: 16px;
+  padding: 24px 32px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.ar-notice-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  flex: 1;
+  min-width: 280px;
+}
+.ar-notice-icon {
+  font-size: 40px;
+  line-height: 1;
+}
+.ar-notice-text h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #1a1a2e;
+}
+.ar-notice-text p {
+  color: #4b5563;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.ar-notice-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  padding: 12px 16px 16px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+.ar-notice-qr img {
+  display: block;
+  width: 140px;
+  height: 140px;
+}
+.ar-notice-qr span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
 .demo-frame-wrapper {
   background: white;
   border-radius: 16px;
@@ -598,6 +881,42 @@ const setActiveFeature = (id: 'config' | 'tryon' | 'space') => {
   border: none;
   display: block;
 }
+.demo-tabs {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+.demo-tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: white;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 100px;
+  padding: 12px 22px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.demo-tab:hover {
+  border-color: #c4b5fd;
+  color: #6366f1;
+}
+.demo-tab.active {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+}
+.demo-tab-icon {
+  font-size: 18px;
+}
+
 .demo-instructions {
   display: flex;
   gap: 16px;
@@ -792,6 +1111,122 @@ const setActiveFeature = (id: 'config' | 'tryon' | 'space') => {
   font-size: 13px;
   padding-top: 24px;
   border-top: 1px solid #f3f4f6;
+}
+
+/* Fullscreen AR launch overlay (after QR scan, when iframe signals it's ready) */
+.ar-launch-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.97) 0%, rgba(15, 52, 96, 0.97) 100%);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  animation: ar-launch-fade-in 0.3s ease;
+}
+@keyframes ar-launch-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.ar-launch-card {
+  max-width: 440px;
+  width: 100%;
+  text-align: center;
+  color: white;
+  padding: 32px;
+}
+.ar-launch-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  margin-bottom: 24px;
+  box-shadow: 0 12px 32px rgba(99, 102, 241, 0.5);
+  animation: ar-launch-icon-pulse 2s ease-in-out infinite;
+}
+@keyframes ar-launch-icon-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.06); }
+}
+.ar-launch-card h2 {
+  font-size: 28px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  letter-spacing: -0.01em;
+}
+.ar-launch-card p {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.5;
+  margin-bottom: 28px;
+}
+.ar-launch-btn {
+  display: inline-block;
+  width: 100%;
+  padding: 18px 32px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  border: none;
+  border-radius: 14px;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+  animation: ar-btn-pulse 1.4s ease-in-out infinite;
+}
+.ar-launch-btn:active {
+  transform: scale(0.97);
+}
+@keyframes ar-btn-pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(99, 102, 241, 0.6); }
+  50%  { box-shadow: 0 0 0 18px rgba(99, 102, 241, 0); }
+  100% { box-shadow: 0 0 0 0   rgba(99, 102, 241, 0); }
+}
+.ar-launch-hint {
+  display: block;
+  margin-top: 16px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* Back to top */
+.back-to-top {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(20px);
+  transition: opacity 0.25s, visibility 0.25s, transform 0.25s;
+  z-index: 99;
+}
+.back-to-top.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.back-to-top:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(99, 102, 241, 0.45);
 }
 
 /* Responsive */

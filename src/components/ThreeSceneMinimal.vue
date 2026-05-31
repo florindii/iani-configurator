@@ -257,14 +257,17 @@
               <h4 class="panel-title">🔲 Frame Material</h4>
               <p class="panel-subtitle">{{ getFrameLabel() }}</p>
               <div class="material-options">
-                <div 
-                  v-for="frame in frameOptions" 
+                <div
+                  v-for="frame in frameOptions"
                   :key="frame.value"
                   :class="['material-option', { active: configuration.frameMaterial === frame.value }]"
                   @click="updateFrameMaterial(frame.value)"
                 >
-                  <span class="material-name">{{ frame.label }}</span>
-                  <span class="material-description">{{ frame.description }}</span>
+                  <div class="material-swatch" :style="{ background: getMaterialSwatchStyle(frame.value) }"></div>
+                  <div class="material-info">
+                    <span class="material-name">{{ frame.label }}</span>
+                    <span class="material-description">{{ frame.description }}</span>
+                  </div>
                   <span class="material-price">+{{ currencySymbol }}{{ frame.extraCost }}</span>
                 </div>
               </div>
@@ -1313,6 +1316,18 @@ const getFrameColor = (material) => {
   return colorMap[material] || 0x8B4513
 }
 
+const getMaterialSwatchStyle = (materialValue) => {
+  const v = (materialValue || '').toLowerCase()
+  if (v.includes('walnut'))                                                    return 'linear-gradient(135deg, #5C3317 0%, #3D1C02 100%)'
+  if (v.includes('white') || v.includes('light'))                              return 'linear-gradient(135deg, #F0E6C8 0%, #C9A87C 100%)'
+  if (v.includes('oak'))                                                       return 'linear-gradient(135deg, #C4882F 0%, #8B4513 100%)'
+  if (v.includes('metal') || v.includes('steel') || v.includes('aluminum') || v.includes('brushed')) return 'linear-gradient(135deg, #E8E8E8 0%, #909090 50%, #D8D8D8 100%)'
+  if (v.includes('black') || v.includes('matte'))                              return 'linear-gradient(135deg, #4A4A4A 0%, #2A2A2A 100%)'
+  if (v.includes('gold') || v.includes('brass'))                               return 'linear-gradient(135deg, #FFD700 0%, #B8860B 100%)'
+  const hex = getFrameColor(materialValue).toString(16).padStart(6, '0')
+  return `#${hex}`
+}
+
 
 const getFrameMaterialProperties = (material) => {
   const properties = {
@@ -2350,6 +2365,17 @@ const handleShopifyMessage = (event) => {
     console.log('✅ Shopify context received:', data.payload)
   }
 
+  // Demo page asks us to start AR (after user tapped the parent overlay).
+  // Same-origin parent → user activation propagates and requestSession can succeed.
+  if (data.type === 'IANI_START_AR') {
+    if (spaceArSupported.value && !isInArSession.value) {
+      console.log('🎬 IANI_START_AR received from parent — launching AR')
+      startArSession().catch(err => {
+        console.warn('🔲 AR launch failed:', err?.message || err)
+      })
+    }
+  }
+
   if (data.type === 'IANI_CART_SUCCESS') {
     console.log('✅ Cart addition successful:', data.payload)
     const notification = document.createElement('div')
@@ -2401,6 +2427,18 @@ onMounted(async () => {
   // Load product configuration from merchant's settings
   await loadProductConfig()
 
+  // Demo URL params — force-enable features for the marketing demo page
+  const demoParams = new URLSearchParams(window.location.search)
+  if (demoParams.get('tryOn') === 'true') {
+    tryOnEnabled.value = true
+    tryOnType.value = demoParams.get('tryOnType') || 'glasses'
+    console.log('🎬 Demo: try-on force-enabled via URL param')
+  }
+  if (demoParams.get('spaceAr') === 'true') {
+    spaceArEnabled.value = true
+    console.log('🎬 Demo: space AR force-enabled via URL param')
+  }
+
   setTimeout(async () => {
     await initThreeJS()
 
@@ -2410,6 +2448,12 @@ onMounted(async () => {
         const supported = await navigator.xr.isSessionSupported('immersive-ar')
         spaceArSupported.value = supported
         console.log('🔲 WebXR immersive-ar supported:', supported)
+
+        // Notify the parent window (demo page) that the configurator is ready
+        // for AR. The parent shows its own launch overlay and posts back IANI_START_AR.
+        if (supported && window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'IANI_AR_READY' }, '*')
+        }
       } catch (e) {
         console.warn('🔲 WebXR check failed:', e)
         spaceArSupported.value = false
@@ -3130,7 +3174,10 @@ onUnmounted(() => {
 }
 
 .material-option {
-  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
   border: 2px solid #e1e5e9;
   border-radius: 6px;
   background: white;
@@ -3152,26 +3199,40 @@ onUnmounted(() => {
   box-shadow: 0 3px 10px rgba(0, 102, 204, 0.15);
 }
 
+.material-swatch {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 2px solid rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.material-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
 .material-name {
   font-weight: 600;
   color: #333;
   display: block;
-  margin-bottom: 4px;
 }
 
 .material-description {
   font-size: 12px;
   color: #666;
-  margin-bottom: 4px;
 }
 
 .material-price {
-  position: absolute;
-  top: 12px;
-  right: 16px;
   font-size: 12px;
   color: #28a745;
   font-weight: 600;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 

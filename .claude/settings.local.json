@@ -39,7 +39,12 @@
       "Bash(node -e \"const icons = require\\('@shopify/polaris-icons'\\); console.log\\('ChartVerticalFilledIcon:', !!icons.ChartVerticalFilledIcon\\); console.log\\('StarFilledIcon:', !!icons.StarFilledIcon\\); console.log\\('ProductIcon:', !!icons.ProductIcon\\); console.log\\('ViewIcon:', !!icons.ViewIcon\\); console.log\\('CheckIcon:', !!icons.CheckIcon\\);\")",
       "Bash(npm test *)",
       "Bash(npx vitest *)",
-      "Bash(grep -v \"console\\\\|debug\\\\|Debug\\\\|//.*pillow\\\\|//.*leg\")"
+      "Bash(grep -v \"console\\\\|debug\\\\|Debug\\\\|//.*pillow\\\\|//.*leg\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\flori\\\\Desktop\\\\iani-configurator\" -Recurse -Depth 2)",
+      "Bash(Select-Object -First 50)",
+      "Bash(Format-Table FullName)",
+      "Bash(git -C \"C:/Users/flori/Desktop/iani-configurator\" remote -v)",
+      "Bash(git -C \"C:/Users/flori/Desktop/iani-configurator\" branch --show-current)"
     ]
   }
 }

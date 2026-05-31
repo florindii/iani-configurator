@@ -8,6 +8,7 @@ import {
   Card,
   Button,
   BlockStack,
+  InlineStack,
   Text,
   TextField,
   Banner,
@@ -168,20 +169,16 @@ export default function ConfiguratorPage() {
                     {products3D.map((product: any) => (
                       <Card key={product.id}>
                         <BlockStack gap="300">
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
+                          <InlineStack align="space-between" blockAlign="start" wrap={true} gap="300">
+                            <BlockStack gap="100">
                               <Text as="h3" variant="headingSm" fontWeight="semibold">
                                 {product.name}
                               </Text>
                               <Text as="p" variant="bodySm" tone="subdued">
-                                Model: {product.baseModelUrl}
-                              </Text>
-                              <Text as="p" variant="bodySm" tone="subdued">
                                 Configurations: {product._count.configurations}
                               </Text>
-                            </div>
-                            
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                            </BlockStack>
+                            <InlineStack gap="200">
                               <Button
                                 size="micro"
                                 onClick={() => openConfigurator(product)}
@@ -196,8 +193,8 @@ export default function ConfiguratorPage() {
                               >
                                 Delete
                               </Button>
-                            </div>
-                          </div>
+                            </InlineStack>
+                          </InlineStack>
                         </BlockStack>
                       </Card>
                     ))}
@@ -338,7 +335,7 @@ export default function ConfiguratorPage() {
           <Modal.Section>
             <div style={{ height: '90vh', width: '100%' }}>
               <iframe
-                src={`https://iani-configurator.vercel.app?shop=${encodeURIComponent(shop)}&product=${encodeURIComponent(selectedConfiguratorProduct.shopifyProductId)}&preview=true`}
+                src={`https://iani-configurator.vercel.app?shop=${encodeURIComponent(shop)}&product=${encodeURIComponent(selectedConfiguratorProduct.shopifyProductId)}&modelUrl=${encodeURIComponent(selectedConfiguratorProduct.baseModelUrl || '')}&preview=true`}
                 style={{
                   width: '100%',
                   height: '100%',
